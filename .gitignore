@@ -1,0 +1,31 @@
+# Gradle
+.gradle
+build/
+app/build/
+!gradle/wrapper/gradle-wrapper.jar
+local.properties
+
+# IDE
+.vscode/
+.idea/
+*.iml
+out/
+gen/
+
+# HSM & Security
+softhsm/
+pkcs11.cfg
+*.conf
+*.p11
+*.pem
+*.crt
+*.jks
+
+# OS & Temp
+.DS_Store
+*~
+*.swp
+
+# Logs
+*.log
+logs/

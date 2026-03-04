@@ -1,6 +1,8 @@
 package di.swallet.wpb
 
 import org.springframework.stereotype.Service
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
 import java.security.*
 import java.security.spec.ECGenParameterSpec
 import org.slf4j.LoggerFactory
@@ -69,5 +71,12 @@ class HsmService(private val walletKeyRepository: WalletKeyRepository) {
 
         logger.info("WSCA: Saving metadata for key alias $alias in database")
         return walletKeyRepository.save(walletKey)
+    }
+    
+    fun getUserKey(userId: String): WalletKey {
+        return walletKeyRepository.findByUserId(userId)
+            .orElseThrow { 
+                ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet for user $userId not found") 
+            }
     }
 }

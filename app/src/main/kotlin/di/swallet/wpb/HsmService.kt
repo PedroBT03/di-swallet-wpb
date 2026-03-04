@@ -4,9 +4,10 @@ import org.springframework.stereotype.Service
 import java.security.*
 import java.security.spec.ECGenParameterSpec
 import org.slf4j.LoggerFactory
+import di.swallet.wpb.WalletKeyRepository
 
 @Service
-class HsmService {
+class HsmService(private val walletKeyRepository: WalletKeyRepository) {
     private val logger = LoggerFactory.getLogger(javaClass)
     // We initialize it directly or ensure the init block is "bulletproof"
     private val pkcs11Provider: Provider
@@ -44,5 +45,29 @@ class HsmService {
         
         // Return public key in Base64 for the API response
         return java.util.Base64.getEncoder().encodeToString(keyPair.public.encoded)
+    }
+
+    fun generateKeyForUser(userId: String): WalletKey {
+        val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
+        keyStore.load(null, "1234".toCharArray())
+
+        // Use a unique alias for this user's key in the HSM
+        val alias = "key-$userId-${System.currentTimeMillis()}"
+
+        val keyPairGen = KeyPairGenerator.getInstance("EC", pkcs11Provider)
+        keyPairGen.initialize(ECGenParameterSpec("secp256r1"))
+
+        val keyPair = keyPairGen.generateKeyPair()
+        val pubKeyBase64 = java.util.Base64.getEncoder().encodeToString(keyPair.public.encoded)
+
+        // Save metadata to DB
+        val walletKey = WalletKey(
+            userId = userId,
+            keyAlias = alias,
+            publicKeyBase64 = pubKeyBase64
+        )
+
+        logger.info("WSCA: Saving metadata for key alias $alias in database")
+        return walletKeyRepository.save(walletKey)
     }
 }

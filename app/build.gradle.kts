@@ -17,8 +17,10 @@ repositories {
 }
 
 dependencies {
-    // Spring Boot Starters (Automatically uses the version from the plugin)
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    runtimeOnly("com.h2database:h2")
+    
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation(kotlin("reflect"))
     implementation(kotlin("stdlib"))
@@ -29,8 +31,10 @@ application {
 }
 
 tasks.withType<JavaExec> {
-    // Mandatory for SunPKCS11 access
+    // For SunPKCS11 access
     jvmArgs("--add-exports=jdk.crypto.cryptoki/sun.security.pkcs11=ALL-UNNAMED")
+    // Environment variable for SoftHSM2 configuration file    
+    environment("SOFTHSM2_CONF", "${System.getProperty("user.home")}/.softhsm2.conf")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {

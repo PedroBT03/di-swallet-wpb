@@ -20,6 +20,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     runtimeOnly("com.h2database:h2")
     
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.77")
+
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation(kotlin("reflect"))
     implementation(kotlin("stdlib"))
@@ -30,9 +32,11 @@ application {
 }
 
 tasks.withType<JavaExec> {
-    // For SunPKCS11 access
-    jvmArgs("--add-exports=jdk.crypto.cryptoki/sun.security.pkcs11=ALL-UNNAMED")
-    // Environment variable for SoftHSM2 configuration file    
+    jvmArgs(
+        "--add-exports=jdk.crypto.cryptoki/sun.security.pkcs11=ALL-UNNAMED",
+        "--add-exports=java.base/sun.security.x509=ALL-UNNAMED"
+    )
+    // Environment variable for SoftHSM2 configuration file
     environment("SOFTHSM2_CONF", "${System.getProperty("user.home")}/.softhsm2.conf")
 }
 

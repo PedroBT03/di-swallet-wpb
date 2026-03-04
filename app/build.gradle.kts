@@ -25,6 +25,9 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation(kotlin("reflect"))
     implementation(kotlin("stdlib"))
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 }
 
 application {
@@ -40,9 +43,24 @@ tasks.withType<JavaExec> {
     environment("SOFTHSM2_CONF", "${System.getProperty("user.home")}/.softhsm2.conf")
 }
 
+tasks.withType<Test> {
+    useJUnitPlatform()
+    
+    // Activate the 'test' profile for clean logging
+    systemProperty("spring.profiles.active", "test")
+
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true 
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+    
+    environment("SOFTHSM2_CONF", "${System.getProperty("user.home")}/.softhsm2.conf")
+}
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     kotlinOptions {
         freeCompilerArgs = listOf("-Xjsr305=strict")
-        jvmTarget = "17" // Matches your VS Code setting
+        jvmTarget = "17"
     }
 }

@@ -18,7 +18,8 @@ import java.util.*
 @Service
 class HsmService(private val walletKeyRepository: WalletKeyRepository) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val pkcs11Provider: Provider
+    private var pkcs11Provider: Provider = Security.getProvider("SunPKCS11")
+        ?: throw RuntimeException("SunPKCS11 provider not found")
     private val pin = "1234"
 
     /**

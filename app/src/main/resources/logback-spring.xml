@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Appender for normal execution (Detailed) -->
+    <appender name="DETAILED_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Appender for Tests (Clean Text Only) -->
+    <appender name="CLEAN_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Default Profile (Standard Log) -->
+    <springProfile name="!test">
+        <root level="WARN">
+            <appender-ref ref="DETAILED_CONSOLE" />
+        </root>
+        <logger name="di.swallet.wpb" level="INFO" additivity="false">
+            <appender-ref ref="DETAILED_CONSOLE" />
+        </logger>
+    </springProfile>
+
+    <!-- Test Profile (Just the messages) -->
+    <springProfile name="test">
+        <root level="ERROR">
+            <appender-ref ref="CLEAN_CONSOLE" />
+        </root>
+        <logger name="di.swallet.wpb" level="INFO" additivity="false">
+            <appender-ref ref="CLEAN_CONSOLE" />
+        </logger>
+    </springProfile>
+
+</configuration>

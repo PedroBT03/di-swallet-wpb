@@ -4,17 +4,17 @@ This repository contains the implementation of the **Wallet Provider Backend (WP
 
 ## 🏗️ Architecture Components
 - **WPI (Wallet Provider Interface):** REST API for communication with the User Domain.
-- **WSCA (Wallet Secure Cryptographic Application):** Service layer managing high-assurance operations.
-- **Remote WSCD (Wallet Secure Cryptographic Device):** Virtualized HSM using **SoftHSM2** via PKCS#11.
-- **Key Metadata Store:** Persistence layer for tracking cryptographic assets and user associations.
+- **WSCA (Wallet Secure Cryptographic Application):** Secure service layer managing hardware-backed operations.
+- **Remote WSCD (Wallet Secure Cryptographic Device):** Virtualized HSM environment using **SoftHSM2**.
+- **Security Interceptor:** Gateway that enforces the **Sole Control** mandate via authorization headers.
+- **Key Metadata Store:** Database layer to track key lifecycles (Candidate, Active, Revoked).
 
 ## 🛠️ Tech Stack
 - **Language:** Kotlin 1.9.24
-- **Framework:** Spring Boot 3.5.x
+- **Framework:** Spring Boot 3.5.11
+- **Cryptography:** BouncyCastle (Standard Security Provider)
 - **Persistence:** Spring Data JPA with H2 (In-Memory)
-- **Build Tool:** Gradle 8.5
-- **Platform:** Java 17 (LTS)
-- **Standard:** PKCS#11 (SunPKCS11 Provider)
+- **Standard:** PKCS#11 (SunPKCS11)
 
 ## 🚀 Prerequisites
 - Ubuntu 24.04 (Noble)
@@ -22,32 +22,66 @@ This repository contains the implementation of the **Wallet Provider Backend (WP
 - OpenJDK 17: `sudo apt install openjdk-17-jdk`
 
 ## ⚙️ Environment Setup
-1. Initialize the SoftHSM2 token (Run once):
-   ```bash
-   mkdir -p ~/softhsm/tokens
-   echo "directories.tokendir = $HOME/softhsm/tokens" > ~/.softhsm2.conf
-   echo "objectstore.backend = file" >> ~/.softhsm2.conf
-   softhsm2-util --init-token --free --label "DI-Swallet-WSCD" --pin 1234 --so-pin 123456
-   ```
+
+### 1. Initialize the SoftHSM2 token
+Run these commands once to create your virtual hardware vault:
+```bash
+mkdir -p ~/softhsm/tokens
+echo "directories.tokendir = $HOME/softhsm/tokens" > ~/.softhsm2.conf
+echo "objectstore.backend = file" >> ~/.softhsm2.conf
+softhsm2-util --init-token --free --label "DI-Swallet-WSCD" --pin 1234 --so-pin 123456
+```
+
+### 2. Configure the HSM Library Path
+The backend needs to know where the SoftHSM2 library is located in your system. 
+Open `app/src/main/resources/application.properties` and verify the path:
+```properties
+# Default path for Ubuntu 24.04
+wpb.hsm.library=/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
+```
 
 ## 💻 Running the Application
-The `SOFTHSM2_CONF` variable is automatically handled by the Gradle build script.
+The `SOFTHSM2_CONF` variable is automatically handled by Gradle.
 ```bash
 ./gradlew :app:bootRun
 ```
 
-## 🧪 API Reference
+## 🧪 Testing & Validation
+Run the automated integration tests to verify the full cryptographic lifecycle:
+```bash
+./gradlew clean test
+```
+*The test suite produces clean audit logs showing the interaction between the Security Gateway and the HSM.*
 
-### Generate User Key
-Generates a hardware-backed EC KeyPair (secp256r1) inside the HSM and stores the metadata in the database.
+## 📂 API Reference
+
+### Mandatory Security
+All endpoints require the following header to simulate Strong User Authentication (SUA):
+- `X-Wallet-Authorization: fido2-assertion-mock`
+
+### 1. Generate User Key
+**Function:** Generates a hardware-protected EC KeyPair inside the HSM and stores metadata in the DB.
 - **Endpoint:** `POST /api/v1/wallet/keys/{userId}`
 - **Example:**
   ```bash
-  curl -X POST http://localhost:8080/api/v1/wallet/keys/pedro-ist
+  curl -i -X POST http://localhost:8080/api/v1/wallet/keys/pedro-ist \
+    -H "X-Wallet-Authorization: fido2-assertion-mock"
   ```
 
-### Database Inspection
-You can inspect the stored key metadata via the H2 Console:
-- **URL:** `http://localhost:8080/h2-console`
-- **JDBC URL:** `jdbc:h2:mem:testdb`
-- **User:** `sa` | **Password:** (empty)
+### 2. Retrieve Key Metadata
+**Function:** Returns the public key and status of a user's wallet.
+- **Endpoint:** `GET /api/v1/wallet/keys/{userId}`
+
+### 3. Digital Signature
+**Function:** Performs an ECDSA signature inside the HSM boundary. The private key never leaves the hardware.
+- **Endpoint:** `POST /api/v1/wallet/sign/{userId}`
+- **Example:**
+  ```bash
+  curl -i -X POST http://localhost:8080/api/v1/wallet/sign/pedro-ist \
+    -H "X-Wallet-Authorization: fido2-assertion-mock" \
+    -H "Content-Type: application/json" \
+    -d '{"data": "Digital Signature Test for IST Thesis"}'
+  ```
+
+## 🛡️ Security Note
+This implementation ensures that **Private Keys are non-exportable**, satisfying the requirements for **eIDAS 2.0 Level of Assurance High (LoA High)**.

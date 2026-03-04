@@ -6,6 +6,7 @@ import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -15,33 +16,44 @@ import java.security.cert.X509Certificate
 import java.security.spec.ECGenParameterSpec
 import java.util.*
 
+/**
+ * WSCA (Wallet Secure Cryptographic Application) implementation.
+ * Manages the interaction with the hardware security module (Remote WSCD).
+ */
 @Service
-class HsmService(private val walletKeyRepository: WalletKeyRepository) {
+class HsmService(
+    private val walletKeyRepository: WalletKeyRepository,
+    private val hsmProperties: HsmProperties // Inject the properties object
+) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private var pkcs11Provider: Provider = Security.getProvider("SunPKCS11")
         ?: throw RuntimeException("SunPKCS11 provider not found")
     private val pin = "1234"
 
     /**
-     * Initializes the Security Providers. 
-     * Registers BouncyCastle for certificate utilities and SunPKCS11 for HSM interaction.
+     * Initializes the SunPKCS11 provider using the library path defined in configuration.
+     * Also registers BouncyCastle for certificate utilities.
      */
     init {
-        // Register BouncyCastle as a security provider
         Security.addProvider(BouncyCastleProvider())
 
         val config = """
             --name = SoftHSM2
-            library = /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
+            library = ${hsmProperties.library}
             slotListIndex = 0
         """.trimIndent()
 
-        val baseProvider = Security.getProvider("SunPKCS11")
-            ?: throw RuntimeException("SunPKCS11 provider not found")
-        
-        pkcs11Provider = baseProvider.configure(config)
-        Security.addProvider(pkcs11Provider)
-        logger.info("WSCA: HSM and BouncyCastle providers initialized")
+        try {
+            val baseProvider = Security.getProvider("SunPKCS11")
+                ?: throw RuntimeException("SunPKCS11 provider not found")
+            
+            pkcs11Provider = baseProvider.configure(config)
+            Security.addProvider(pkcs11Provider)
+            logger.info("WSCA: HSM initialized using library: ${hsmProperties.library}")
+        } catch (e: Exception) {
+            logger.error("WSCA: Critical error initializing HSM: ${e.message}")
+            throw e
+        }
     }
 
     /**
@@ -70,7 +82,7 @@ class HsmService(private val walletKeyRepository: WalletKeyRepository) {
             val pubKeyBase64 = Base64.getEncoder().encodeToString(keyPair.public.encoded)
             val walletKey = WalletKey(userId = userId, keyAlias = alias, publicKeyBase64 = pubKeyBase64)
 
-            logger.info("WSCA: Successfully created and persisted key for user $userId")
+            logger.info("WSCA: Key created for user $userId with alias $alias")
             return walletKeyRepository.save(walletKey)
         } catch (e: Exception) {
             logger.error("WSCA: Key generation failed for user $userId: ${e.message}")
@@ -79,8 +91,7 @@ class HsmService(private val walletKeyRepository: WalletKeyRepository) {
     }
 
     /**
-     * Uses the private key stored in the HSM to sign data.
-     * Implementation of the Remote WSCD signing logic.
+     * Performs a digital signature on the provided data using the user's private key in the HSM.
      */
     fun signData(userId: String, dataToSign: ByteArray): ByteArray {
         val walletKey = walletKeyRepository.findByUserId(userId)
@@ -114,8 +125,7 @@ class HsmService(private val walletKeyRepository: WalletKeyRepository) {
     }
 
     /**
-     * Creates an X.509 self-signed certificate using BouncyCastle.
-     * The signature of the certificate is performed by the HSM itself.
+     * Generates a temporary X.509 certificate to allow the KeyStore to index the private key.
      */
     private fun generateSelfSignedCertificate(keyPair: KeyPair): X509Certificate {
         val issuer = X500Name("CN=DI-Swallet-Internal")
@@ -132,8 +142,6 @@ class HsmService(private val walletKeyRepository: WalletKeyRepository) {
             .setProvider(pkcs11Provider)
             .build(keyPair.private)
 
-        // Convert the BouncyCastle structure to a standard Java X509Certificate
-        return JcaX509CertificateConverter()
-            .getCertificate(certBuilder.build(signer))
+        return JcaX509CertificateConverter().getCertificate(certBuilder.build(signer))
     }
 }

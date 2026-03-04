@@ -4,6 +4,7 @@ plugins {
     kotlin("jvm") version "1.9.24"
     kotlin("plugin.spring") version "1.9.24"
     kotlin("plugin.jpa") version "1.9.24"
+    kotlin("kapt") version "1.9.24"
     
     application
 }
@@ -21,6 +22,8 @@ dependencies {
     runtimeOnly("com.h2database:h2")
     
     implementation("org.bouncycastle:bcpkix-jdk18on:1.77")
+
+    kapt("org.springframework.boot:spring-boot-configuration-processor")
 
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation(kotlin("reflect"))

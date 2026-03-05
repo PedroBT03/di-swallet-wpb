@@ -9,7 +9,10 @@ import com.nimbusds.jwt.JWTClaimsSet
 import java.util.*
 import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.service.MockIssuerService
+import di.swallet.wpb.service.format.SdJwtService
 import di.swallet.wpb.domain.WalletKey
+import di.swallet.wpb.domain.WalletCredential
+import di.swallet.wpb.domain.WalletCredentialRepository
 
 /**
  * Data Transfer Object for signing requests.
@@ -20,18 +23,21 @@ data class SignRequest(
 
 /**
  * Wallet Provider Interface (WPI) implementation.
- * Manages keys and credential issuance flows.
+ * Orchestrates user wallet lifecycles and credential issuance protocols.
  */
 @RestController
 @RequestMapping("/api/v1/wallet")
-@Tag(name = "Wallet Management", description = "Endpoints for user wallet and key lifecycle")
+@Tag(name = "Wallet Management", description = "Endpoints for user wallet, keys, and credentials")
 class WalletController(
     private val hsmService: HsmService,
-    private val mockIssuerService: MockIssuerService // 1. Inject the service here
+    private val mockIssuerService: MockIssuerService,
+    private val sdJwtService: SdJwtService,
+    private val credentialRepository: WalletCredentialRepository
 ) {
 
     /**
-     * Endpoint to generate a hardware-backed cryptographic key for a specific user.
+     * Generates a hardware-backed cryptographic key for a specific user.
+     * The private key is strictly contained within the Remote WSCD (HSM).
      */
     @PostMapping("/keys/{userId}")
     @Operation(summary = "Generate Hardware-backed Key", description = "Creates an EC KeyPair inside the Remote HSM for the user")
@@ -40,7 +46,7 @@ class WalletController(
     }
 
     /**
-     * Endpoint to retrieve the metadata and public key of an existing user wallet.
+     * Retrieves the metadata and public key of an existing user wallet.
      */
     @GetMapping("/keys/{userId}")
     @Operation(summary = "Get Wallet Metadata", description = "Retrieves the public key and status of a user's wallet")
@@ -100,5 +106,59 @@ class WalletController(
             "format" to "JWT",
             "encoded" to signedJwt
         )
+    }
+
+    /**
+     * Issues an SD-JWT credential by salting and hashing individual identity attributes.
+     * The result is signed by the HSM and persisted in the local database.
+     */
+    @PostMapping("/credentials/issue-sd/{userId}")
+    @Operation(summary = "Issue and Store SD-JWT", description = "Issues a Selective Disclosure JWT credential, signed by the HSM, and stores it in the database")
+    fun issueSdCredential(@PathVariable userId: String): WalletCredential {
+        val walletKey = hsmService.getUserKey(userId)
+        val userData = mockIssuerService.fetchUserData(userId)
+
+        val disclosures = mutableListOf<String>()
+        val hashedDisclosures = mutableListOf<String>()
+
+        // Salt and hash each claim to enable individual selective disclosure
+        userData.forEach { (key, value) ->
+            val disclosure = sdJwtService.createDisclosure(key, value)
+            disclosures.add(disclosure)
+            hashedDisclosures.add(sdJwtService.hashDisclosure(disclosure))
+        }
+
+        val sdPayload = mapOf(
+            "iss" to "https://pt-mock-issuer.gov.pt",
+            "sub" to userId,
+            "iat" to System.currentTimeMillis() / 1000,
+            "_sd" to hashedDisclosures.sorted(),
+            "_sd_alg" to "sha-256"
+        )
+
+        val signedJwt = hsmService.signSdJwt(userId, sdPayload)
+        
+        // Assemble the multipart format: <Signed_JWT>~<Disclosure_1>~...~<Disclosure_N>~
+        val finalSdJwt = StringBuilder(signedJwt)
+        disclosures.forEach { finalSdJwt.append("~").append(it) }
+        finalSdJwt.append("~")
+
+        val credential = WalletCredential(
+            userId = userId,
+            credentialType = "PID",
+            encodedData = finalSdJwt.toString(),
+            walletKey = walletKey
+        )
+
+        return credentialRepository.save(credential)
+    }
+
+    /**
+     * Retrieves all Verifiable Credentials associated with a specific user.
+     */
+    @GetMapping("/credentials/{userId}")
+    @Operation(summary = "List User Credentials", description = "Retrieves all Verifiable Credentials stored in the wallet for a specific user")
+    fun getCredentials(@PathVariable userId: String): List<WalletCredential> {
+        return credentialRepository.findByUserId(userId)
     }
 }

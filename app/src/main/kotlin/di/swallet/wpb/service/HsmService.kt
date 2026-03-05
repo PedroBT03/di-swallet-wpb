@@ -185,4 +185,30 @@ class HsmService(
         logger.info("WSCA: Successfully generated signed JWT for user $userId")
         return signedJwt
     }
+
+    /**
+     * Signs a specialized SD-JWT payload.
+     * Unlike a standard JWT, the SD-JWT requires a specific content-type header
+     * and a payload containing hashed disclosures.
+     */
+    fun signSdJwt(userId: String, sdClaims: Map<String, Any>): String {
+        val walletKey = getUserKey(userId)
+        
+        // 1. Create the Header with the specific SD-JWT type
+        val header = JWSHeader.Builder(JWSAlgorithm.ES256)
+            .keyID(walletKey.keyAlias)
+            .type(JOSEObjectType("kb+jwt")) // Key Binding / SD-JWT related type
+            .build()
+
+        val jwsObject = JWSObject(header, Payload(sdClaims))
+        
+        // 2. Sign using the HSM
+        val derSignature = signData(userId, jwsObject.signingInput)
+        
+        // 3. Transcode signature to JWS format
+        val jwsSignatureBytes = ECDSA.transcodeSignatureToConcat(derSignature, 64)
+        val base64UrlSignature = Base64URL.encode(jwsSignatureBytes)
+
+        return "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$base64UrlSignature"
+    }
 }

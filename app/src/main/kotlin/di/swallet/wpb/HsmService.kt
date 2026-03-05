@@ -15,6 +15,11 @@ import java.security.*
 import java.security.cert.X509Certificate
 import java.security.spec.ECGenParameterSpec
 import java.util.*
+import com.nimbusds.jose.*
+import com.nimbusds.jose.crypto.impl.ECDSA
+import com.nimbusds.jose.jca.JCAContext
+import com.nimbusds.jose.util.Base64URL
+import com.nimbusds.jwt.*
 
 /**
  * WSCA (Wallet Secure Cryptographic Application) implementation.
@@ -143,5 +148,38 @@ class HsmService(
             .build(keyPair.private)
 
         return JcaX509CertificateConverter().getCertificate(certBuilder.build(signer))
+    }
+
+    /**
+     * Signs a JWT Claims Set using the user's private key inside the HSM.
+     * This implements the core logic of the Format Engine, transforming identity
+     * data into a signed JWS (JSON Web Signature).
+     */
+    fun signJwt(userId: String, claims: JWTClaimsSet): String {
+        val walletKey = getUserKey(userId)
+        
+        // 1. Create the JWS Header, using ES256
+        val header = JWSHeader.Builder(JWSAlgorithm.ES256)
+            .keyID(walletKey.keyAlias)
+            .type(JOSEObjectType.JWT)
+            .build()
+
+        // 2. Prepare the Signing Input (Base64URL(Header) + "." + Base64URL(Payload))
+        val jwsObject = JWSObject(header, Payload(claims.toJSONObject()))
+        val signingInput: ByteArray = jwsObject.signingInput
+
+        // 3. Perform the signature inside the HSM
+        val derSignature = signData(userId, signingInput)
+
+        // 4. Convert DER signature (HSM standard) to Concatenated (JWT standard)
+        // ECDSA signatures in JWT must be 64 bytes for P-256 (32 bytes for R + 32 bytes for S)
+        val jwsSignatureBytes = ECDSA.transcodeSignatureToConcat(derSignature, 64)
+        val base64UrlSignature = Base64URL.encode(jwsSignatureBytes)
+
+        // 5. Assemble and return the complete serialized JWT
+        val signedJwt = "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$base64UrlSignature"
+        
+        logger.info("WSCA: Successfully generated signed JWT for user $userId")
+        return signedJwt
     }
 }

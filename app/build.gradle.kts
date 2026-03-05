@@ -26,6 +26,8 @@ dependencies {
     
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5")
 
+    implementation("com.nimbusds:nimbus-jose-jwt:9.37.3")
+
     implementation("org.bouncycastle:bcpkix-jdk18on:1.77")
     kapt("org.springframework.boot:spring-boot-configuration-processor")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")

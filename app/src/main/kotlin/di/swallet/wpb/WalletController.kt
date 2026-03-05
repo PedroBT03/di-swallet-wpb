@@ -1,23 +1,29 @@
 package di.swallet.wpb
 
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.http.HttpStatus
 
 /**
- * Wallet Provider Interface (WPI) implementation.
- * This controller exposes the REST endpoints used by the User Domain (Mobile App)
- * to interact with the Wallet Provider Backend.
+ * Data Transfer Object for signing requests.
+ * Helps Swagger UI define the correct JSON schema.
  */
+data class SignRequest(
+    val data: String
+)
+
 @RestController
 @RequestMapping("/api/v1/wallet")
+@Tag(name = "Wallet Management", description = "Endpoints for user wallet and key lifecycle")
 class WalletController(private val hsmService: HsmService) {
 
     /**
      * Endpoint to generate a hardware-backed cryptographic key for a specific user.
-     * The private key is generated and stored inside the Remote WSCD (HSM).
      */
     @PostMapping("/keys/{userId}")
+    @Operation(summary = "Generate Hardware-backed Key", description = "Creates an EC KeyPair inside the Remote HSM for the user")
     fun createKey(@PathVariable userId: String): WalletKey {
         return hsmService.generateKeyForUser(userId)
     }
@@ -26,28 +32,24 @@ class WalletController(private val hsmService: HsmService) {
      * Endpoint to retrieve the metadata and public key of an existing user wallet.
      */
     @GetMapping("/keys/{userId}")
+    @Operation(summary = "Get Wallet Metadata", description = "Retrieves the public key and status of a user's wallet")
     fun getKey(@PathVariable userId: String): WalletKey {
         return hsmService.getUserKey(userId)
     }
 
     /**
      * Endpoint to perform a digital signature operation inside the HSM.
-     * This simulates the "Sign Document" functional goal of the EUDI Wallet.
-     * It requires a valid authorization context (handled by the Security Interceptor).
+     * The input 'data' must be provided in the JSON body.
      */
     @PostMapping("/sign/{userId}")
+    @Operation(summary = "Remote Signature", description = "Triggers a signing operation inside the secure boundary of the HSM")
     fun sign(
         @PathVariable userId: String, 
-        @RequestBody payload: Map<String, String>
+        @RequestBody request: SignRequest // Use the DTO here
     ): Map<String, String> {
-        // Extract the data to be signed from the request body
-        val data = payload["data"] 
-            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing 'data' field in request body")
         
-        // Execute the signing operation within the secure boundary of the HSM
-        val signatureBytes = hsmService.signData(userId, data.toByteArray())
-        
-        // Return the Base64 encoded signature
+        // Execute the signing operation using the data from the DTO
+        val signatureBytes = hsmService.signData(userId, request.data.toByteArray())
         val signatureBase64 = java.util.Base64.getEncoder().encodeToString(signatureBytes)
 
         return mapOf(

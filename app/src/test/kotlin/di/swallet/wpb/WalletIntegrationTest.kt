@@ -4,12 +4,14 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
+import org.springframework.test.context.ActiveProfiles
 import org.springframework.http.*
 import org.assertj.core.api.Assertions.assertThat
 import org.slf4j.LoggerFactory
 import java.util.*
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("test")
 class WalletIntegrationTest {
 
     @Autowired

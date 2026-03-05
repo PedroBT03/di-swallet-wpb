@@ -23,7 +23,7 @@ import java.util.*
 @Service
 class HsmService(
     private val walletKeyRepository: WalletKeyRepository,
-    private val hsmProperties: HsmProperties // Inject the properties object
+    private val hsmProperties: HsmProperties
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private var pkcs11Provider: Provider = Security.getProvider("SunPKCS11")

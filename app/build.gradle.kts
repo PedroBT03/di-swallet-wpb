@@ -19,16 +19,19 @@ repositories {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    runtimeOnly("com.h2database:h2")
     
+    runtimeOnly("org.postgresql:postgresql")
+
+    testImplementation("com.h2database:h2")
+    
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5")
+
     implementation("org.bouncycastle:bcpkix-jdk18on:1.77")
-
     kapt("org.springframework.boot:spring-boot-configuration-processor")
-
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation(kotlin("reflect"))
     implementation(kotlin("stdlib"))
-
+    
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 }

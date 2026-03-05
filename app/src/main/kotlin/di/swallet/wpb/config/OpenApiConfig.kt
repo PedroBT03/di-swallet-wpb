@@ -1,4 +1,4 @@
-package di.swallet.wpb
+package di.swallet.wpb.config
 
 import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI

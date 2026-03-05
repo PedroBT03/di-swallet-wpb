@@ -1,4 +1,4 @@
-package di.swallet.wpb
+package di.swallet.wpb.service
 
 import org.springframework.stereotype.Service
 

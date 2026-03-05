@@ -1,4 +1,4 @@
-package di.swallet.wpb
+package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.stereotype.Component

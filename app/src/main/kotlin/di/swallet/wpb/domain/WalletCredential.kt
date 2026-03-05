@@ -1,4 +1,4 @@
-package di.swallet.wpb
+package di.swallet.wpb.domain
 
 import jakarta.persistence.*
 import java.time.LocalDateTime

@@ -1,4 +1,4 @@
-package di.swallet.wpb
+package di.swallet.wpb.security
 
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException

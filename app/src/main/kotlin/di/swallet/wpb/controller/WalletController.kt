@@ -1,4 +1,4 @@
-package di.swallet.wpb
+package di.swallet.wpb.controller
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -7,6 +7,9 @@ import org.springframework.web.server.ResponseStatusException
 import org.springframework.http.HttpStatus
 import com.nimbusds.jwt.JWTClaimsSet
 import java.util.*
+import di.swallet.wpb.service.HsmService
+import di.swallet.wpb.service.MockIssuerService
+import di.swallet.wpb.domain.WalletKey
 
 /**
  * Data Transfer Object for signing requests.

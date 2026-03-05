@@ -9,6 +9,7 @@ import org.springframework.http.*
 import org.assertj.core.api.Assertions.assertThat
 import org.slf4j.LoggerFactory
 import java.util.*
+import di.swallet.wpb.domain.WalletKey
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")

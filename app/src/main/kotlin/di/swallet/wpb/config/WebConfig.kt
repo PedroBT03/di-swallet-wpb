@@ -1,8 +1,9 @@
-package di.swallet.wpb
+package di.swallet.wpb.config
 
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
+import di.swallet.wpb.security.AuthorizationInterceptor
 
 @Configuration
 class WebConfig(private val authInterceptor: AuthorizationInterceptor) : WebMvcConfigurer {

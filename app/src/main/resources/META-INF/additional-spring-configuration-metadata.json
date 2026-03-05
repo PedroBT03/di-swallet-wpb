@@ -1,0 +1,9 @@
+{
+  "properties": [
+    {
+      "name": "wpb.hsm.library",
+      "type": "java.lang.String",
+      "description": "Path to the SoftHSM2/PKCS11 library file (.so)."
+    }
+  ]
+}

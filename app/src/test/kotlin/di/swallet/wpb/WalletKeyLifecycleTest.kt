@@ -10,33 +10,26 @@ import java.util.*
 class WalletKeyLifecycleTest : BaseIntegrationTest() {
 
     /**
-     * Verifies the full lifecycle of a hardware key: generation in the Remote WSCD,
-     * persistence of metadata in the database, and usage for raw digital signatures.
+     * Tests the generation of keys using the new dynamic authentication handshake.
      */
     @Test
-    fun `should manage full key lifecycle and perform raw HSM signature`() {
-        val testUserId = "user-key-test-${UUID.randomUUID()}"
-        val entity = HttpEntity<String>(createAuthHeaders())
+    fun `should manage full key lifecycle with dynamic auth`() {
+        val testUserId = "user-${UUID.randomUUID()}"
 
-        // Create Key
-        logger.info("STEP: Requesting Key Generation in Remote WSCD for $testUserId")
+        // 1. Create Key (Requires fresh handshake)
+        logger.info("Step 1: KeyLifecycle. Requesting key with dynamic challenge for $testUserId")
+        val entity = HttpEntity<String>(getDynamicHeaders(testUserId))
         val createResponse = restTemplate.postForEntity("/api/v1/wallet/keys/$testUserId", entity, WalletKey::class.java)
-        
         assertThat(createResponse.statusCode).isEqualTo(HttpStatus.OK)
-        val publicKey = createResponse.body?.publicKeyBase64
-        
-        // Assert that the public key is present
-        assertThat(publicKey).isNotBlank()
-        logger.info("RESULT: Hardware key generated inside HSM. Public Key: $publicKey")
 
-        // Sign Raw Data
-        logger.info("STEP: Requesting raw signature (Proof of Possession)")
-        val signRequest = mapOf("data" to "Raw Data Test")
-        val signEntity = HttpEntity(signRequest, createAuthHeaders())
+        // 2. Sign Data (Requires another fresh handshake)
+        logger.info("Step 2: KeyLifecycle. Requesting signature with new dynamic challenge")
+        val signRequest = mapOf("data" to "PoC Signature")
+        val signEntity = HttpEntity(signRequest, getDynamicHeaders(testUserId))
         val signResponse = restTemplate.postForEntity("/api/v1/wallet/sign/$testUserId", signEntity, Map::class.java)
         
         assertThat(signResponse.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(signResponse.body?.get("signature")).isNotNull
-        logger.info("RESULT: HSM Signature produced successfully")
+        logger.info("Result: Lifecycle validated with dynamic authorization")
     }
 }

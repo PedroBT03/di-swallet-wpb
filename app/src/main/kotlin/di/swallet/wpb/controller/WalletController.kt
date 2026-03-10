@@ -15,6 +15,7 @@ import di.swallet.wpb.service.format.PresentationService
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.security.ChallengeService
 
 /**
  * Data Transfer Object for signing requests.
@@ -44,8 +45,24 @@ class WalletController(
     private val mockIssuerService: MockIssuerService,
     private val sdJwtService: SdJwtService,
     private val presentationService: PresentationService,
-    private val credentialRepository: WalletCredentialRepository
+    private val credentialRepository: WalletCredentialRepository,
+    private val challengeService: ChallengeService
 ) {
+
+    /**
+     * Generates a unique cryptographic challenge (nonce) to be signed by the user's physical device.
+     * This is the initial step for any operation requiring Strong User Authentication (SUA).
+     */
+    @GetMapping("/auth/challenge/{userId}")
+    @Operation(summary = "Get Auth Challenge", description = "Generates a unique nonce for FIDO2/WebAuthn authorization.")
+    fun getChallenge(@PathVariable userId: String): Map<String, String> {
+        val challenge = challengeService.generateChallenge(userId)
+        return mapOf(
+            "userId" to userId,
+            "challenge" to challenge,
+            "info" to "Sign this challenge using your device to authorize the next operation."
+        )
+    }
 
     /**
      * Endpoint to generate a hardware-backed cryptographic key for a specific user.

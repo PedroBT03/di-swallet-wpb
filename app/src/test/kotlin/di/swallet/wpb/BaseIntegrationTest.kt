@@ -15,14 +15,24 @@ abstract class BaseIntegrationTest {
     lateinit var restTemplate: TestRestTemplate
 
     protected val logger = LoggerFactory.getLogger(javaClass)
-    protected val authHeader = "fido2-assertion-mock"
 
     /**
-     * Generates the mandatory security headers for the Wallet API.
+     * Performs a security handshake to get a dynamic FIDO2 authorization header.
+     * Every call to this function fetches a new challenge from the server.
      */
-    protected fun createAuthHeaders(): HttpHeaders {
+    @Suppress("UNCHECKED_CAST")
+    protected fun getDynamicHeaders(userId: String): HttpHeaders {
+        // 1. Request a new challenge from the auth endpoint
+        val authResponse = restTemplate.getForObject(
+            "/api/v1/wallet/auth/challenge/$userId", 
+            Map::class.java
+        ) as Map<String, String>
+        
+        val challenge = authResponse["challenge"] ?: throw RuntimeException("Failed to get challenge")
+        
+        // 2. Construct the dynamic header: fido2-userId:challenge
         val headers = HttpHeaders()
-        headers.set("X-Wallet-Authorization", authHeader)
+        headers.set("X-Wallet-Authorization", "fido2-$userId:$challenge")
         return headers
     }
 }

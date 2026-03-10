@@ -2,6 +2,7 @@ package di.swallet.wpb.controller
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
+import io.swagger.v3.oas.annotations.media.Schema
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.http.HttpStatus
@@ -19,6 +20,7 @@ import di.swallet.wpb.domain.WalletCredentialRepository
  * Data Transfer Object for signing requests.
  */
 data class SignRequest(
+    @Schema(example = "Data to be signed by the HSM", description = "Raw string data to sign")
     val data: String
 )
 
@@ -26,6 +28,7 @@ data class SignRequest(
  * Data Transfer Object for selective disclosure presentation requests.
  */
 data class PresentationRequest(
+    @Schema(example = "[\"given_name\", \"nationality\"]", description = "List of claim names to reveal to the Verifier")
     val claimsToDisclose: List<String>
 )
 
@@ -40,7 +43,7 @@ class WalletController(
     private val hsmService: HsmService,
     private val mockIssuerService: MockIssuerService,
     private val sdJwtService: SdJwtService,
-    private val presentationService: PresentationService, // NEW: Presentation Logic
+    private val presentationService: PresentationService,
     private val credentialRepository: WalletCredentialRepository
 ) {
 

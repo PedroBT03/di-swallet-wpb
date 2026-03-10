@@ -25,7 +25,6 @@ class OpenApiConfig {
                 .version("1.0")
                 .description("Wallet Provider Backend (WPB) with Remote HSM (WSCD) integration. " +
                              "Aligned with eIDAS 2.0 and ARF standards."))
-            // FIX: Use addSecurityItem instead of addSecurityRequirement
             .addSecurityItem(SecurityRequirement().addList(securitySchemeName))
             .components(Components()
                 // Define the API Key security scheme for the mandatory authorization header

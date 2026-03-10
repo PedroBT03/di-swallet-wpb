@@ -175,7 +175,6 @@ class HsmService(
         val derSignature = signData(userId, signingInput)
 
         // 4. Convert DER signature (HSM standard) to Concatenated (JWT standard)
-        // ECDSA signatures in JWT must be 64 bytes for P-256 (32 bytes for R + 32 bytes for S)
         val jwsSignatureBytes = ECDSA.transcodeSignatureToConcat(derSignature, 64)
         val base64UrlSignature = Base64URL.encode(jwsSignatureBytes)
 

@@ -26,7 +26,6 @@ class SdJwtService {
         val saltBase64 = Base64.getEncoder().encodeToString(salt)
 
         // 2. Format the disclosure: [salt, name, value]
-        // This follows the IETF SD-JWT specification
         val disclosureArray = "[\"$saltBase64\", \"$claimName\", \"$claimValue\"]"
         
         // 3. Return the Base64URL encoded version

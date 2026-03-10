@@ -41,10 +41,23 @@ wpb.hsm.library=/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
 ```
 
 ## 💻 Running the Application
-The `SOFTHSM2_CONF` variable is automatically handled by Gradle.
+
+### 1. Start the Persistence Layer (Docker)
+The application requires a PostgreSQL database to store key metadata and credentials.
+Run the following command in the project root:
+```bash
+docker compose up -d
+```
+
+### 2. Start the Backend (WPB)
+The `SOFTHSM2_CONF` variable and library paths are automatically handled by the Gradle build script.
 ```bash
 ./gradlew :app:bootRun
 ```
+
+### 3. Access the API Documentation
+Once the server is running, you can interact with the Wallet through the interactive Swagger UI:
+👉 **[http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)**
 
 ## 🧪 Testing & Validation
 Run the automated integration tests to verify the full cryptographic lifecycle:

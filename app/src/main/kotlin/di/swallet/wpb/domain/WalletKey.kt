@@ -3,10 +3,10 @@ package di.swallet.wpb.domain
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
-enum class KeyStatus {
-    ACTIVE, SUSPENDED, REVOKED
-}
-
+/**
+ * Entity representing a hardware key. 
+ * Status is managed via a bitstring index (0 = ACTIVE, 1 = REVOKED).
+ */
 @Entity
 @Table(name = "wallet_keys")
 class WalletKey(
@@ -23,8 +23,9 @@ class WalletKey(
     @Column(columnDefinition = "TEXT")
     val publicKeyBase64: String = "",
 
-    @Enumerated(EnumType.STRING)
-    var status: KeyStatus = KeyStatus.ACTIVE,
+    // The index of this key in the global revocation bitstring
+    @Column(nullable = false)
+    val revocationIndex: Int = 0,
 
     @Column(nullable = false)
     val createdAt: LocalDateTime = LocalDateTime.now()

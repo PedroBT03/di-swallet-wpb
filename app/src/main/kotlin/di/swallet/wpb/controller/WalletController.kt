@@ -10,6 +10,7 @@ import com.nimbusds.jwt.JWTClaimsSet
 import java.util.*
 import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.service.MockIssuerService
+import di.swallet.wpb.service.StatusListService
 import di.swallet.wpb.service.format.SdJwtService
 import di.swallet.wpb.service.format.PresentationService
 import di.swallet.wpb.domain.WalletKey
@@ -46,7 +47,8 @@ class WalletController(
     private val sdJwtService: SdJwtService,
     private val presentationService: PresentationService,
     private val credentialRepository: WalletCredentialRepository,
-    private val challengeService: ChallengeService
+    private val challengeService: ChallengeService,
+    private val statusListService: StatusListService
 ) {
 
     /**
@@ -83,6 +85,17 @@ class WalletController(
     }
 
     /**
+     * Revokes a user's key by setting its bit to 1 in the Status List.
+     */
+    @PostMapping("/keys/{userId}/revoke")
+    @Operation(summary = "Revoke Key", description = "Sets the revocation bit to 1 for this user's key index.")
+    fun revokeKey(@PathVariable userId: String): Map<String, String> {
+        val key = hsmService.getUserKey(userId)
+        statusListService.revoke(key.revocationIndex)
+        return mapOf("status" to "REVOKED", "index" to key.revocationIndex.toString())
+    }
+
+    /**
      * Endpoint to perform a digital signature operation inside the HSM.
      */
     @PostMapping("/sign/{userId}")
@@ -91,6 +104,11 @@ class WalletController(
         @PathVariable userId: String, 
         @RequestBody request: SignRequest
     ): Map<String, String> {
+        val key = hsmService.getUserKey(userId)
+
+        // Check if the key is revoked before signing
+        hsmService.validateKeyStatus(key)
+
         val signatureBytes = hsmService.signData(userId, request.data.toByteArray())
         val signatureBase64 = Base64.getEncoder().encodeToString(signatureBytes)
 
@@ -194,6 +212,10 @@ class WalletController(
     ): Map<String, Any> {
         val credential = credentialRepository.findById(credentialId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Credential not found") }
+
+        // Check if the associated key is revoked before creating the presentation
+        val walletKey = credential.walletKey ?: throw RuntimeException("No key associated with credential")
+        hsmService.validateKeyStatus(walletKey)
 
         // Filter the multipart string to include only requested disclosures
         val minimizedSdJwt = presentationService.createSelectivePresentation(

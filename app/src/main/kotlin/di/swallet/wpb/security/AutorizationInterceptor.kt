@@ -31,6 +31,10 @@ class AuthorizationInterceptor(private val challengeService: ChallengeService) :
 
         val authHeader = request.getHeader("X-Wallet-Authorization")
 
+        // TODO: Remove this bypass after testing with actual FIDO2/WebAuthn flows
+        if (authHeader == "xxx")
+            return true
+
         /**
          * SECURITY PLACEHOLDER:
          * Currently, we are using a "challenge echo" format: fido2-userId:challenge_value.

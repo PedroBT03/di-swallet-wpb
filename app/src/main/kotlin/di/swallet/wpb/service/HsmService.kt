@@ -31,6 +31,7 @@ import com.nimbusds.jwt.*
 @Service
 class HsmService(
     private val walletKeyRepository: WalletKeyRepository,
+    private val statusListService: StatusListService,
     private val hsmProperties: HsmProperties
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -88,7 +89,12 @@ class HsmService(
 
             // 4. Save metadata to database
             val pubKeyBase64 = Base64.getEncoder().encodeToString(keyPair.public.encoded)
-            val walletKey = WalletKey(userId = userId, keyAlias = alias, publicKeyBase64 = pubKeyBase64)
+            val walletKey = WalletKey(
+                userId = userId, 
+                keyAlias = alias, 
+                publicKeyBase64 = pubKeyBase64,
+                revocationIndex = statusListService.getNextRevocationIndex()
+            )
 
             logger.info("WSCA: Key created for user $userId with alias $alias")
             return walletKeyRepository.save(walletKey)
@@ -99,11 +105,24 @@ class HsmService(
     }
 
     /**
+     * Validates if the key is authorized for use based on the bitstring status.
+     * Throws 403 Forbidden if the key is marked as revoked.
+     */
+    fun validateKeyStatus(walletKey: WalletKey) {
+        if (statusListService.isRevoked(walletKey.revocationIndex)) {
+            logger.warn("Security: Blocked operation attempt using revoked key for user ${walletKey.userId}")
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Key has been revoked in the status list bitstring")
+        }
+    }
+
+    /**
      * Performs a digital signature on the provided data using the user's private key in the HSM.
      */
     fun signData(userId: String, dataToSign: ByteArray): ByteArray {
-        val walletKey = walletKeyRepository.findByUserId(userId)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Key not found") }
+        val walletKey = getUserKey(userId)
+        
+        // Ensure the key is active before signing
+        validateKeyStatus(walletKey)
 
         try {
             val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
@@ -160,6 +179,9 @@ class HsmService(
      */
     fun signJwt(userId: String, claims: JWTClaimsSet): String {
         val walletKey = getUserKey(userId)
+
+        // Ensure the key is active before signing
+        validateKeyStatus(walletKey)
         
         // 1. Create the JWS Header, using ES256
         val header = JWSHeader.Builder(JWSAlgorithm.ES256)
@@ -192,6 +214,9 @@ class HsmService(
      */
     fun signSdJwt(userId: String, sdClaims: Map<String, Any>): String {
         val walletKey = getUserKey(userId)
+
+        // Ensure the key is active before signing
+        validateKeyStatus(walletKey)
         
         // 1. Create the Header with the specific SD-JWT type
         val header = JWSHeader.Builder(JWSAlgorithm.ES256)
@@ -208,6 +233,9 @@ class HsmService(
         val jwsSignatureBytes = ECDSA.transcodeSignatureToConcat(derSignature, 64)
         val base64UrlSignature = Base64URL.encode(jwsSignatureBytes)
 
-        return "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$base64UrlSignature"
+        // 4. Return the complete SD-JWT
+        val signedSdJwt = "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$base64UrlSignature"
+
+        return signedSdJwt
     }
 }

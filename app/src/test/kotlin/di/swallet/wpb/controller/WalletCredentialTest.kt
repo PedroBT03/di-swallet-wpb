@@ -1,5 +1,6 @@
-package di.swallet.wpb
+package di.swallet.wpb.controller
 
+import di.swallet.wpb.BaseIntegrationTest
 import di.swallet.wpb.domain.WalletCredential
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test

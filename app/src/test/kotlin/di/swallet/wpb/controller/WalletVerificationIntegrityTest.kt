@@ -1,5 +1,6 @@
-package di.swallet.wpb
+package di.swallet.wpb.controller
 
+import di.swallet.wpb.BaseIntegrationTest
 import di.swallet.wpb.controller.PresentationRequest
 import di.swallet.wpb.controller.VerificationRequest
 import di.swallet.wpb.domain.WalletCredential

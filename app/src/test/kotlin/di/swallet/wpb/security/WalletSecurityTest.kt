@@ -1,5 +1,6 @@
-package di.swallet.wpb
+package di.swallet.wpb.security
 
+import di.swallet.wpb.BaseIntegrationTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpStatus
@@ -11,7 +12,7 @@ class WalletSecurityTest : BaseIntegrationTest() {
      */
     @Test
     fun `security interceptor should block requests without valid authorization`() {
-        logger.info("Step 1: Security. Testing access without header")
+        logger.info("Testing access without header")
         val response = restTemplate.postForEntity("/api/v1/wallet/keys/any-user", null, String::class.java)
         assertThat(response.statusCode).isEqualTo(HttpStatus.UNAUTHORIZED)
         logger.info("Result: Request blocked successfully")
@@ -22,7 +23,7 @@ class WalletSecurityTest : BaseIntegrationTest() {
      */
     @Test
     fun `security interceptor should block invalid challenge format`() {
-        logger.info("Step 2: Security. Testing with malformed challenge")
+        logger.info("Testing with malformed challenge")
         val headers = org.springframework.http.HttpHeaders()
         headers.set("X-Wallet-Authorization", "fido2-user:wrong-challenge")
         val entity = org.springframework.http.HttpEntity<String>(headers)

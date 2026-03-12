@@ -1,46 +1,94 @@
 package di.swallet.wpb.service
 
+import di.swallet.wpb.domain.StatusList
+import di.swallet.wpb.domain.StatusListRepository
+import jakarta.annotation.PostConstruct
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.*
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Service managing the Revocation Bitstring.
- * Bit 0 = Active, Bit 1 = Revoked.
+ * Service managing the persistent Status List Bitstring.
+ * Implements the W3C/eIDAS 2.0 pattern where revocation is tracked via bits.
+ * Bit 0 = ACTIVE, Bit 1 = REVOKED.
  */
 @Service
-class StatusListService {
+class StatusListService(private val statusListRepository: StatusListRepository) {
 
-    // A BitSet represents the bitstring efficiently in memory
-    private val revocationBitstring = BitSet(10000) 
-    private val nextIndex = AtomicInteger(0)
+    private val logger = LoggerFactory.getLogger(javaClass)
+    private lateinit var internalBitset: BitSet
+    private val listId = "PRIMARY_LIST"
 
     /**
-     * Assigns the next available index in the bitstring to a new key.
+     * Initializes the service by loading the bitstring from the database on startup.
+     * This ensures the revocation state survives server restarts.
      */
+    @PostConstruct
+    fun init() {
+        val storedList = statusListRepository.findById(listId)
+        if (storedList.isPresent) {
+            val list = storedList.get()
+            // Convert the binary data from the DB back into a BitSet
+            internalBitset = BitSet.valueOf(list.bitstring)
+            logger.info("StatusList: Loaded existing list from database. Current bitset size: ${internalBitset.length()}")
+        } else {
+            // Create a new list if it's the first time running
+            internalBitset = BitSet(100000)
+            syncToDatabase(0)
+            logger.info("StatusList: No list found. Created new primary status list in database.")
+        }
+    }
+
+    /**
+     * Allocates the next available index for a new wallet key.
+     * Increments and persists the counter in the database.
+     */
+    @Transactional
     fun getNextRevocationIndex(): Int {
-        return nextIndex.getAndIncrement()
+        val list = statusListRepository.findById(listId).orElseThrow { 
+            RuntimeException("Status list not initialized") 
+        }
+        val index = list.nextIndex
+        list.nextIndex = index + 1
+        statusListRepository.save(list)
+        return index
     }
 
     /**
-     * Revokes a key by setting its bit to 1.
+     * Revokes a specific index by setting its bit to 1.
+     * Persists the updated bitstring to the database.
      */
+    @Transactional
     fun revoke(index: Int) {
-        revocationBitstring.set(index, true)
+        internalBitset.set(index, true)
+        syncToDatabase()
+        logger.info("StatusList: Bit at index $index set to 1 (REVOKED) and saved to database.")
     }
 
     /**
-     * Checks if a key is revoked. Returns true if bit is 1.
+     * Checks if a key index is marked as revoked in the current bitset.
      */
     fun isRevoked(index: Int): Boolean {
-        return revocationBitstring.get(index)
+        return internalBitset.get(index)
     }
 
     /**
-     * Returns the raw bitstring as a Base64 string.
-     * This is what a Verifier would download to check statuses.
+     * Returns the Base64 encoded version of the raw bitstring.
      */
-    fun getRawBitstring(): String {
-        return Base64.getEncoder().encodeToString(revocationBitstring.toByteArray())
+    fun getEncodedStatusList(): String {
+        return Base64.getEncoder().encodeToString(internalBitset.toByteArray())
+    }
+
+    /**
+     * Internal helper to save the current memory state into the PostgreSQL BYTEA column.
+     */
+    private fun syncToDatabase(nextIndexOverride: Int? = null) {
+        val list = statusListRepository.findById(listId).orElse(StatusList(id = listId))
+        list.bitstring = internalBitset.toByteArray()
+        if (nextIndexOverride != null) {
+            list.nextIndex = nextIndexOverride
+        }
+        statusListRepository.save(list)
     }
 }

@@ -68,7 +68,7 @@ class VerificationService(
      * Decodes a Base64 encoded public key into an ECPublicKey.
      */
     private fun decodePublicKey(base64Key: String): ECPublicKey {
-        val keyBytes = Base64.getDecoder().decode(base64Key)
+        val keyBytes = Base64.getUrlDecoder().decode(base64Key.trim())
         val spec = X509EncodedKeySpec(keyBytes)
         val kf = KeyFactory.getInstance("EC")
         return kf.generatePublic(spec) as ECPublicKey

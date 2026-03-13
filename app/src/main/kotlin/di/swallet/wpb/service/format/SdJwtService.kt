@@ -29,7 +29,7 @@ class SdJwtService {
         val disclosureArray = "[\"$saltBase64\", \"$claimName\", \"$claimValue\"]"
         
         // 3. Return the Base64URL encoded version
-        return Base64URL.encode(disclosureArray).toString()
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(disclosureArray.toByteArray())
     }
 
     /**

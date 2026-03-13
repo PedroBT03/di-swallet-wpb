@@ -11,11 +11,13 @@ import java.util.*
 import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.service.MockIssuerService
 import di.swallet.wpb.service.StatusListService
+import di.swallet.wpb.service.Fido2Service
 import di.swallet.wpb.service.format.SdJwtService
 import di.swallet.wpb.service.format.PresentationService
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.domain.UserDevice
 import di.swallet.wpb.security.ChallengeService
 
 /**
@@ -48,8 +50,30 @@ class WalletController(
     private val presentationService: PresentationService,
     private val credentialRepository: WalletCredentialRepository,
     private val challengeService: ChallengeService,
-    private val statusListService: StatusListService
+    private val statusListService: StatusListService,
+    private val fido2Service: Fido2Service
 ) {
+
+    // --- SECTION 1: AUTHENTICATION & ONBOARDING ---
+
+    /**
+     * Registers a new device for FIDO2 authorization.
+     * 
+     * REAL-WORLD NOTE: In a production EUDI Wallet, this registration must be preceded 
+     * by a High Level of Assurance (LoA High) authentication, such as using the 
+     * Portuguese 'Chave Móvel Digital' or 'Cartão de Cidadão'. Once the identity 
+     * is verified via an official IdP, this endpoint binds that identity to the 
+     * user's physical device hardware.
+     */
+    @PostMapping("/auth/register/{userId}")
+    @Operation(summary = "Register Device (FIDO2 Simulation)")
+    fun registerDevice(
+        @PathVariable userId: String,
+        @RequestParam credentialId: String,
+        @RequestParam publicKeyBase64: String
+    ): UserDevice {
+        return fido2Service.registerDevice(userId, credentialId, publicKeyBase64)
+    }
 
     /**
      * Generates a unique cryptographic challenge (nonce) to be signed by the user's physical device.
@@ -65,6 +89,8 @@ class WalletController(
             "info" to "Sign this challenge using your device to authorize the next operation."
         )
     }
+
+    // --- SECTION 2: HARDWARE KEY MANAGEMENT ---
 
     /**
      * Endpoint to generate a hardware-backed cryptographic key for a specific user.
@@ -95,29 +121,7 @@ class WalletController(
         return mapOf("status" to "REVOKED", "index" to key.revocationIndex.toString())
     }
 
-    /**
-     * Endpoint to perform a digital signature operation inside the HSM.
-     */
-    @PostMapping("/sign/{userId}")
-    @Operation(summary = "Remote Signature", description = "Triggers a signing operation inside the secure boundary of the HSM")
-    fun sign(
-        @PathVariable userId: String, 
-        @RequestBody request: SignRequest
-    ): Map<String, String> {
-        val key = hsmService.getUserKey(userId)
-
-        // Check if the key is revoked before signing
-        hsmService.validateKeyStatus(key)
-
-        val signatureBytes = hsmService.signData(userId, request.data.toByteArray())
-        val signatureBase64 = Base64.getEncoder().encodeToString(signatureBytes)
-
-        return mapOf(
-            "userId" to userId,
-            "signature" to signatureBase64,
-            "algorithm" to "SHA256withECDSA"
-        )
-    }
+    // --- SECTION 3: CREDENTIAL ISSUANCE ---
 
     /**
      * Simulates the issuance of a Verifiable Credential (PID) using a Mock Issuer.
@@ -131,19 +135,17 @@ class WalletController(
     ): Map<String, Any> {
         val userData = mockIssuerService.fetchUserData(userId)
         
-        // Build the JWT Claims
         val claims = JWTClaimsSet.Builder()
             .issuer("https://pt-mock-issuer.gov.pt")
             .subject(userId)
             .issueTime(Date())
-            .expirationTime(Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365)) // 1 year
+            .expirationTime(Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365))
             .claim("vc", mapOf(
                 "type" to listOf("VerifiableCredential", credentialType),
                 "credentialSubject" to userData
             ))
             .build()
 
-        // Sign the JWT using the HSM logic (Format Engine)
         val signedJwt = hsmService.signJwt(userId, claims)
 
         return mapOf(
@@ -161,13 +163,10 @@ class WalletController(
     @PostMapping("/credentials/issue-sd/{userId}")
     @Operation(summary = "Issue and Store SD-JWT", description = "Generates an SD-JWT and persists it in the database.")
     fun issueSdCredential(@PathVariable userId: String): WalletCredential {
-        // 1. Get the user's key reference
         val walletKey = hsmService.getUserKey(userId)
-
-        // 2. Fetch data from Mock Issuer
         val userData = mockIssuerService.fetchUserData(userId)
 
-        // 3. Process each attribute with salted hashing to enable selective disclosure
+        // Process each attribute with salted hashing to enable selective disclosure
         val disclosures = mutableListOf<String>()
         val hashedDisclosures = mutableListOf<String>()
         userData.forEach { (key, value) ->
@@ -184,13 +183,11 @@ class WalletController(
             "_sd_alg" to "sha-256"
         )
 
-        // 4. Sign and Format
         val signedJwt = hsmService.signSdJwt(userId, sdPayload)
         val finalSdJwt = StringBuilder(signedJwt)
         disclosures.forEach { finalSdJwt.append("~").append(it) }
         finalSdJwt.append("~")
 
-        // 5. Persist the credential in the database
         val credential = WalletCredential(
             userId = userId,
             credentialType = "PID",
@@ -200,6 +197,8 @@ class WalletController(
 
         return credentialRepository.save(credential)
     }
+
+    // --- SECTION 4: CREDENTIAL USAGE & SIGNING ---
 
     /**
      * Endpoint to filter a stored SD-JWT and create a minimized presentation.
@@ -213,7 +212,7 @@ class WalletController(
         val credential = credentialRepository.findById(credentialId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Credential not found") }
 
-        // Check if the associated key is revoked before creating the presentation
+        // Check revocation status before presentation
         val walletKey = credential.walletKey ?: throw RuntimeException("No key associated with credential")
         hsmService.validateKeyStatus(walletKey)
 
@@ -231,6 +230,32 @@ class WalletController(
             "revealedClaims" to request.claimsToDisclose
         )
     }
+
+    /**
+     * Endpoint to perform a digital signature operation inside the HSM.
+     */
+    @PostMapping("/sign/{userId}")
+    @Operation(summary = "Remote Signature", description = "Triggers a signing operation inside the secure boundary of the HSM")
+    fun sign(
+        @PathVariable userId: String, 
+        @RequestBody request: SignRequest
+    ): Map<String, String> {
+        val key = hsmService.getUserKey(userId)
+
+        // Validate key state before cryptographic execution
+        hsmService.validateKeyStatus(key)
+
+        val signatureBytes = hsmService.signData(userId, request.data.toByteArray())
+        val signatureBase64 = Base64.getEncoder().encodeToString(signatureBytes)
+
+        return mapOf(
+            "userId" to userId,
+            "signature" to signatureBase64,
+            "algorithm" to "SHA256withECDSA"
+        )
+    }
+
+    // --- SECTION 5: DATA RETRIEVAL ---
 
     /**
      * Endpoint to retrieve all issued credentials for a user.

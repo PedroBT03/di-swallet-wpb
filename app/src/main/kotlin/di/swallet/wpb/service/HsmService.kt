@@ -88,7 +88,7 @@ class HsmService(
             keyStore.setKeyEntry(alias, keyPair.private, null, chain)
 
             // 4. Save metadata to database
-            val pubKeyBase64 = Base64.getEncoder().encodeToString(keyPair.public.encoded)
+            val pubKeyBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(keyPair.public.encoded)
             val walletKey = WalletKey(
                 userId = userId, 
                 keyAlias = alias, 

@@ -1,5 +1,6 @@
 package di.swallet.wpb.security
 
+import di.swallet.wpb.service.Fido2Service
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
@@ -8,58 +9,54 @@ import org.springframework.web.servlet.HandlerInterceptor
 
 /**
  * Security interceptor that enforces the SoleControl mandate.
- * It validates that every request to the wallet API is authorized by a valid FIDO2 challenge.
  */
 @Component
-class AuthorizationInterceptor(private val challengeService: ChallengeService) : HandlerInterceptor {
+class AuthorizationInterceptor(
+    private val challengeService: ChallengeService,
+    private val fido2Service: Fido2Service
+) : HandlerInterceptor {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /**
-     * Intercepts incoming requests to verify the authorization header.
-     * Allows anonymous access only to the authentication challenge endpoint.
-     */
     override fun preHandle(
         request: HttpServletRequest,
         response: HttpServletResponse,
         handler: Any
     ): Boolean {
-        // Allow users to request a challenge without a token
-        if (request.requestURI.contains("/auth/challenge")) {
+        // Allow access to endpoints used for the initial security handshake and device pairing
+        if (request.requestURI.contains("/auth/challenge") || request.requestURI.contains("/auth/register")) {
             return true
         }
 
         val authHeader = request.getHeader("X-Wallet-Authorization")
 
-        // TODO: Remove this bypass after testing with actual FIDO2/WebAuthn flows
-        if (authHeader == "xxx")
-            return true
+        // Development bypass
+        if (authHeader == "xxx") return true
 
-        /**
-         * SECURITY PLACEHOLDER:
-         * Currently, we are using a "challenge echo" format: fido2-userId:challenge_value.
-         * TO BE IMPLEMENTED: Replace this logic with WebAuthn assertion verification 
-         * using the user's public key registered in the database.
-         */
-        // Validate Header Format: Expects the format "fido2-userId:challenge"
+        // Validate Header Format: Expects "fido2-userId:credentialId:signature"
         if (authHeader != null && authHeader.startsWith("fido2-")) {
             val credentialsPart = authHeader.removePrefix("fido2-")
             val parts = credentialsPart.split(":")
 
-            if (parts.size == 2) {
+            if (parts.size == 3) {
                 val userId = parts[0]
-                val challenge = parts[1]
+                val credentialId = parts[1]
+                val signature = parts[2]
 
-                // Cryptographic Validation: Verify that the challenge is valid and belongs to the user
-                if (challengeService.validateChallenge(userId, challenge)) {
-                    logger.info("SecurityPolicy: Authorization successful for user $userId")
+                // 1. Retrieve the expected challenge
+                val challenge = challengeService.getChallengeForUser(userId)
+
+                // 2. Verify the device signature via Fido2Service
+                if (challenge != null && fido2Service.verifyDeviceSignature(userId, credentialId, challenge, signature)) {
+                    // 3. Consume the challenge if verification succeeds
+                    challengeService.validateChallenge(userId, challenge)
+                    logger.info("SecurityPolicy: Authorized access for $userId via device $credentialId")
                     return true
                 }
             }
         }
 
-        // Security Breach Attempt: Block request if header is missing, malformed, or challenge is invalid
-        logger.warn("SecurityPolicy: Unauthorized access attempt detected at ${request.requestURI}")
+        logger.warn("SecurityPolicy: Unauthorized access attempt to ${request.requestURI}")
         throw UnauthorizedWalletException("Invalid or expired FIDO2 authorization context")
     }
 }

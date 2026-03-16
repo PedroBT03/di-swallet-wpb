@@ -37,7 +37,14 @@ class ChallengeService(
         )
     }
 
+    /**
+     * Stores a new assertion request for the given user ID. If a challenge already exists, it will be replaced.
+     */
     fun storeRequest(userId: String, request: AssertionRequest) {
+        if (requestStore.containsKey(userId)) {
+            logger.warn("SecurityPolicy: Challenge already active for user $userId — replacing")
+        }
+
         requestStore[userId] = StoredRequest(
             request = request,
             expiresAt = Instant.now().plusSeconds(ttlSeconds)

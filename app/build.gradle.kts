@@ -40,6 +40,8 @@ dependencies {
     implementation("org.bouncycastle:bcpkix-jdk18on:1.77")
     // FIDO2 / WebAuthn support for Strong User Authentication (SUA)
     implementation("com.yubico:webauthn-server-core:2.5.4")
+    // FIDO2 Metadata Service (MDS) for hardware attestation verification
+    implementation("com.yubico:webauthn-server-attestation:2.5.4")
     
     // --- API Documentation ---
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5")

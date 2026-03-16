@@ -1,41 +1,74 @@
 package di.swallet.wpb.security
 
+import com.yubico.webauthn.AssertionRequest
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
-import java.security.SecureRandom
-import java.util.*
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import di.swallet.wpb.config.WalletProperties
 
 /**
- * Stateful service to manage cryptographic challenges (nonces).
+ * Stateful service to manage single-use WebAuthn Assertion Requests.
+ * Challenges expire after a configurable TTL to prevent replay attacks.
  */
 @Service
-class ChallengeService {
-    private val secureRandom = SecureRandom()
-    private val challengeStore = ConcurrentHashMap<String, String>()
+class ChallengeService(
+    private val walletProperties: WalletProperties
+) {
+    private val logger = LoggerFactory.getLogger(javaClass)
 
-    /**
-     * Generates a new random challenge for a user.
-     */
-    fun generateChallenge(userId: String): String {
-        val bytes = ByteArray(32)
-        secureRandom.nextBytes(bytes)
-        val challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-        challengeStore[userId] = challenge
-        return challenge
+    private data class StoredRequest(
+        val request: AssertionRequest,
+        val expiresAt: Instant
+    )
+
+    private val requestStore = ConcurrentHashMap<String, StoredRequest>()
+
+    private val ttlSeconds get() = walletProperties.challenge.ttlSeconds
+
+    // Background cleanup of expired challenges
+    init {
+        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(
+            { purgeExpired() },
+            ttlSeconds, ttlSeconds, TimeUnit.SECONDS
+        )
+    }
+
+    fun storeRequest(userId: String, request: AssertionRequest) {
+        requestStore[userId] = StoredRequest(
+            request = request,
+            expiresAt = Instant.now().plusSeconds(ttlSeconds)
+        )
     }
 
     /**
-     * Retrieves the current challenge for a user without removing it.
+     * Returns the request only if it exists and has not expired.
      */
-    fun getChallengeForUser(userId: String): String? {
-        return challengeStore[userId]
+    fun getRequest(userId: String): AssertionRequest? {
+        val stored = requestStore[userId] ?: return null
+        if (Instant.now().isAfter(stored.expiresAt)) {
+            requestStore.remove(userId)
+            logger.warn("SecurityPolicy: Challenge expired for user $userId")
+            return null
+        }
+        return stored.request
     }
 
-    /**
-     * Validates and consumes a challenge (removes it from memory).
-     */
-    fun validateChallenge(userId: String, receivedChallenge: String): Boolean {
-        val storedChallenge = challengeStore.remove(userId)
-        return storedChallenge != null && storedChallenge == receivedChallenge
+    fun removeRequest(userId: String) {
+        requestStore.remove(userId)
+    }
+
+    fun getRawChallenge(userId: String): String? {
+        return getRequest(userId)?.publicKeyCredentialRequestOptions?.challenge?.base64Url
+    }
+
+    private fun purgeExpired() {
+        val now = Instant.now()
+        val expired = requestStore.entries.filter { now.isAfter(it.value.expiresAt) }.map { it.key }
+        expired.forEach { requestStore.remove(it) }
+        if (expired.isNotEmpty()) logger.info("SecurityPolicy: Purged ${expired.size} expired challenge(s)")
     }
 }

@@ -1,0 +1,71 @@
+{
+  "groups": [
+    {
+      "name": "wallet",
+      "type": "di.swallet.wpb.config.WalletProperties",
+      "sourceType": "di.swallet.wpb.config.WalletProperties"
+    },
+    {
+      "name": "wallet.rp",
+      "type": "di.swallet.wpb.config.WalletProperties$RpProperties",
+      "sourceType": "di.swallet.wpb.config.WalletProperties",
+      "sourceMethod": "getRp()"
+    },
+    {
+      "name": "wallet.challenge",
+      "type": "di.swallet.wpb.config.WalletProperties$ChallengeProperties",
+      "sourceType": "di.swallet.wpb.config.WalletProperties",
+      "sourceMethod": "getChallenge()"
+    },
+    {
+      "name": "wpb.hsm",
+      "type": "di.swallet.wpb.config.HsmProperties",
+      "sourceType": "di.swallet.wpb.config.HsmProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "wallet.rp.id",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.WalletProperties$RpProperties",
+      "description": "WebAuthn Relying Party ID. Must match the registered domain in production (e.g., wpb.diswallet.eu).",
+      "defaultValue": "localhost"
+    },
+    {
+      "name": "wallet.rp.name",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.WalletProperties$RpProperties",
+      "description": "Human-readable name of the Relying Party shown during WebAuthn ceremonies.",
+      "defaultValue": "DI-Swallet Wallet Provider"
+    },
+    {
+      "name": "wallet.origins",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.WalletProperties",
+      "description": "Comma-separated list of allowed WebAuthn origins. Use HTTPS only in production.",
+      "defaultValue": "http://localhost,http://localhost:8080,https://localhost"
+    },
+    {
+      "name": "wallet.allow-untrusted-attestation",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.WalletProperties",
+      "description": "Allow unverified authenticator attestation. Must be false in production with MDS configured.",
+      "defaultValue": true
+    },
+    {
+      "name": "wallet.challenge.ttl-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.WalletProperties$ChallengeProperties",
+      "description": "Time-to-live in seconds for a WebAuthn challenge before it expires.",
+      "defaultValue": 120
+    },
+    {
+      "name": "wpb.hsm.library",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.HsmProperties",
+      "description": "Path to the PKCS#11 library file used by the HSM (e.g., /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so).",
+      "defaultValue": ""
+    }
+  ],
+  "hints": []
+}

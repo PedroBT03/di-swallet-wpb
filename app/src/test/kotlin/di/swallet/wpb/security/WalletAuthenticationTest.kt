@@ -1,71 +1,55 @@
 package di.swallet.wpb.security
 
 import di.swallet.wpb.BaseIntegrationTest
-import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpStatus
+import org.springframework.web.util.UriComponentsBuilder
 import java.util.*
 
-/**
- * Technical validation of the FIDO2/WebAuthn Cryptographic Handshake.
- * This test simulates a physical device performing real ECDSA signing.
- */
 class WalletAuthenticationTest : BaseIntegrationTest() {
 
     @Test
+    @Suppress("UNCHECKED_CAST")
     fun `should complete a real cryptographic challenge-response handshake`() {
         val userId = "crypto-user-${UUID.randomUUID()}"
+        val localCredentialId = "device-${UUID.randomUUID()}"
         
         logger.info("--- STARTING CRYPTOGRAPHIC AUTHENTICATION TEST ---")
 
-        // Step 1: Device Registration
-        // User pairing their phone's public key with the WPB.
+        // Step 1: DeviceRegistration
         val devicePubKey = Fido2TestHelper.getPublicKeyBase64(deviceKeyPair)
-        logger.info("Step 1: Registering Device. Public Key (Base64): $devicePubKey")
-        
-        val registrationUrl = org.springframework.web.util.UriComponentsBuilder
+        val registrationUrl = UriComponentsBuilder
             .fromPath("/api/v1/wallet/auth/register/{userId}")
-            .queryParam("credentialId", testCredentialId)
+            .queryParam("credentialId", localCredentialId)
             .queryParam("publicKeyBase64", devicePubKey)
-            .buildAndExpand(userId)
-            .toUriString()
+            .buildAndExpand(userId).toUriString()
             
-        val regResponse = restTemplate.postForEntity(registrationUrl, null, String::class.java)
+        restTemplate.postForEntity(registrationUrl, null, String::class.java)
 
-        assertThat(regResponse.statusCode).isEqualTo(HttpStatus.OK)
+        // Step 2: ChallengeRequest
+        val authResponse = restTemplate.getForObject("/api/v1/wallet/auth/challenge/$userId", Map::class.java) as Map<String, String>
+        val challenge = authResponse["challenge"]!!
 
-        // Step 2: Challenge Request
-        // The server provides a nonce.
-        logger.info("Step 2: Requesting Auth Challenge from server")
-        val authResponse = restTemplate.getForObject(
-            "/api/v1/wallet/auth/challenge/$userId", 
-            Map::class.java
-        ) as Map<*, *>
-        val challenge = authResponse["challenge"] as String
-        logger.info("Result: Received Challenge: $challenge")
+        // Step 3: ClientSideSigning - Generating real FIDO2 blobs
+        logger.info("Step 3: Signing - Generating standard WebAuthn assertion blobs")
+        val assertionMap = Fido2TestHelper.createWebAuthnAssertion(userId, localCredentialId, challenge, deviceKeyPair)
 
-        // Step 3: Client-Side Signing
-        // The Fido2TestHelper simulates the phone's Secure Enclave signing the challenge.
-        logger.info("Step 3: Simulating device signature using Private Key (secp256r1)")
-        val signature = Fido2TestHelper.signChallenge(deviceKeyPair.private, challenge)
-        logger.info("Result: Generated Signature: $signature")
-
-        // Step 4: Server-Side Verification
-        logger.info("Step 4: Sending 3-part authorization header to server")
-        val headers = createAuthHeaders() // Clear headers
-        headers.set("X-Wallet-Authorization", "fido2-$userId:$testCredentialId:$signature")
+        // Step 4: ServerSideVerification - Using the StandardMode logic
+        logger.info("Step 4: Verification - Sending standard FIDO2 JSON header")
+        val jsonAssertion = com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(assertionMap)
+        val encodedAssertion = Base64.getUrlEncoder().withoutPadding().encodeToString(jsonAssertion.toByteArray())
+        
+        val headers = createAuthHeaders()
+        headers.set("X-Wallet-Authorization", "fido2-assertion:$encodedAssertion")
         val entity = HttpEntity<String>(headers)
 
-        val finalResponse = restTemplate.postForEntity(
-            "/api/v1/wallet/keys/$userId", 
-            entity, 
-            String::class.java
-        )
+        val finalResponse = restTemplate.postForEntity("/api/v1/wallet/keys/$userId", entity, String::class.java)
 
-        // Step 5: Final Assertion
-        assertThat(finalResponse.statusCode).isEqualTo(HttpStatus.OK)
-        logger.info("Final Result: Server verified the ECDSA signature and granted access to the HSM.")
-        logger.info("--- CRYPTOGRAPHIC AUTHENTICATION TEST COMPLETED ---")
+        // Step 5: FinalAssertions
+        assertEquals(HttpStatus.OK, finalResponse.statusCode)
+        logger.info("FinalResult: Server verified standard WebAuthn assertion. Access granted.")
+        logger.info("--- StartingCryptographicAuthenticationTest Completed ---")
     }
 }

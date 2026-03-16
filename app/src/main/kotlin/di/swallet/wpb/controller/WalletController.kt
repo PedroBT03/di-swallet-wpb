@@ -82,7 +82,10 @@ class WalletController(
     @GetMapping("/auth/challenge/{userId}")
     @Operation(summary = "Get Auth Challenge", description = "Generates a unique nonce for FIDO2/WebAuthn authorization.")
     fun getChallenge(@PathVariable userId: String): Map<String, String> {
-        val challenge = challengeService.generateChallenge(userId)
+        val assertionRequest = fido2Service.startAuthentication(userId)
+        
+        val challenge = assertionRequest.publicKeyCredentialRequestOptions.challenge.base64Url
+        
         return mapOf(
             "userId" to userId,
             "challenge" to challenge,

@@ -1,19 +1,22 @@
 package di.swallet.wpb.security
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.service.Fido2Service
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.HandlerInterceptor
+import java.util.Base64
 
 /**
- * Security interceptor that enforces the SoleControl mandate.
+ * Security interceptor that enforces the Sole Control mandate.
  */
 @Component
 class AuthorizationInterceptor(
     private val challengeService: ChallengeService,
-    private val fido2Service: Fido2Service
+    private val fido2Service: Fido2Service,
+    private val objectMapper: ObjectMapper
 ) : HandlerInterceptor {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -24,35 +27,34 @@ class AuthorizationInterceptor(
         handler: Any
     ): Boolean {
         // Allow access to endpoints used for the initial security handshake and device pairing
+        // TODO: Register path will be protected with a High LoA identity check
         if (request.requestURI.contains("/auth/challenge") || request.requestURI.contains("/auth/register")) {
             return true
         }
 
         val authHeader = request.getHeader("X-Wallet-Authorization")
 
-        // Development bypass
-        if (authHeader == "xxx") return true
+        // DevelopmentBypass: "xxx" token for easy Swagger testing
+        if (authHeader == "xxx") {
+            return true
+        }
 
-        // Validate Header Format: Expects "fido2-userId:credentialId:signature"
-        if (authHeader != null && authHeader.startsWith("fido2-")) {
-            val credentialsPart = authHeader.removePrefix("fido2-")
-            val parts = credentialsPart.split(":")
+        // Expects "fido2-assertion:<Base64URL_JSON>"
+        if (authHeader != null && authHeader.startsWith("fido2-assertion:")) {
+            try {
+                val encodedJson = authHeader.removePrefix("fido2-assertion:")
+                val json = String(Base64.getUrlDecoder().decode(encodedJson))
+                val assertionMap = objectMapper.readValue(json, Map::class.java)
 
-            if (parts.size == 3) {
-                val userId = parts[0]
-                val credentialId = parts[1]
-                val signature = parts[2]
-
-                // 1. Retrieve the expected challenge
-                val challenge = challengeService.getChallengeForUser(userId)
-
-                // 2. Verify the device signature via Fido2Service
-                if (challenge != null && fido2Service.verifyDeviceSignature(userId, credentialId, challenge, signature)) {
-                    // 3. Consume the challenge if verification succeeds
-                    challengeService.validateChallenge(userId, challenge)
-                    logger.info("SecurityPolicy: Authorized access for $userId via device $credentialId")
-                    return true
-                }
+                if (fido2Service.verifyStandardAssertion(
+                    userId = assertionMap["userId"] as String,
+                    credentialId = assertionMap["id"] as String,
+                    clientDataJSON = assertionMap["clientDataJSON"] as String,
+                    authenticatorData = assertionMap["authenticatorData"] as String,
+                    signature = assertionMap["signature"] as String
+                )) return true
+            } catch (e: Exception) {
+                logger.warn("SecurityPolicy: Failed to parse standard FIDO2 assertion: ${e.message}")
             }
         }
 

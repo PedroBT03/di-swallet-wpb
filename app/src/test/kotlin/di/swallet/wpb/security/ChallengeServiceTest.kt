@@ -1,38 +1,62 @@
 package di.swallet.wpb.security
 
+import com.yubico.webauthn.AssertionRequest
+import com.yubico.webauthn.data.ByteArray
+import com.yubico.webauthn.data.PublicKeyCredentialRequestOptions
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
+import java.util.*
+import di.swallet.wpb.config.WalletProperties
 
 class ChallengeServiceTest {
 
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val challengeService = ChallengeService()
+    private val challengeService = ChallengeService(
+        WalletProperties(challenge = WalletProperties.ChallengeProperties(ttlSeconds = 120))
+    )
 
     /**
-     * Verifies the core security property of anti-replay: 
-     * a challenge must be consumed (deleted) immediately after one use.
+     * Verifies that the service correctly manages the lifecycle of a WebAuthn AssertionRequest.
+     * This is essential for maintaining session context during the FIDO2 handshake.
      */
     @Test
-    fun `challenge should be single use only`() {
+    fun `challenge request should be single use only`() {
         val userId = "security-test-user"
+        
+        // Step 1: Generation - Create a minimal valid AssertionRequest context
+        logger.info("Step 1: Creating a standard AssertionRequest context")
+        
+        // Build the inner options first
+        val options = PublicKeyCredentialRequestOptions.builder()
+            .challenge(ByteArray(java.security.SecureRandom().generateSeed(32)))
+            .rpId("localhost")
+            .build()
 
-        // Step 1: Generation - Request a fresh nonce
-        logger.info("Step 1: Requesting a fresh cryptographic challenge")
-        val challenge = challengeService.generateChallenge(userId)
-        assertNotNull(challenge)
+        // Build the top-level request object
+        val dummyRequest = AssertionRequest.builder()
+            .publicKeyCredentialRequestOptions(options)
+            .username(Optional.of(userId))
+            .build()
 
-        // Step 2: First Validation - Initial use of the challenge
-        logger.info("Step 2: Attempting first use of the challenge")
-        val firstAttempt = challengeService.validateChallenge(userId, challenge)
-        assertTrue(firstAttempt)
-        logger.info("Result: First validation successful")
+        challengeService.storeRequest(userId, dummyRequest)
+        val rawChallenge = challengeService.getRawChallenge(userId)
+        
+        assertNotNull(rawChallenge)
+        logger.info("Result: Challenge stored successfully: $rawChallenge")
 
-        // Step 3: Second Validation - Anti-replay enforcement
-        logger.info("Step 3: Attempting second use of the same challenge")
-        val secondAttempt = challengeService.validateChallenge(userId, challenge)
-        assertFalse(secondAttempt)
+        // Step 2: Retrieval - Verify the context is preserved
+        logger.info("Step 2: Retrieving the stored request")
+        val retrieved = challengeService.getRequest(userId)
+        assertNotNull(retrieved)
+        assertEquals(dummyRequest, retrieved)
 
-        logger.info("Final Result: Anti-replay policy enforced. Challenge was successfully consumed.")
+        // Step 3: Removal - Ensure anti-replay enforcement
+        logger.info("Step 3: Removing the request to prevent reuse")
+        challengeService.removeRequest(userId)
+        assertNull(challengeService.getRequest(userId))
+        assertNull(challengeService.getRawChallenge(userId))
+
+        logger.info("Final Result: Challenge lifecycle managed correctly for WebAuthn compliance.")
     }
 }

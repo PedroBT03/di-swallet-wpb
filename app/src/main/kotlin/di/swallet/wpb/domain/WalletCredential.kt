@@ -1,5 +1,6 @@
 package di.swallet.wpb.domain
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -21,7 +22,11 @@ class WalletCredential(
     val credentialType: String = "", // e.g., "PID"
 
     @Column(columnDefinition = "TEXT", nullable = false)
-    val encodedData: String = "", // The full SD-JWT string with disclosures
+    val encodedData: String = "", // Signed SD-JWT (without disclosures)
+
+    @JsonIgnore
+    @Column(columnDefinition = "TEXT", nullable = false)
+    val encryptedDisclosures: String = "", // AES-GCM encrypted disclosure set
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "wallet_key_id")

@@ -35,8 +35,8 @@ class WalletCredentialTest : BaseIntegrationTest() {
         
         assertThat(issueResponse.statusCode).isEqualTo(HttpStatus.OK)
         val encodedData = issueResponse.body?.encodedData
-        assertThat(encodedData).contains("~") 
-        logger.info("Result: SD-JWT format verified with multipart disclosures")
+        assertThat(encodedData).doesNotContain("~")
+        logger.info("Result: Stored credential payload is minimized (signed JWT only)")
 
         // Step 3: PersistenceVerification. Fresh handshake to list credentials
         logger.info("Step 3: PersistenceVerification. Verifying database storage for user $testUserId")

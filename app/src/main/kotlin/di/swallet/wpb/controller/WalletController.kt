@@ -14,6 +14,7 @@ import di.swallet.wpb.service.StatusListService
 import di.swallet.wpb.service.Fido2Service
 import di.swallet.wpb.service.format.SdJwtService
 import di.swallet.wpb.service.format.PresentationService
+import di.swallet.wpb.service.format.DisclosureCipherService
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
@@ -48,6 +49,7 @@ class WalletController(
     private val mockIssuerService: MockIssuerService,
     private val sdJwtService: SdJwtService,
     private val presentationService: PresentationService,
+    private val disclosureCipherService: DisclosureCipherService,
     private val credentialRepository: WalletCredentialRepository,
     private val challengeService: ChallengeService,
     private val statusListService: StatusListService,
@@ -187,14 +189,13 @@ class WalletController(
         )
 
         val signedJwt = hsmService.signSdJwt(userId, sdPayload)
-        val finalSdJwt = StringBuilder(signedJwt)
-        disclosures.forEach { finalSdJwt.append("~").append(it) }
-        finalSdJwt.append("~")
+        val encryptedDisclosures = disclosureCipherService.encrypt(disclosures)
 
         val credential = WalletCredential(
             userId = userId,
             credentialType = "PID",
-            encodedData = finalSdJwt.toString(),
+            encodedData = signedJwt,
+            encryptedDisclosures = encryptedDisclosures,
             walletKey = walletKey
         )
 
@@ -219,11 +220,19 @@ class WalletController(
         val walletKey = credential.walletKey ?: throw RuntimeException("No key associated with credential")
         hsmService.validateKeyStatus(walletKey)
 
-        // Filter the multipart string to include only requested disclosures
-        val minimizedSdJwt = presentationService.createSelectivePresentation(
-            credential.encodedData, 
-            request.claimsToDisclose
-        )
+        // Backward-compatible support for legacy records that still contain inline disclosures.
+        val fullSdJwt = if (credential.encodedData.contains("~")) {
+            credential.encodedData
+        } else {
+            val disclosures = disclosureCipherService.decrypt(credential.encryptedDisclosures)
+            val rebuilt = StringBuilder(credential.encodedData)
+            disclosures.forEach { rebuilt.append("~").append(it) }
+            rebuilt.append("~")
+            rebuilt.toString()
+        }
+
+        // Filter the multipart token to include only requested disclosures.
+        val minimizedSdJwt = presentationService.createSelectivePresentation(fullSdJwt, request.claimsToDisclose)
 
         return mapOf(
             "userId" to credential.userId,

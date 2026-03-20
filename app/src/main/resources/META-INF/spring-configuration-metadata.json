@@ -18,6 +18,12 @@
       "sourceMethod": "getChallenge()"
     },
     {
+      "name": "wallet.disclosures",
+      "type": "di.swallet.wpb.config.WalletProperties$DisclosuresProperties",
+      "sourceType": "di.swallet.wpb.config.WalletProperties",
+      "sourceMethod": "getDisclosures()"
+    },
+    {
       "name": "wpb.hsm",
       "type": "di.swallet.wpb.config.HsmProperties",
       "sourceType": "di.swallet.wpb.config.HsmProperties"
@@ -58,6 +64,13 @@
       "sourceType": "di.swallet.wpb.config.WalletProperties$ChallengeProperties",
       "description": "Time-to-live in seconds for a WebAuthn challenge before it expires.",
       "defaultValue": 120
+    },
+    {
+      "name": "wallet.disclosures.encryption-key",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.WalletProperties$DisclosuresProperties",
+      "description": "Base64-encoded AES-256 key used to encrypt SD-JWT disclosures at rest.",
+      "defaultValue": "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY="
     },
     {
       "name": "wpb.hsm.library",

@@ -12,7 +12,8 @@ data class WalletProperties(
     val rp: RpProperties = RpProperties(),
     val origins: String = "http://localhost,http://localhost:8080,https://localhost",
     val allowUntrustedAttestation: Boolean = true,
-    val challenge: ChallengeProperties = ChallengeProperties()
+    val challenge: ChallengeProperties = ChallengeProperties(),
+    val disclosures: DisclosuresProperties = DisclosuresProperties()
 ) {
     data class RpProperties(
         val id: String = "localhost",
@@ -21,5 +22,9 @@ data class WalletProperties(
 
     data class ChallengeProperties(
         val ttlSeconds: Long = 120
+    )
+
+    data class DisclosuresProperties(
+        val encryptionKey: String = "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY="
     )
 }

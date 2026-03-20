@@ -81,6 +81,22 @@ class StatusListService(private val statusListRepository: StatusListRepository) 
     }
 
     /**
+     * Returns the stable identifier of the list exposed by this backend.
+     */
+    fun getListId(): String {
+        return listId
+    }
+
+    /**
+     * Returns the current allocation cursor used for new revocation entries.
+     */
+    fun getCurrentNextIndex(): Int {
+        return statusListRepository.findById(listId)
+            .orElseThrow { RuntimeException("Status list not initialized") }
+            .nextIndex
+    }
+
+    /**
      * Internal helper to save the current memory state into the PostgreSQL BYTEA column.
      */
     private fun syncToDatabase(nextIndexOverride: Int? = null) {

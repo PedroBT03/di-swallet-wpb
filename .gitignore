@@ -2,6 +2,7 @@
 .gradle
 build/
 app/build/
+app/bin/
 !gradle/wrapper/gradle-wrapper.jar
 local.properties
 
@@ -29,3 +30,6 @@ pkcs11.cfg
 # Logs
 *.log
 logs/
+
+# PIC pdf
+DI_Swallet_EU_Digital_Identity_Server_Side_Wallet_Architecture_1.pdf

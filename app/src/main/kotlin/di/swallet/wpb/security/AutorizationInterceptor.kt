@@ -26,6 +26,11 @@ class AuthorizationInterceptor(
         response: HttpServletResponse,
         handler: Any
     ): Boolean {
+        // Public revocation/status list publication endpoints consumed by external verifiers.
+        if (request.method == "GET" && request.requestURI.contains("/status-lists/")) {
+            return true
+        }
+
         // Allow access to endpoints used for the initial security handshake and device pairing
         // TODO: Register path will be protected with a High LoA identity check
         if (request.requestURI.contains("/auth/challenge") || request.requestURI.contains("/auth/register")) {

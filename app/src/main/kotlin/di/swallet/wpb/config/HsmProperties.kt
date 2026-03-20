@@ -10,4 +10,5 @@ import org.springframework.stereotype.Component
 @ConfigurationProperties(prefix = "wpb.hsm")
 class HsmProperties {
     var library: String = ""
+    var pin: String = ""
 }

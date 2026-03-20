@@ -37,7 +37,8 @@ class HsmService(
     private val logger = LoggerFactory.getLogger(javaClass)
     private var pkcs11Provider: Provider = Security.getProvider("SunPKCS11")
         ?: throw RuntimeException("SunPKCS11 provider not found")
-    private val pin = "1234"
+    private val pin: String
+        get() = hsmProperties.pin
 
     /**
      * Initializes the SunPKCS11 provider using the library path defined in configuration.

@@ -78,6 +78,13 @@
       "sourceType": "di.swallet.wpb.config.HsmProperties",
       "description": "Path to the PKCS#11 library file used by the HSM (e.g., /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so).",
       "defaultValue": ""
+    },
+    {
+      "name": "wpb.hsm.pin",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.HsmProperties",
+      "description": "PIN code for HSM authentication. Should be externalized via environment variable HSM_PIN in production.",
+      "defaultValue": "1234"
     }
   ],
   "hints": []

@@ -11,9 +11,9 @@ This repository contains the implementation of the **Wallet Provider Backend (WP
 
 ## 🛠️ Tech Stack
 - **Language:** Kotlin 1.9.24
-- **Framework:** Spring Boot 3.5.11
+- **Framework:** Spring Boot 3.5.12
 - **Cryptography:** BouncyCastle (Standard Security Provider)
-- **Persistence:** Spring Data JPA with H2 (In-Memory)
+- **Persistence:** Spring Data JPA with PostgreSQL (runtime) + H2 (tests)
 - **Standard:** PKCS#11 (SunPKCS11)
 
 ## 🚀 Prerequisites
@@ -69,8 +69,13 @@ Run the automated integration tests to verify the full cryptographic lifecycle:
 ## 📂 API Reference
 
 ### Mandatory Security
-All endpoints require the following header to simulate Strong User Authentication (SUA):
-- `X-Wallet-Authorization: fido2-assertion-mock`
+Protected endpoints require `X-Wallet-Authorization`:
+- **WebAuthn assertion (expected format):** `fido2-assertion:<Base64URL_JSON>`
+
+Real flow (for development and production-aligned testing):
+1. Register a device with `POST /api/v1/wallet/auth/register/{userId}`.
+2. Request a challenge with `GET /api/v1/wallet/auth/challenge/{userId}`.
+3. Sign the challenge in the client authenticator and send the assertion in `X-Wallet-Authorization`.
 
 ### 1. Generate User Key
 **Function:** Generates a hardware-protected EC KeyPair inside the HSM and stores metadata in the DB.
@@ -78,7 +83,7 @@ All endpoints require the following header to simulate Strong User Authenticatio
 - **Example:**
   ```bash
   curl -i -X POST http://localhost:8080/api/v1/wallet/keys/pedro-ist \
-    -H "X-Wallet-Authorization: fido2-assertion-mock"
+    -H "X-Wallet-Authorization: fido2-assertion:<Base64URL_JSON>"
   ```
 
 ### 2. Retrieve Key Metadata
@@ -91,10 +96,11 @@ All endpoints require the following header to simulate Strong User Authenticatio
 - **Example:**
   ```bash
   curl -i -X POST http://localhost:8080/api/v1/wallet/sign/pedro-ist \
-    -H "X-Wallet-Authorization: fido2-assertion-mock" \
+    -H "X-Wallet-Authorization: fido2-assertion:<Base64URL_JSON>" \
     -H "Content-Type: application/json" \
     -d '{"data": "Digital Signature Test for IST Thesis"}'
   ```
 
 ## 🛡️ Security Note
-This implementation ensures that **Private Keys are non-exportable**, satisfying the requirements for **eIDAS 2.0 Level of Assurance High (LoA High)**.
+This implementation ensures that **private keys are non-exportable** and HSM-backed signing is enforced.  
+For full production-grade **LoA High/QES** posture, additional hardening remains (for example: trusted attestation configuration and verified onboarding checks).

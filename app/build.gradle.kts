@@ -1,13 +1,13 @@
 plugins {
     // Core Spring Boot and Dependency Management
-    id("org.springframework.boot") version "3.5.12"
+    id("org.springframework.boot") version "3.5.14"
     id("io.spring.dependency-management") version "1.1.7"
     
     // Kotlin plugins for JVM, Spring, JPA, and Annotation Processing (kapt)
-    kotlin("jvm") version "1.9.24"
-    kotlin("plugin.spring") version "1.9.24"
-    kotlin("plugin.jpa") version "1.9.24"
-    kotlin("kapt") version "1.9.24"
+    kotlin("jvm") version "2.2.0"
+    kotlin("plugin.spring") version "2.2.0"
+    kotlin("plugin.jpa") version "2.2.0"
+    kotlin("kapt") version "2.2.0"
     
     application
 }
@@ -26,14 +26,29 @@ dependencies {
     implementation(kotlin("reflect"))
     implementation(kotlin("stdlib"))
 
+    // --- OpenID4VP / EUDI SDK ---
+    implementation("eu.europa.ec.eudi:eudi-lib-jvm-openid4vp-kt:0.13.0")
+
+    // --- Ktor client used by the EUDI SDK wrapper ---
+    implementation("io.ktor:ktor-client-cio:3.3.3")
+    implementation("io.ktor:ktor-client-content-negotiation:3.3.3")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.3.3")
+
     // --- Persistence Layer ---
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     runtimeOnly("org.postgresql:postgresql") // Production database
+    runtimeOnly("com.h2database:h2") // Allow local H2 runtime for dev/emulator
     testImplementation("com.h2database:h2")  // In-memory database for isolated testing
 
     // --- Identity & Credential Formats (Format Engine) ---
     // Used for JWS, JWT, and SD-JWT operations
     implementation("com.nimbusds:nimbus-jose-jwt:9.37.3")
+
+    // Reactive streams (coroutines interop) required for suspending controller support
+    implementation("org.reactivestreams:reactive-streams:1.0.4")
+    implementation("io.projectreactor:reactor-core:3.5.15")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
     // --- Cryptography & Security ---
     // Standard security provider for X.509 and certificate utilities
@@ -91,9 +106,9 @@ tasks.withType<Test> {
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions {
-        freeCompilerArgs = listOf("-Xjsr305=strict")
-        jvmTarget = "17"
+    compilerOptions {
+        freeCompilerArgs.add("-Xjsr305=strict")
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

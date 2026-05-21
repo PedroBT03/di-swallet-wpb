@@ -31,5 +31,8 @@ pkcs11.cfg
 *.log
 logs/
 
+# Virtual Environments
+.venv/
+
 # PIC pdf
 DI_Swallet_EU_Digital_Identity_Server_Side_Wallet_Architecture_1.pdf

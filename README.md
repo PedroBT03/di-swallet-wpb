@@ -104,3 +104,25 @@ Real flow (for development and production-aligned testing):
 ## 🛡️ Security Note
 This implementation ensures that **private keys are non-exportable** and HSM-backed signing is enforced.  
 For full production-grade **LoA High/QES** posture, additional hardening remains (for example: trusted attestation configuration and verified onboarding checks).
+
+## OpenID4VP Demo Mode Warning
+Some OpenID4VP shortcuts used for local emulator validation are protected behind:
+
+- `wpb.openid4vp.demo-mode=false` (default)
+
+When `wpb.openid4vp.demo-mode=true`, the backend enables demo-only behavior such as:
+
+- accepting a demo pre-registered verifier client (`verifier-demo-client`)
+- synthetic credential candidates when the wallet has no matching credentials
+- fallback request resolution/dispatch paths for emulator scenarios
+
+Important:
+
+- Never enable `wpb.openid4vp.demo-mode` in production or public environments.
+- Keep it enabled only for controlled local testing.
+
+Example (local demo run only):
+
+```bash
+./gradlew :app:bootRun --args='--wpb.openid4vp.demo-mode=true'
+```

@@ -1,0 +1,9 @@
+{
+  "client_id": "verifier-demo-client",
+  "response_type": "vp_token",
+  "response_mode": "query",
+  "redirect_uri": "http://localhost:8081/redirect_return",
+  "state": "req-redirect-query-1",
+  "nonce": "nonce-query-456",
+  "dcql": { "query": [{ "type": "Credential", "fields": ["email"] }] }
+}

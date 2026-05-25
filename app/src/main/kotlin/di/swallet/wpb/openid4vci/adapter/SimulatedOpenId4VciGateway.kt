@@ -17,6 +17,7 @@ import di.swallet.wpb.openid4vci.protocol.PreAuthorizedGrant
 import di.swallet.wpb.openid4vci.protocol.PreparedAuthorization
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.openid4vci.protocol.ResolvedOffer
+import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Primary
@@ -55,6 +56,7 @@ class SimulatedOpenId4VciGateway(
         val accessToken: String? = null,
         val refreshToken: String? = null,
         val cNonce: String? = null,
+        val wiaCnfJkt: String? = null,
         var deferredCounter: Int = 0,
     )
 
@@ -79,6 +81,7 @@ class SimulatedOpenId4VciGateway(
         offer: ResolvedOffer,
         metadata: ResolvedIssuerMetadata,
         proof: ProofMaterial,
+        walletAttestation: WalletAttestationTransport,
     ): PreparedAuthorization {
         require(offer.authorizationFlow == AuthorizationFlowKind.AUTHORIZATION_CODE) {
             "offer does not support authorization_code flow"
@@ -92,6 +95,7 @@ class SimulatedOpenId4VciGateway(
                 proof = proof,
                 pkceVerifier = verifier,
                 expectedState = state,
+                wiaCnfJkt = walletAttestation.cnfJkt,
             )
         }
         val authzEndpoint = metadata.authorizationServers.firstOrNull()?.authorizationEndpoint
@@ -105,6 +109,7 @@ class SimulatedOpenId4VciGateway(
             pkceUsed = true,
             parUsed = supportsPar,
             dpopRequested = metadata.authorizationServers.any { it.supportsDpop },
+            wiaAttached = true,
         )
     }
 
@@ -112,6 +117,7 @@ class SimulatedOpenId4VciGateway(
         adapterSessionId: String,
         authorizationCode: String,
         state: String,
+        walletAttestation: WalletAttestationTransport,
     ): AuthorizedContext {
         val current = states[adapterSessionId]
             ?: throw IllegalStateException("unknown adapter session: $adapterSessionId")
@@ -124,6 +130,7 @@ class SimulatedOpenId4VciGateway(
             accessToken = randomToken(48),
             refreshToken = randomToken(48),
             cNonce = randomToken(24),
+            wiaCnfJkt = walletAttestation.cnfJkt,
         )
         states[adapterSessionId] = updated
         return AuthorizedContext(
@@ -133,6 +140,8 @@ class SimulatedOpenId4VciGateway(
             dpopUsed = current.metadata?.authorizationServers?.any { it.supportsDpop } ?: false,
             cNoncePresent = true,
             authorizationServer = current.metadata?.authorizationServers?.firstOrNull()?.issuer,
+            accessTokenCnfJkt = walletAttestation.cnfJkt,
+            wiaCnfJkt = walletAttestation.cnfJkt,
         )
     }
 
@@ -142,6 +151,7 @@ class SimulatedOpenId4VciGateway(
         metadata: ResolvedIssuerMetadata,
         proof: ProofMaterial,
         txCode: String?,
+        walletAttestation: WalletAttestationTransport,
     ): AuthorizedContext {
         val grant = offer.preAuthorizedGrant
             ?: throw IllegalArgumentException("offer does not contain pre-authorized_code grant")
@@ -155,6 +165,7 @@ class SimulatedOpenId4VciGateway(
             accessToken = randomToken(48),
             refreshToken = randomToken(48),
             cNonce = randomToken(24),
+            wiaCnfJkt = walletAttestation.cnfJkt,
         )
         return AuthorizedContext(
             adapterSessionId = adapterSessionId,
@@ -163,6 +174,8 @@ class SimulatedOpenId4VciGateway(
             dpopUsed = metadata.authorizationServers.any { it.supportsDpop },
             cNoncePresent = true,
             authorizationServer = metadata.authorizationServers.firstOrNull()?.issuer,
+            accessTokenCnfJkt = walletAttestation.cnfJkt,
+            wiaCnfJkt = walletAttestation.cnfJkt,
         )
     }
 

@@ -23,6 +23,7 @@ class OpenId4VciProperties {
     var trust: TrustProperties = TrustProperties()
     var policy: PolicyProperties = PolicyProperties()
     var simulator: SimulatorProperties = SimulatorProperties()
+    var wia: WiaProperties = WiaProperties()
 
     class SdkProperties {
         /** Optional hint of the credential issuer identifier (used by the real SDK adapter). */
@@ -66,5 +67,32 @@ class OpenId4VciProperties {
          * Lower values keep deferred tests fast.
          */
         var deferredPollsBeforeIssue: Int = 1
+    }
+
+    class WiaProperties {
+        /** Enable WIA sub-context processing in issuance flow. */
+        var enabled: Boolean = true
+
+        /** WIA JWT technical TTL in seconds (must remain < 24h). */
+        var tokenTtlSeconds: Long = 6 * 60 * 60
+
+        /** Minimum status maintenance period in days. */
+        var minStatusMaintenanceDays: Long = 31
+
+        /** Reuse status entry per issuer; default false for privacy. */
+        var reusePerIssuer: Boolean = false
+
+        /** Wallet solution identity claims included in WIA. */
+        var walletName: String = "DI-Swallet-WPB"
+        var walletVersion: String = "0.1.0"
+        var walletLink: String = ""
+        var walletSolutionCertificationInformation: String = "thesis-mvp-not-certified"
+
+        /** Simplified x5c transport value for MVP demo mode. */
+        var signingX5c: String = ""
+
+        /** Retry semantics for nonce mismatch / expired WIA. */
+        var maxNonceMismatchRetries: Int = 1
+        var maxExpiredRetries: Int = 1
     }
 }

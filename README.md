@@ -256,15 +256,15 @@ implements issuer endpoints.
 
 | Limitation | Why it is acceptable for Phase 2 | Where it will be addressed |
 |---|---|---|
-| **SDK-backed adapter (`SdkOpenId4VciGateway`) is scaffolded but every operation throws `UnsupportedOperationException`** when `wpb.openid4vci.demo-mode=false`. The simulated adapter (`SimulatedOpenId4VciGateway`) is the only adapter exercised end-to-end. | This Phase 2 increment validates the wallet-side orchestration, lifecycle, persistence and observability against a deterministic in-process issuer simulator. The library is on the classpath and the port keeps SDK isolation. | Real SDK wiring lands in Phase 3 once an integration target issuer is available. |
+| **SDK-backed adapter (`SdkOpenId4VciGateway`) is scaffolded but every operation throws `UnsupportedOperationException`** when `wpb.openid4vci.demo-mode=false`. The simulated adapter (`SimulatedOpenId4VciGateway`) is the only adapter exercised end-to-end. | This increment validates the wallet-side orchestration, lifecycle, persistence and observability against a deterministic in-process issuer simulator. The library is on the classpath and the port keeps SDK isolation. | Real SDK wiring when an integration target issuer is available. |
 | **Issuer trust validation is an allow-list** of credential issuer identifiers — no signed metadata verification, no X.509 chain validation, no federation/trust-list lookup, no `metadata_policy=requireSigned` enforcement. | Phase 2 only needs to reject unknown issuers and document the boundary. | Phase 5 (trust framework). |
-| **Proof of possession uses an ephemeral EC key per holder** stored in a JVM-local `ConcurrentHashMap` (`EphemeralProofMaterialProvider`). The wallet does not yet bind issuance to an HSM-managed key. | Decouples Phase 2 from a working SoftHSM2 session so the orchestrator and lifecycle can be tested in isolation. | Phase 3 (WIA) and Phase 4 (Key Attestation) when WSCA-backed PoP is mandatory. |
+| **Proof of possession uses an ephemeral EC key per holder** stored in a JVM-local `ConcurrentHashMap` (`EphemeralProofMaterialProvider`). Credential-request proofs are not yet bound to HSM-backed keys. | Decouples issuance orchestration from mandatory WSCA availability during early integration. | Key Attestation (KA) and HSM-backed credential proofs. |
 | **mdoc issuance is deferred**: the simulator returns `unsupported_format` for `MSO_MDOC` and the policy rejects mdoc credential configurations unless `wpb.openid4vci.policy.allow-mdoc=true`. | The roadmap defers mdoc to Phase 7. | Phase 7 (ISO 18013-5). |
 | **Sessions are stored in memory** (`InMemoryIssuanceSessionRepository`) and adapter SDK state is per-instance. Optimistic locking is in place but no JPA persistence. | Single-instance prototype is enough for Phase 2 protocol validation. | Phase 10 (durable transaction log). |
 | **Deferred polling uses a counter** in the simulator (`wpb.openid4vci.simulator.deferred-polls-before-issue`) rather than real issuer-driven retry hints. | The simulator must produce deterministic deferred behaviour for tests. | Replaced by real issuer interaction in Phase 3. |
 | **`/openid4vci/**` endpoints are not gated by the FIDO2 interceptor** (same as Phase 1's `/openid4vp/**`). | Issuance flows are intended to be initiated by a holder-authenticated UI in a later phase. | Phase 16 / production hardening. |
 | **The simulated SD-JWT VC payload is syntactically shaped but cryptographically meaningless** (no real issuer signature, no real `cnf` binding). | Phase 2 validates the orchestration contract, not credential cryptography (Phase 1 already exercises real signature production). | Real issuer signatures arrive with the SDK adapter wiring. |
-| **By-reference offer resolution does not actually fetch the URL** in the simulator. | A real HTTP fetch belongs to the SDK-backed adapter. | Phase 3 (SDK adapter). |
+| **By-reference offer resolution does not actually fetch the URL** in the simulator. | A real HTTP fetch belongs to the SDK-backed adapter. | SDK adapter hardening. |
 
 ### Configuration knobs
 
@@ -317,3 +317,67 @@ curl -X POST http://localhost:8080/openid4vci/notify \
 # 7. inspect the lifecycle trail
 curl http://localhost:8080/openid4vci/session/<uuid>/events | jq .
 ```
+
+## OpenID4VCI / WIA (Wallet Instance Attestation)
+
+WIA is integrated as a **sub-context inside the existing issuance flow**, not as a
+separate top-level lifecycle. The issuance orchestrator selects or issues a WIA,
+attaches it to PAR/token transport, validates technical freshness, and verifies
+that the access token `cnf.jkt` matches the WIA `cnf` key before credential
+issuance proceeds.
+
+There is **no** public `POST /wia/issue` endpoint in this increment.
+
+### What WIA delivers
+
+| Capability | Status |
+|---|---|
+| WIA sub-context on `IssuanceContext` (`WiaState`, `WiaContext`, `WalletInstanceAttestation`) | Implemented |
+| `WalletAttestationProvider` abstraction with `DefaultWalletAttestationProvider` (generation) | Implemented |
+| WIA transport envelope on `OpenId4VciGateway` (`WalletAttestationTransport` on PAR/token paths) | Implemented (simulated adapter) |
+| WIA validation service (technical expiry + `cnf.jkt` binding against access token) | Implemented |
+| Simplified WIA status management via existing bitstring status list (`WiaStatusManagementService`) | Implemented |
+| Persistent `cnf` key per wallet instance (derived from `WalletKey` metadata) | Implemented |
+| Structured issuance events: `wia.attached`, `wia.binding.verified` | Implemented |
+| Retry semantics for nonce mismatch / expired WIA (configurable limits, recoverable errors) | Implemented |
+| Default reuse policy per issuer: `false` (`wpb.openid4vci.wia.reuse-per-issuer`) | Implemented |
+| WIA-specific unit tests (validation, status management, orchestrator + adapter integration) | Implemented |
+
+### Explicit non-production limitations
+
+| Limitation | Why it is acceptable for the thesis MVP | Where it will be addressed |
+|---|---|---|
+| **WIA signing is simplified** (deterministic pseudo-signature for local runs; optional raw `signing-x5c` string, not a parsed/trusted certificate chain). | Keeps issuance+WIA testable without LoTE/trust-anchor infrastructure. | Trust framework + production signing pipeline. |
+| **No issuer-side WIA signature/trust validation** (wallet only generates and self-checks binding). | Issuer validation belongs to external PID/Attestation Providers, not the WPB. | Interop tests with real issuers. |
+| **WIA status mapping is in-memory** (holder/issuer → bitstring index); publication still uses the existing `/api/v1/wallet/status-lists/** endpoints. | Enough to demonstrate revocation chaining mechanics in the thesis prototype. | Durable WIA registry and richer status-list chunking. |
+| **KA (Key Attestation) is not implemented** in this increment. | TS3 scopes WIA and KA separately; device-bound credential proofs need KA. | Key Attestation increment. |
+| **DPoP proof headers are modeled via `cnf.jkt` binding**, not full RFC 9449 DPoP JWT construction against live AS metadata. | Phase goal is WIA transport + AT binding correctness, not full OAuth stack hardening. | SDK adapter + production OAuth profile. |
+
+### Configuration knobs
+
+```
+wpb.openid4vci.wia.enabled=true
+wpb.openid4vci.wia.token-ttl-seconds=21600                 # WIA JWT exp (< 24h)
+wpb.openid4vci.wia.min-status-maintenance-days=31          # client_status.exp horizon
+wpb.openid4vci.wia.reuse-per-issuer=false                 # privacy-first default
+wpb.openid4vci.wia.wallet-name=DI-Swallet-WPB
+wpb.openid4vci.wia.wallet-version=0.1.0
+wpb.openid4vci.wia.wallet-link=
+wpb.openid4vci.wia.wallet-solution-certification-information=thesis-mvp-not-certified
+wpb.openid4vci.wia.signing-x5c=
+wpb.openid4vci.wia.max-nonce-mismatch-retries=1
+wpb.openid4vci.wia.max-expired-retries=1
+```
+
+### WIA-related events in issuance sessions
+
+After `authorize/prepare` or `authorize/code`, inspect:
+
+```bash
+curl http://localhost:8080/openid4vci/session/<uuid>/events | jq '.[] | select(.type | startswith("wia."))'
+```
+
+Expected event types in the happy path:
+
+- `wia.attached`
+- `wia.binding.verified`

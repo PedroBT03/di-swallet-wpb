@@ -73,6 +73,12 @@
       "type": "di.swallet.wpb.config.OpenId4VciProperties$SimulatorProperties",
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
       "sourceMethod": "getSimulator()"
+    },
+    {
+      "name": "wpb.openid4vci.wia",
+      "type": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
+      "sourceMethod": "getWia()"
     }
   ],
   "properties": [
@@ -229,6 +235,83 @@
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$SdkProperties",
       "description": "Send authorization requests via PAR when the issuer advertises it.",
       "defaultValue": true
+    },
+    {
+      "name": "wpb.openid4vci.wia.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "Enable WIA sub-context processing in issuance flows.",
+      "defaultValue": true
+    },
+    {
+      "name": "wpb.openid4vci.wia.token-ttl-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "WIA JWT technical TTL in seconds (must remain under 24 hours).",
+      "defaultValue": 21600
+    },
+    {
+      "name": "wpb.openid4vci.wia.min-status-maintenance-days",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "Minimum client_status maintenance period in days.",
+      "defaultValue": 31
+    },
+    {
+      "name": "wpb.openid4vci.wia.reuse-per-issuer",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "Reuse WIA status list entry per issuer (default false for privacy).",
+      "defaultValue": false
+    },
+    {
+      "name": "wpb.openid4vci.wia.wallet-name",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "Wallet solution name claim included in WIA.",
+      "defaultValue": "DI-Swallet-WPB"
+    },
+    {
+      "name": "wpb.openid4vci.wia.wallet-version",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "Wallet solution version claim included in WIA.",
+      "defaultValue": "0.1.0"
+    },
+    {
+      "name": "wpb.openid4vci.wia.wallet-link",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "Optional URI with further wallet solution information.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vci.wia.wallet-solution-certification-information",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "Certification information claim for the wallet solution.",
+      "defaultValue": "thesis-mvp-not-certified"
+    },
+    {
+      "name": "wpb.openid4vci.wia.signing-x5c",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "Optional raw x5c value embedded in WIA header (MVP transport only).",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vci.wia.max-nonce-mismatch-retries",
+      "type": "java.lang.Integer",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "Maximum retries when authorization fails due to nonce mismatch.",
+      "defaultValue": 1
+    },
+    {
+      "name": "wpb.openid4vci.wia.max-expired-retries",
+      "type": "java.lang.Integer",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
+      "description": "Maximum retries when WIA is expired during authorization.",
+      "defaultValue": 1
     }
   ],
   "hints": []

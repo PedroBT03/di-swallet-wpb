@@ -8,6 +8,7 @@ import di.swallet.wpb.openid4vci.protocol.DeferredQueryOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
+import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -28,6 +29,13 @@ class SimulatedOpenId4VciGatewayTest {
         }.generateKeyPair()
         return ProofMaterial(keyId = "key-1", publicKey = kp.public as ECPublicKey, algorithm = "ES256")
     }
+
+    private fun wia() = WalletAttestationTransport(
+        jwt = "wia.jwt",
+        popJwt = "wia.pop",
+        cnfJkt = "jkt-test",
+        expiresAt = java.time.Instant.now().plusSeconds(3600),
+    )
 
     @Test
     fun `resolves authorization_code offer by value`() {
@@ -61,9 +69,10 @@ class SimulatedOpenId4VciGatewayTest {
             """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}""",
         )
         val sessionId = UUID.randomUUID().toString()
-        val prepared = gw.prepareAuthorization(sessionId, offer, metadata, proof())
-        val authorized = gw.authorizeWithCode(sessionId, "code-123", prepared.state)
+        val prepared = gw.prepareAuthorization(sessionId, offer, metadata, proof(), wia())
+        val authorized = gw.authorizeWithCode(sessionId, "code-123", prepared.state, wia())
         assertTrue(authorized.accessTokenPresent)
+        assertEquals("jkt-test", authorized.accessTokenCnfJkt)
 
         val outcome = gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"), proof())
         assertTrue(outcome is IssuanceOutcome.Issued)
@@ -78,9 +87,9 @@ class SimulatedOpenId4VciGatewayTest {
             """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}""",
         )
         val sessionId = UUID.randomUUID().toString()
-        gw.prepareAuthorization(sessionId, offer, metadata, proof())
+        gw.prepareAuthorization(sessionId, offer, metadata, proof(), wia())
         assertThrows(IllegalArgumentException::class.java) {
-            gw.authorizeWithCode(sessionId, "code-1", "wrong-state")
+            gw.authorizeWithCode(sessionId, "code-1", "wrong-state", wia())
         }
     }
 
@@ -95,8 +104,8 @@ class SimulatedOpenId4VciGatewayTest {
             """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}""",
         )
         val sessionId = UUID.randomUUID().toString()
-        val prepared = gw.prepareAuthorization(sessionId, offer, metadata, proof())
-        gw.authorizeWithCode(sessionId, "code-x", prepared.state)
+        val prepared = gw.prepareAuthorization(sessionId, offer, metadata, proof(), wia())
+        gw.authorizeWithCode(sessionId, "code-x", prepared.state, wia())
         val req = gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"), proof())
         assertTrue(req is IssuanceOutcome.Deferred)
         var handle = (req as IssuanceOutcome.Deferred).handle
@@ -132,8 +141,8 @@ class SimulatedOpenId4VciGatewayTest {
             credentialConfigurations = metadata.credentialConfigurations.map {
                 it.copy(format = di.swallet.wpb.issuance.domain.IssuanceCredentialFormat.MSO_MDOC)
             },
-        ), proof())
-        gw.authorizeWithCode(sessionId, "c", prepared.state)
+        ), proof(), wia())
+        gw.authorizeWithCode(sessionId, "c", prepared.state, wia())
         val outcome = gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "driver_license"), proof())
         assertTrue(outcome is IssuanceOutcome.Failed)
         assertEquals("unsupported_format", (outcome as IssuanceOutcome.Failed).code)
@@ -146,8 +155,8 @@ class SimulatedOpenId4VciGatewayTest {
         val (offer, metadata) = gw.resolveOffer(
             """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}""",
         )
-        val prepared = gw.prepareAuthorization(sessionId, offer, metadata, proof())
-        gw.authorizeWithCode(sessionId, "c", prepared.state)
+        val prepared = gw.prepareAuthorization(sessionId, offer, metadata, proof(), wia())
+        gw.authorizeWithCode(sessionId, "c", prepared.state, wia())
         gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"), proof())
         assertTrue(gw.notify(sessionId, "notif-1", NotificationEvent.CREDENTIAL_ACCEPTED))
         gw.discard(sessionId)
@@ -163,7 +172,7 @@ class SimulatedOpenId4VciGatewayTest {
         )
         val sessionId = UUID.randomUUID().toString()
         assertThrows(IllegalArgumentException::class.java) {
-            gw.authorizeWithPreAuthorizedCode(sessionId, offer, metadata, proof(), txCode = null)
+            gw.authorizeWithPreAuthorizedCode(sessionId, offer, metadata, proof(), txCode = null, walletAttestation = wia())
         }
     }
 

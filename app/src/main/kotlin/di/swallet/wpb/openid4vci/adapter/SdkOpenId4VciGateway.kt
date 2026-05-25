@@ -11,6 +11,7 @@ import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import di.swallet.wpb.openid4vci.protocol.PreparedAuthorization
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.openid4vci.protocol.ResolvedOffer
+import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
@@ -59,12 +60,14 @@ class SdkOpenId4VciGateway(
         offer: ResolvedOffer,
         metadata: ResolvedIssuerMetadata,
         proof: ProofMaterial,
+        walletAttestation: WalletAttestationTransport,
     ): PreparedAuthorization = notImplemented("prepareAuthorization")
 
     override fun authorizeWithCode(
         adapterSessionId: String,
         authorizationCode: String,
         state: String,
+        walletAttestation: WalletAttestationTransport,
     ): AuthorizedContext = notImplemented("authorizeWithCode")
 
     override fun authorizeWithPreAuthorizedCode(
@@ -73,6 +76,7 @@ class SdkOpenId4VciGateway(
         metadata: ResolvedIssuerMetadata,
         proof: ProofMaterial,
         txCode: String?,
+        walletAttestation: WalletAttestationTransport,
     ): AuthorizedContext = notImplemented("authorizeWithPreAuthorizedCode")
 
     override fun requestCredential(

@@ -24,6 +24,54 @@ enum class IssuanceCredentialFormat {
 }
 
 /**
+ * Lifecycle of the WIA sub-context embedded in issuance.
+ *
+ * WIA is intentionally not modeled as a top-level issuance lifecycle. It is a
+ * mandatory sub-flow that can be regenerated/re-attached as retries happen.
+ */
+enum class WiaState {
+    REQUIRED,
+    SELECTED,
+    ATTACHED,
+    VALIDATED,
+    EXPIRED,
+    FAILED,
+}
+
+data class WiaStatusReference(
+    val listId: String,
+    val index: Int,
+    val uri: String,
+)
+
+/**
+ * Wallet Instance Attestation envelope used by the wallet-side issuance flow.
+ */
+data class WalletInstanceAttestation(
+    val jwt: String,
+    val popJwt: String,
+    val walletInstanceId: String,
+    val walletName: String,
+    val walletVersion: String,
+    val walletLink: String? = null,
+    val walletSolutionCertificationInformation: String,
+    val cnfJkt: String,
+    val clientStatus: WiaStatusReference,
+    val tokenExpiresAt: Instant,
+    val clientStatusExpiresAt: Instant,
+    val issuedAt: Instant,
+    val issuerScope: String? = null,
+)
+
+data class WiaContext(
+    val state: WiaState = WiaState.REQUIRED,
+    val attestation: WalletInstanceAttestation? = null,
+    val nonceMismatchRetries: Int = 0,
+    val expiredRetries: Int = 0,
+    val lastErrorCode: String? = null,
+)
+
+/**
  * Formal lifecycle of an OID4VCI issuance session.
  */
 enum class IssuanceState {
@@ -129,6 +177,7 @@ data class IssuanceContext(
     val policyDecision: IssuancePolicyDecision? = null,
     val preparedAuthorization: PreparedAuthorization? = null,
     val authorizedContext: AuthorizedContext? = null,
+    val wia: WiaContext? = null,
     val deferredHandle: DeferredIssuanceHandle? = null,
     val issuedCredentials: List<IssuedCredential> = emptyList(),
     val notificationOutcome: String? = null,
@@ -151,6 +200,7 @@ data class IssuanceSession(
     val policyDecision: IssuancePolicyDecision? = null,
     val preparedAuthorization: PreparedAuthorization? = null,
     val authorizedContext: AuthorizedContext? = null,
+    val wia: WiaContext? = null,
     val deferredHandle: DeferredIssuanceHandle? = null,
     val issuedCredentials: List<IssuedCredential> = emptyList(),
     val notificationOutcome: String? = null,
@@ -170,6 +220,7 @@ fun IssuanceContext.toSession(): IssuanceSession = IssuanceSession(
     policyDecision = policyDecision,
     preparedAuthorization = preparedAuthorization,
     authorizedContext = authorizedContext,
+    wia = wia,
     deferredHandle = deferredHandle,
     issuedCredentials = issuedCredentials,
     notificationOutcome = notificationOutcome,
@@ -189,6 +240,7 @@ fun IssuanceSession.toContext(): IssuanceContext = IssuanceContext(
     policyDecision = policyDecision,
     preparedAuthorization = preparedAuthorization,
     authorizedContext = authorizedContext,
+    wia = wia,
     deferredHandle = deferredHandle,
     issuedCredentials = issuedCredentials,
     notificationOutcome = notificationOutcome,

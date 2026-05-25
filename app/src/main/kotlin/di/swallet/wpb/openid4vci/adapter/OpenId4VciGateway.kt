@@ -10,6 +10,7 @@ import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import di.swallet.wpb.openid4vci.protocol.PreparedAuthorization
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.openid4vci.protocol.ResolvedOffer
+import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
 
 /**
  * Adapter port that encapsulates all interactions with the EUDI OID4VCI SDK.
@@ -49,6 +50,7 @@ interface OpenId4VciGateway {
         offer: ResolvedOffer,
         metadata: ResolvedIssuerMetadata,
         proof: ProofMaterial,
+        walletAttestation: WalletAttestationTransport,
     ): PreparedAuthorization
 
     /**
@@ -59,6 +61,7 @@ interface OpenId4VciGateway {
         adapterSessionId: String,
         authorizationCode: String,
         state: String,
+        walletAttestation: WalletAttestationTransport,
     ): AuthorizedContext
 
     /**
@@ -71,6 +74,7 @@ interface OpenId4VciGateway {
         metadata: ResolvedIssuerMetadata,
         proof: ProofMaterial,
         txCode: String?,
+        walletAttestation: WalletAttestationTransport,
     ): AuthorizedContext
 
     /**

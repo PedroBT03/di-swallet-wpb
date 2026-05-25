@@ -83,6 +83,7 @@ data class PreparedAuthorization(
     val pkceUsed: Boolean = true,
     val parUsed: Boolean = false,
     val dpopRequested: Boolean = false,
+    val wiaAttached: Boolean = false,
 )
 
 /**
@@ -95,6 +96,21 @@ data class AuthorizedContext(
     val dpopUsed: Boolean = false,
     val cNoncePresent: Boolean = false,
     val authorizationServer: String? = null,
+    val accessTokenCnfJkt: String? = null,
+    val wiaCnfJkt: String? = null,
+)
+
+/**
+ * WIA transport envelope passed from orchestration to the adapter.
+ *
+ * It represents the generated wallet attestation and its PoP token that must
+ * be attached to PAR/token requests.
+ */
+data class WalletAttestationTransport(
+    val jwt: String,
+    val popJwt: String,
+    val cnfJkt: String,
+    val expiresAt: Instant,
 )
 
 /**

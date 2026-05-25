@@ -13,6 +13,9 @@ import di.swallet.wpb.openid4vci.adapter.SimulatedOpenId4VciGateway
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
+import di.swallet.wpb.wia.attestation.WalletAttestationProvider
+import di.swallet.wpb.wia.status.WiaStatusManagementService
+import di.swallet.wpb.wia.validation.DefaultWiaValidationService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -35,15 +38,56 @@ class DefaultIssuanceFlowOrchestratorTest {
             seq.incrementAndGet()
     }
 
+    private class StubWiaStatusManagementService : WiaStatusManagementService {
+        private val map = mutableMapOf<String, Int>()
+        private var seq = 200
+        override fun getOrAllocateStatus(holderId: String, issuerId: String?) =
+            di.swallet.wpb.issuance.domain.WiaStatusReference(
+                listId = "PRIMARY_LIST",
+                index = map.getOrPut("$holderId::${issuerId ?: "*"}") { seq++ },
+                uri = "/api/v1/wallet/status-lists/PRIMARY_LIST",
+            )
+        override fun revokeHolder(holderId: String) = Unit
+    }
+
+    private class StubWalletAttestationProvider(
+        private val statusManagementService: WiaStatusManagementService,
+    ) : WalletAttestationProvider {
+        override fun issue(
+            holderId: String,
+            walletInstanceId: String,
+            issuerId: String?,
+        ): di.swallet.wpb.issuance.domain.WalletInstanceAttestation {
+            val now = java.time.Instant.now()
+            return di.swallet.wpb.issuance.domain.WalletInstanceAttestation(
+                jwt = "wia.jwt.$holderId",
+                popJwt = "wia.pop.$holderId",
+                walletInstanceId = walletInstanceId,
+                walletName = "DI-Swallet-WPB",
+                walletVersion = "test",
+                walletSolutionCertificationInformation = "test-cert",
+                cnfJkt = "jkt-$holderId",
+                clientStatus = statusManagementService.getOrAllocateStatus(holderId, issuerId),
+                tokenExpiresAt = now.plusSeconds(3600),
+                clientStatusExpiresAt = now.plusSeconds(31L * 24 * 3600),
+                issuedAt = now,
+                issuerScope = issuerId,
+            )
+        }
+    }
+
     private fun orchestrator(
         properties: OpenId4VciProperties = OpenId4VciProperties(),
     ): DefaultIssuanceFlowOrchestrator {
+        val wiaStatus = StubWiaStatusManagementService()
         return DefaultIssuanceFlowOrchestrator(
             gateway = SimulatedOpenId4VciGateway(properties),
             repository = InMemoryIssuanceSessionRepository(),
             trustValidator = DefaultIssuerTrustValidator(properties),
             policy = DefaultIssuancePolicy(properties),
             proofProvider = EphemeralProofMaterialProvider(),
+            attestationProvider = StubWalletAttestationProvider(wiaStatus),
+            wiaValidationService = DefaultWiaValidationService(),
             credentialStorage = StubIssuedCredentialStorage(),
             eventStore = InMemoryIssuanceEventStore(),
             properties = properties,

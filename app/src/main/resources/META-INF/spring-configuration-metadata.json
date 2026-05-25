@@ -44,6 +44,35 @@
       "type": "di.swallet.wpb.config.OpenId4VpProperties$SessionProperties",
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties",
       "sourceMethod": "getSession()"
+    },
+    {
+      "name": "wpb.openid4vci",
+      "type": "di.swallet.wpb.config.OpenId4VciProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties"
+    },
+    {
+      "name": "wpb.openid4vci.sdk",
+      "type": "di.swallet.wpb.config.OpenId4VciProperties$SdkProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
+      "sourceMethod": "getSdk()"
+    },
+    {
+      "name": "wpb.openid4vci.trust",
+      "type": "di.swallet.wpb.config.OpenId4VciProperties$TrustProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
+      "sourceMethod": "getTrust()"
+    },
+    {
+      "name": "wpb.openid4vci.policy",
+      "type": "di.swallet.wpb.config.OpenId4VciProperties$PolicyProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
+      "sourceMethod": "getPolicy()"
+    },
+    {
+      "name": "wpb.openid4vci.simulator",
+      "type": "di.swallet.wpb.config.OpenId4VciProperties$SimulatorProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
+      "sourceMethod": "getSimulator()"
     }
   ],
   "properties": [
@@ -123,6 +152,83 @@
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$SessionProperties",
       "description": "Presentation session time-to-live in seconds.",
       "defaultValue": 600
+    },
+    {
+      "name": "wpb.openid4vci.demo-mode",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
+      "description": "Activates the in-process simulated OID4VCI adapter. Disable for real SDK integration.",
+      "defaultValue": true
+    },
+    {
+      "name": "wpb.openid4vci.session-ttl-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
+      "description": "Issuance session time-to-live in seconds.",
+      "defaultValue": 1800
+    },
+    {
+      "name": "wpb.openid4vci.trust.allowed-issuer-ids",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$TrustProperties",
+      "description": "Comma-separated allow-list of credential issuer identifiers.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vci.policy.allow-mdoc",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$PolicyProperties",
+      "description": "Allow mso_mdoc credential configurations (deferred to Phase 7).",
+      "defaultValue": false
+    },
+    {
+      "name": "wpb.openid4vci.simulator.always-defer",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$SimulatorProperties",
+      "description": "Force every simulated credential request into a deferred outcome.",
+      "defaultValue": false
+    },
+    {
+      "name": "wpb.openid4vci.simulator.deferred-polls-before-issue",
+      "type": "java.lang.Integer",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$SimulatorProperties",
+      "description": "Number of deferred polls before the simulator returns issued credentials.",
+      "defaultValue": 1
+    },
+    {
+      "name": "wpb.openid4vci.sdk.credential-issuer-id",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$SdkProperties",
+      "description": "Hint for the credential issuer identifier when the real SDK adapter is active.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vci.sdk.dpop-mode",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$SdkProperties",
+      "description": "DPoP support mode: supported | required | disabled.",
+      "defaultValue": "supported"
+    },
+    {
+      "name": "wpb.openid4vci.sdk.metadata-policy",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$SdkProperties",
+      "description": "Issuer metadata policy: preferSigned | requireSigned | ignoreSigned.",
+      "defaultValue": "preferSigned"
+    },
+    {
+      "name": "wpb.openid4vci.sdk.pkce-required",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$SdkProperties",
+      "description": "Enforce PKCE for authorization-code grants (always true).",
+      "defaultValue": true
+    },
+    {
+      "name": "wpb.openid4vci.sdk.use-par-when-supported",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$SdkProperties",
+      "description": "Send authorization requests via PAR when the issuer advertises it.",
+      "defaultValue": true
     }
   ],
   "hints": []

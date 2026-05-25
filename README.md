@@ -222,3 +222,98 @@ curl -X POST http://localhost:8080/openid4vp/consent \
 # 5. inspect the lifecycle trail
 curl http://localhost:8080/openid4vp/session/<uuid>/events | jq .
 ```
+
+## OpenID4VCI / Phase 2 (Issuance Core)
+
+Phase 2 extends the wallet with an OID4VCI orchestrator that follows the
+exact same architectural rules as Phase 1 (adapter-based, orchestration-centered,
+SDK-decoupled, lifecycle/state-machine driven, session persistence, audit/event
+model). The wallet acts strictly as a **wallet-side** OID4VCI client and never
+implements issuer endpoints.
+
+### What Phase 2 delivers
+
+| Capability | Status |
+|---|---|
+| Orchestrator-centric OID4VCI lifecycle (`/openid4vci/offer/resolve`, `/authorize/prepare`, `/authorize/code`, `/authorize/pre-authorized`, `/credential/request`, `/deferred/query`, `/notify`, `/session/{id}`, `/session/{id}/events`) | Implemented |
+| Formal state machine with runtime-enforced transitions (`OFFER_RECEIVED → OFFER_RESOLVED → AUTHORIZATION_PREPARED → AUTHORIZED → CREDENTIAL_REQUESTED → CREDENTIAL_ISSUED → NOTIFIED`, deferred branch via `DEFERRED_PENDING → DEFERRED_ISSUED`, plus `FAILED / REJECTED / EXPIRED`) | Implemented |
+| Adapter port `OpenId4VciGateway` isolates the EUDI library (only `openid4vci.adapter` may import `eu.europa.ec.eudi.openid4vci.*`) | Implemented |
+| Credential offer resolution (by-value and by-reference) producing `ResolvedOffer` + `ResolvedIssuerMetadata` | Implemented (simulated) |
+| Authorization-code grant with PKCE + automatic PAR usage when supported + DPoP probe | Implemented (simulated) |
+| Pre-authorized-code grant with optional `tx_code` | Implemented (simulated) |
+| Credential request via `credential_configuration_id` or `credential_identifier` (HAIP SD-JWT VC) | Implemented (simulated) |
+| Deferred issuance: `transaction_id` persistence, polling, resumed issuance with stable PoP key | Implemented (simulated) |
+| Wallet → Issuer notifications: `CREDENTIAL_ACCEPTED`, `CREDENTIAL_DELETED`, `CREDENTIAL_FAILURE` | Implemented (simulated) |
+| Issued credential persistence into the existing `WalletCredentialRepository` (SD-JWT split into encoded JWT + AES-GCM-encrypted disclosures) | Implemented |
+| Issuer trust validator with configurable allow-list (`wpb.openid4vci.trust.allowed-issuer-ids`) | Implemented |
+| Issuance policy with mdoc opt-out (`wpb.openid4vci.policy.allow-mdoc=false`) | Implemented |
+| Optimistic-locking in-memory session repository (`InMemoryIssuanceSessionRepository`) | Implemented |
+| Structured event store (`IssuanceEvent` + `InMemoryIssuanceEventStore`) with correlation IDs | Implemented |
+| JaCoCo coverage gate for Phase 2 module: ≥ 50% (current actual: ~90%) | Implemented |
+| Phase 2 test suite (state machine, repository, policy, trust, simulated adapter happy + deferred + negative, orchestrator real-beans flow, controller, storage, proof, event store) | Implemented |
+
+### Explicit non-production limitations
+
+| Limitation | Why it is acceptable for Phase 2 | Where it will be addressed |
+|---|---|---|
+| **SDK-backed adapter (`SdkOpenId4VciGateway`) is scaffolded but every operation throws `UnsupportedOperationException`** when `wpb.openid4vci.demo-mode=false`. The simulated adapter (`SimulatedOpenId4VciGateway`) is the only adapter exercised end-to-end. | This Phase 2 increment validates the wallet-side orchestration, lifecycle, persistence and observability against a deterministic in-process issuer simulator. The library is on the classpath and the port keeps SDK isolation. | Real SDK wiring lands in Phase 3 once an integration target issuer is available. |
+| **Issuer trust validation is an allow-list** of credential issuer identifiers — no signed metadata verification, no X.509 chain validation, no federation/trust-list lookup, no `metadata_policy=requireSigned` enforcement. | Phase 2 only needs to reject unknown issuers and document the boundary. | Phase 5 (trust framework). |
+| **Proof of possession uses an ephemeral EC key per holder** stored in a JVM-local `ConcurrentHashMap` (`EphemeralProofMaterialProvider`). The wallet does not yet bind issuance to an HSM-managed key. | Decouples Phase 2 from a working SoftHSM2 session so the orchestrator and lifecycle can be tested in isolation. | Phase 3 (WIA) and Phase 4 (Key Attestation) when WSCA-backed PoP is mandatory. |
+| **mdoc issuance is deferred**: the simulator returns `unsupported_format` for `MSO_MDOC` and the policy rejects mdoc credential configurations unless `wpb.openid4vci.policy.allow-mdoc=true`. | The roadmap defers mdoc to Phase 7. | Phase 7 (ISO 18013-5). |
+| **Sessions are stored in memory** (`InMemoryIssuanceSessionRepository`) and adapter SDK state is per-instance. Optimistic locking is in place but no JPA persistence. | Single-instance prototype is enough for Phase 2 protocol validation. | Phase 10 (durable transaction log). |
+| **Deferred polling uses a counter** in the simulator (`wpb.openid4vci.simulator.deferred-polls-before-issue`) rather than real issuer-driven retry hints. | The simulator must produce deterministic deferred behaviour for tests. | Replaced by real issuer interaction in Phase 3. |
+| **`/openid4vci/**` endpoints are not gated by the FIDO2 interceptor** (same as Phase 1's `/openid4vp/**`). | Issuance flows are intended to be initiated by a holder-authenticated UI in a later phase. | Phase 16 / production hardening. |
+| **The simulated SD-JWT VC payload is syntactically shaped but cryptographically meaningless** (no real issuer signature, no real `cnf` binding). | Phase 2 validates the orchestration contract, not credential cryptography (Phase 1 already exercises real signature production). | Real issuer signatures arrive with the SDK adapter wiring. |
+| **By-reference offer resolution does not actually fetch the URL** in the simulator. | A real HTTP fetch belongs to the SDK-backed adapter. | Phase 3 (SDK adapter). |
+
+### Configuration knobs
+
+```
+wpb.openid4vci.demo-mode=true                                # simulated adapter (default)
+wpb.openid4vci.session-ttl-seconds=1800                      # issuance session expiry
+wpb.openid4vci.trust.allowed-issuer-ids=                     # CSV allow-list (empty + demo-mode permissive)
+wpb.openid4vci.policy.allow-mdoc=false                       # opt-in mdoc
+wpb.openid4vci.simulator.always-defer=false                  # force deferred outcome
+wpb.openid4vci.simulator.deferred-polls-before-issue=1       # polls before simulated issuance
+wpb.openid4vci.sdk.credential-issuer-id=                     # hint for real SDK adapter
+wpb.openid4vci.sdk.dpop-mode=supported                       # supported | required | disabled
+wpb.openid4vci.sdk.metadata-policy=preferSigned              # preferSigned | requireSigned | ignoreSigned
+wpb.openid4vci.sdk.pkce-required=true                        # PKCE always enforced
+wpb.openid4vci.sdk.use-par-when-supported=true               # send PAR when issuer advertises it
+```
+
+### End-to-end smoke flow with the simulator
+
+```bash
+# 1. start the wallet (demo-mode is the default)
+./gradlew :app:bootRun
+
+# 2. resolve a credential offer (by-value)
+OFFER='openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}'
+curl -X POST http://localhost:8080/openid4vci/offer/resolve \
+  -H 'Content-Type: application/json' \
+  -d "{\"offerUri\":\"$OFFER\",\"holderId\":\"pedro-ist\"}"
+
+# 3. prepare the authorization-code grant
+curl -X POST http://localhost:8080/openid4vci/authorize/prepare \
+  -H 'Content-Type: application/json' \
+  -d '{"sessionId":"<uuid>"}'
+
+# 4. complete the authorization-code grant
+curl -X POST http://localhost:8080/openid4vci/authorize/code \
+  -H 'Content-Type: application/json' \
+  -d '{"sessionId":"<uuid>","authorizationCode":"code-abc","state":"<state-from-prepare>"}'
+
+# 5. request the credential
+curl -X POST http://localhost:8080/openid4vci/credential/request \
+  -H 'Content-Type: application/json' \
+  -d '{"sessionId":"<uuid>","credentialConfigurationId":"pid_jwt"}'
+
+# 6. notify the issuer
+curl -X POST http://localhost:8080/openid4vci/notify \
+  -H 'Content-Type: application/json' \
+  -d '{"sessionId":"<uuid>","event":"CREDENTIAL_ACCEPTED"}'
+
+# 7. inspect the lifecycle trail
+curl http://localhost:8080/openid4vci/session/<uuid>/events | jq .
+```

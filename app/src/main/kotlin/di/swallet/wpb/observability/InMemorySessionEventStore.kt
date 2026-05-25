@@ -1,18 +1,20 @@
 package di.swallet.wpb.observability
 
 import org.springframework.stereotype.Component
-import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 @Component
 class InMemorySessionEventStore : SessionEventStore {
-    private val store = ConcurrentHashMap<UUID, MutableList<String>>()
+    private val store = ConcurrentHashMap<UUID, MutableList<SessionEvent>>()
 
-    override fun record(sessionId: UUID, event: String) {
-        val list = store.computeIfAbsent(sessionId) { mutableListOf() }
-        list.add("${Instant.now()}: $event")
+    override fun record(event: SessionEvent) {
+        val list = store.computeIfAbsent(event.sessionId) { mutableListOf() }
+        synchronized(list) { list.add(event) }
     }
 
-    override fun getEvents(sessionId: UUID): List<String> = store[sessionId]?.toList() ?: emptyList()
+    override fun getEvents(sessionId: UUID): List<SessionEvent> {
+        val list = store[sessionId] ?: return emptyList()
+        return synchronized(list) { list.toList() }
+    }
 }

@@ -1,0 +1,170 @@
+package di.swallet.wpb.presentation
+
+import di.swallet.wpb.domain.WalletCredential
+import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.observability.InMemorySessionEventStore
+import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
+import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
+import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
+import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
+import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
+import di.swallet.wpb.presentation.domain.CredentialFormat
+import di.swallet.wpb.presentation.domain.PresentationContext
+import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
+import di.swallet.wpb.presentation.domain.PresentationRequirements
+import di.swallet.wpb.presentation.domain.PresentationState
+import di.swallet.wpb.presentation.domain.VpToken
+import di.swallet.wpb.presentation.format.VpTokenBuilder
+import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
+import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
+import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
+import di.swallet.wpb.presentation.policy.DefaultPolicyEngine
+import di.swallet.wpb.presentation.trust.DefaultTrustValidator
+import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.mockito.Mockito.`when`
+import org.mockito.Mockito.mock
+
+/**
+ * Locks in the Phase 1 lifecycle fix: with the **real** trust validator,
+ * credential matcher and policy engine, the wallet must reach
+ * `CONSENT_PENDING` when there is at least one matching wallet credential —
+ * even with `demo-mode = false`. The previous bug had policy run before
+ * matching, which made every non-demo session collapse into `REJECTED`.
+ */
+class DefaultPresentationFlowOrchestratorRealBeansTest {
+
+    private val resolved = ResolvedAuthorizationRequest(
+        requestToken = "rt-real",
+        requestUri = "http://verifier/req",
+        clientId = "verifier-demo-client",
+        responseMode = PresentationResponseMode.DIRECT_POST,
+        nonce = "nonce-1",
+        state = "state-1",
+        responseUri = "http://verifier/direct_post",
+        verifierDisplayName = "Verifier",
+        requirements = PresentationRequirements(
+            dcqlQueryJson = """{"credentials":[{"id":"pid","format":"vc+sd-jwt","claims":[{"path":["given_name"]}]}]}""",
+            credentialQueryIds = listOf("pid"),
+            requestedFormats = setOf(CredentialFormat.SD_JWT),
+        ),
+    )
+
+    private class GatewayStub(val request: ResolvedAuthorizationRequest) : OpenId4VpGateway {
+        var positiveCount = 0
+        var negativeCount = 0
+        override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution =
+            AuthorizationRequestResolution.Success(request)
+        override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken): PresentationDispatchOutcome {
+            positiveCount++
+            return PresentationDispatchOutcome.VerifierAccepted(null)
+        }
+        override suspend fun dispatchNegative(requestToken: String): PresentationDispatchOutcome {
+            negativeCount++
+            return PresentationDispatchOutcome.VerifierAccepted(null)
+        }
+        override suspend fun dispatchError(errorToken: String): PresentationDispatchOutcome =
+            PresentationDispatchOutcome.VerifierAccepted(null)
+    }
+
+    private class StubVpBuilder : VpTokenBuilder {
+        override fun build(context: PresentationContext): PresentationContext =
+            context.copy(
+                vpToken = VpToken(
+                    presentationsByQueryId = mapOf("pid" to listOf("VP-STUB")),
+                    format = CredentialFormat.SD_JWT,
+                ),
+            )
+    }
+
+    private fun orchestrator(
+        repository: WalletCredentialRepository,
+        allowed: String = "verifier-demo-client",
+        demoMode: Boolean = false,
+    ): Pair<DefaultPresentationFlowOrchestrator, GatewayStub> {
+        val gateway = GatewayStub(resolved)
+        val orchestrator = DefaultPresentationFlowOrchestrator(
+            gateway = gateway,
+            repository = InMemoryPresentationSessionRepository(),
+            trustValidator = DefaultTrustValidator(allowedClientIdsCsv = allowed, demoMode = demoMode),
+            policyEngine = DefaultPolicyEngine(demoMode = demoMode),
+            credentialMatcher = DefaultCredentialMatcher(repository, demoMode = demoMode),
+            vpTokenBuilder = StubVpBuilder(),
+            eventStore = InMemorySessionEventStore(),
+        )
+        return orchestrator to gateway
+    }
+
+    @Test
+    fun `non-demo session with matching wallet credential reaches consent`() = runBlocking {
+        val repository = mock(WalletCredentialRepository::class.java)
+        `when`(repository.findByUserId("holder-1")).thenReturn(
+            listOf(
+                WalletCredential(
+                    id = 1L,
+                    userId = "holder-1",
+                    credentialType = "PID",
+                    encodedData = "HEAD.PAYLOAD.SIG",
+                    encryptedDisclosures = "",
+                ),
+            ),
+        )
+
+        val (orchestrator, _) = orchestrator(repository)
+        val ctx = orchestrator.startSession("http://verifier/req", "holder-1")
+        assertEquals(PresentationState.CONSENT_PENDING, ctx.state)
+        assertEquals(1, ctx.credentialCandidates.size)
+        assertEquals(listOf("given_name"), ctx.credentialCandidates.single().requestedClaims)
+    }
+
+    @Test
+    fun `non-demo session without matching credentials rejects and dispatches negative`() = runBlocking {
+        val repository = mock(WalletCredentialRepository::class.java)
+        `when`(repository.findByUserId("holder-1")).thenReturn(emptyList())
+
+        val (orchestrator, gateway) = orchestrator(repository)
+        val ctx = orchestrator.startSession("http://verifier/req", "holder-1")
+        assertEquals(PresentationState.DISPATCHED, ctx.state)
+        assertTrue(gateway.negativeCount >= 1)
+        assertEquals("policy_rejected", ctx.error?.code)
+    }
+
+    @Test
+    fun `non-demo session with untrusted client_id rejects before matching`() = runBlocking {
+        val repository = mock(WalletCredentialRepository::class.java)
+        val (orchestrator, gateway) = orchestrator(repository, allowed = "another-verifier")
+        val ctx = orchestrator.startSession("http://verifier/req", "holder-1")
+        assertEquals(PresentationState.DISPATCHED, ctx.state)
+        assertEquals("trust_rejected", ctx.error?.code)
+        assertTrue(gateway.negativeCount >= 1)
+    }
+
+    @Test
+    fun `consent submission dispatches positive VP`() = runBlocking {
+        val repository = mock(WalletCredentialRepository::class.java)
+        `when`(repository.findByUserId("holder-1")).thenReturn(
+            listOf(
+                WalletCredential(
+                    id = 1L,
+                    userId = "holder-1",
+                    credentialType = "PID",
+                    encodedData = "HEAD.PAYLOAD.SIG",
+                    encryptedDisclosures = "",
+                ),
+            ),
+        )
+
+        val (orchestrator, gateway) = orchestrator(repository)
+        val ctx = orchestrator.startSession("http://verifier/req", "holder-1")
+        val after = orchestrator.submitConsent(
+            ctx.sessionMeta.sessionId,
+            ConsentSubmission(ctx.sessionMeta.sessionId.toString(), granted = true),
+        )
+        assertEquals(PresentationState.DISPATCHED, after.state)
+        assertEquals(1, gateway.positiveCount)
+        assertNotNull(after.dispatchOutcome)
+    }
+}

@@ -1,0 +1,11 @@
+package di.swallet.wpb.presentation.format
+
+/**
+ * Signs a Key Binding JWT (KB-JWT) for SD-JWT presentations.
+ *
+ * Extracted as a narrow interface so the VP builder can be unit-tested without
+ * starting the full HSM stack (PKCS#11 / SoftHSM2).
+ */
+interface KeyBindingJwtSigner {
+    fun signKeyBindingJwt(userId: String, payload: Map<String, Any>): String
+}

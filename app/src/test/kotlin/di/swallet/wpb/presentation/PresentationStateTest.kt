@@ -1,31 +1,49 @@
 package di.swallet.wpb.presentation
 
 import di.swallet.wpb.presentation.domain.PresentationState
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PresentationStateTest {
+
     @Test
-    fun `allowed transition path should be valid`() {
-        var state = PresentationState.RECEIVED
-        assertTrue(state.canTransitionTo(PresentationState.REQUEST_RESOLVED))
-        state = PresentationState.REQUEST_RESOLVED
-        assertTrue(state.canTransitionTo(PresentationState.VERIFIER_VALIDATED))
-        state = PresentationState.VERIFIER_VALIDATED
-        assertTrue(state.canTransitionTo(PresentationState.POLICY_EVALUATED))
-        state = PresentationState.POLICY_EVALUATED
-        assertTrue(state.canTransitionTo(PresentationState.CONSENT_PENDING))
-        state = PresentationState.CONSENT_PENDING
-        assertTrue(state.canTransitionTo(PresentationState.CONSENT_GRANTED))
-        state = PresentationState.CONSENT_GRANTED
-        assertTrue(state.canTransitionTo(PresentationState.VP_BUILT))
-        state = PresentationState.VP_BUILT
-        assertTrue(state.canTransitionTo(PresentationState.DISPATCHED))
+    fun `forward happy-path transitions are valid`() {
+        val sequence = listOf(
+            PresentationState.RECEIVED,
+            PresentationState.REQUEST_RESOLVED,
+            PresentationState.VERIFIER_VALIDATED,
+            PresentationState.POLICY_EVALUATED,
+            PresentationState.CONSENT_PENDING,
+            PresentationState.CONSENT_GRANTED,
+            PresentationState.VP_BUILT,
+            PresentationState.DISPATCHED,
+        )
+        sequence.windowed(2).forEach { (from, to) ->
+            assertTrue(from.canTransitionTo(to), "Expected $from -> $to to be valid")
+        }
     }
 
     @Test
-    fun `invalid transition should be rejected`() {
-        val from = PresentationState.RECEIVED
+    fun `cannot skip ahead from RECEIVED to VP_BUILT`() {
+        assertFalse(PresentationState.RECEIVED.canTransitionTo(PresentationState.VP_BUILT))
+    }
+
+    @Test
+    fun `dispatched state can only expire afterwards`() {
+        val from = PresentationState.DISPATCHED
+        assertTrue(from.canTransitionTo(PresentationState.EXPIRED))
+        assertFalse(from.canTransitionTo(PresentationState.REQUEST_RESOLVED))
         assertFalse(from.canTransitionTo(PresentationState.VP_BUILT))
+    }
+
+    @Test
+    fun `every terminal state is flagged as terminal`() {
+        listOf(
+            PresentationState.FAILED,
+            PresentationState.REJECTED,
+            PresentationState.DISPATCHED,
+            PresentationState.EXPIRED,
+        ).forEach { assertTrue(it.isTerminal, "Expected $it to be terminal") }
     }
 }

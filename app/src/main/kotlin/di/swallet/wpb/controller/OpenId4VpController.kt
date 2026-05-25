@@ -1,5 +1,7 @@
 package di.swallet.wpb.controller
 
+import di.swallet.wpb.observability.SessionEvent
+import di.swallet.wpb.observability.SessionEventStore
 import di.swallet.wpb.openid4vp.protocol.AuthorizationStartRequest
 import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
 import di.swallet.wpb.presentation.domain.PresentationContext
@@ -19,7 +21,7 @@ import java.util.UUID
 @Tag(name = "OpenID4VP", description = "OpenID4VP + HAIP presentation lifecycle endpoints")
 class OpenId4VpController(
     private val presentationFlowOrchestrator: PresentationFlowOrchestrator,
-    private val eventStore: di.swallet.wpb.observability.SessionEventStore,
+    private val eventStore: SessionEventStore,
 ) {
 
     @PostMapping("/authorize")
@@ -48,7 +50,7 @@ class OpenId4VpController(
 
     @GetMapping("/session/{id}/events")
     @Operation(summary = "Get session events")
-    suspend fun getSessionEvents(@PathVariable id: UUID): List<String> {
+    suspend fun getSessionEvents(@PathVariable id: UUID): List<SessionEvent> {
         return eventStore.getEvents(id)
     }
 }

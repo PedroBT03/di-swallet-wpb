@@ -3,6 +3,7 @@ package di.swallet.wpb.service
 import di.swallet.wpb.config.HsmProperties
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletKeyRepository
+import di.swallet.wpb.presentation.format.KeyBindingJwtSigner
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
@@ -33,7 +34,7 @@ class HsmService(
     private val walletKeyRepository: WalletKeyRepository,
     private val statusListService: StatusListService,
     private val hsmProperties: HsmProperties
-) {
+) : KeyBindingJwtSigner {
     private val logger = LoggerFactory.getLogger(javaClass)
     private var pkcs11Provider: Provider = Security.getProvider("SunPKCS11")
         ?: throw RuntimeException("SunPKCS11 provider not found")
@@ -238,5 +239,29 @@ class HsmService(
         val signedSdJwt = "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$base64UrlSignature"
 
         return signedSdJwt
+    }
+
+    /**
+     * Signs a Key Binding JWT for SD-JWT presentations (HAIP).
+     *
+     * The KB-JWT proves the holder controls the key that is bound to the
+     * SD-JWT credential. The wallet signs it inside the HSM. The verifier
+     * checks `aud`, `nonce` and `sd_hash` against the presentation it
+     * received.
+     */
+    override fun signKeyBindingJwt(userId: String, payload: Map<String, Any>): String {
+        val walletKey = getUserKey(userId)
+        validateKeyStatus(walletKey)
+
+        val header = JWSHeader.Builder(JWSAlgorithm.ES256)
+            .keyID(walletKey.keyAlias)
+            .type(JOSEObjectType("kb+jwt"))
+            .build()
+
+        val jwsObject = JWSObject(header, Payload(payload))
+        val derSignature = signData(userId, jwsObject.signingInput)
+        val jwsSignatureBytes = ECDSA.transcodeSignatureToConcat(derSignature, 64)
+        val base64UrlSignature = Base64URL.encode(jwsSignatureBytes)
+        return "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$base64UrlSignature"
     }
 }

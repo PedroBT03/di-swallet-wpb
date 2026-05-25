@@ -3,6 +3,7 @@ package di.swallet.wpb.openid4vp.adapter
 import com.nimbusds.jose.util.Base64URL
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestErrorEnvelope
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
+import di.swallet.wpb.openid4vp.protocol.DcqlSupport
 import di.swallet.wpb.openid4vp.protocol.DispatchDetails
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
 import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
@@ -15,7 +16,6 @@ import eu.europa.ec.eudi.openid4vp.Consensus
 import eu.europa.ec.eudi.openid4vp.DispatchOutcome
 import eu.europa.ec.eudi.openid4vp.EncryptionParameters
 import eu.europa.ec.eudi.openid4vp.ErrorDispatchDetails
-import eu.europa.ec.eudi.openid4vp.OpenId4VPConfig
 import eu.europa.ec.eudi.openid4vp.OpenId4Vp
 import eu.europa.ec.eudi.openid4vp.Resolution
 import eu.europa.ec.eudi.openid4vp.ResolvedRequestObject
@@ -27,8 +27,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.nio.charset.StandardCharsets
@@ -49,7 +49,21 @@ class SdkOpenId4VpGateway(
     private val requestStore = ConcurrentHashMap<String, ResolvedRequestObject>()
     private val fallbackRequestStore = ConcurrentHashMap<String, FallbackRequest>()
     private val errorStore = ConcurrentHashMap<String, Pair<AuthorizationRequestError, ErrorDispatchDetails?>>()
-    private val encryptionParameters = EncryptionParameters.DiffieHellman(Base64URL.encode("di-swallet-phase1"))
+
+    private val secureRandom = java.security.SecureRandom()
+
+    /**
+     * Returns fresh ephemeral encryption material for a single dispatch.
+     *
+     * Phase 1 does not bind the encryption parameters to the resolved request
+     * (full HAIP response encryption is tracked under Phase 5/8). Each
+     * dispatch still gets a per-request random value so that no two sessions
+     * share key material in memory.
+     */
+    private fun ephemeralEncryptionParameters(): EncryptionParameters {
+        val randomBytes = ByteArray(32).also { secureRandom.nextBytes(it) }
+        return EncryptionParameters.DiffieHellman(Base64URL.encode(randomBytes))
+    }
 
     override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution {
         return when (val resolution = openId4Vp.resolveRequestUri(requestUri)) {
@@ -87,8 +101,9 @@ class SdkOpenId4VpGateway(
             val raw = URI(requestUri).toURL().readText()
             val jsonText = decodeJwtPayloadIfNeeded(raw)
             val element = Json.parseToJsonElement(jsonText).jsonObject
-            val clientId = element["client_id"]?.jsonPrimitive?.content ?: return invalidFallback("MissingClientId")
-            val responseMode = when (element["response_mode"]?.jsonPrimitive?.content) {
+            val clientId = element["client_id"]?.jsonPrimitive?.contentOrNull
+                ?: return invalidFallback("MissingClientId")
+            val responseMode = when (element["response_mode"]?.jsonPrimitive?.contentOrNull) {
                 "direct_post" -> PresentationResponseMode.DIRECT_POST
                 "direct_post.jwt" -> PresentationResponseMode.DIRECT_POST_JWT
                 "query" -> PresentationResponseMode.QUERY
@@ -97,19 +112,15 @@ class SdkOpenId4VpGateway(
                 "fragment.jwt" -> PresentationResponseMode.FRAGMENT_JWT
                 else -> PresentationResponseMode.DIRECT_POST
             }
-            val nonce = element["nonce"]?.jsonPrimitive?.content ?: UUID.randomUUID().toString()
-            val state = element["state"]?.jsonPrimitive?.content
-            val redirectUri = element["redirect_uri"]?.jsonPrimitive?.content
-            val responseUri = element["response_uri"]?.jsonPrimitive?.content
-            val dcqlJson = element["dcql"]?.toString() ?: "{}"
-            val queryIds = element["dcql"]
-                ?.jsonObject
-                ?.get("query")
-                ?.jsonArray
-                ?.mapNotNull { queryEntry: JsonElement ->
-                    queryEntry.jsonObject["fields"]?.jsonArray?.firstOrNull()?.jsonPrimitive?.content
-                }
-                ?: emptyList<String>()
+            val nonce = element["nonce"]?.jsonPrimitive?.contentOrNull ?: UUID.randomUUID().toString()
+            val state = element["state"]?.jsonPrimitive?.contentOrNull
+            val redirectUri = element["redirect_uri"]?.jsonPrimitive?.contentOrNull
+            val responseUri = element["response_uri"]?.jsonPrimitive?.contentOrNull
+            val dcqlElement = element["dcql"] as? JsonObject
+            val dcqlJson = dcqlElement?.toString() ?: "{}"
+            val parsedQueries = DcqlSupport.parse(dcqlJson)
+            val queryIds = parsedQueries.map { it.id }
+            val requestedFormats = parsedQueries.map { it.format }.toSet().ifEmpty { setOf(CredentialFormat.SD_JWT) }
 
             val requestToken = UUID.randomUUID().toString()
             val request = ResolvedAuthorizationRequest(
@@ -125,6 +136,8 @@ class SdkOpenId4VpGateway(
                 requirements = PresentationRequirements(
                     dcqlQueryJson = dcqlJson,
                     credentialQueryIds = queryIds,
+                    requestedFormats = requestedFormats,
+                    credentialQueries = parsedQueries,
                 ),
                 transactionDataJson = element["transaction_data"]?.toString(),
                 verifierInfoJson = element["verifier_info"]?.toString(),
@@ -163,26 +176,38 @@ class SdkOpenId4VpGateway(
     }
 
     override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken): PresentationDispatchOutcome {
-        requestStore[requestToken]?.let { request ->
+        val sdkRequest = requestStore[requestToken]
+        if (sdkRequest != null) {
             val consensus = Consensus.PositiveConsensus(vpToken.toSdkVerifiablePresentations())
-            return dispatchOutcome(openId4Vp.dispatch(request, consensus, encryptionParameters))
+            val outcome = dispatchOutcome(openId4Vp.dispatch(sdkRequest, consensus, ephemeralEncryptionParameters()))
+            requestStore.remove(requestToken)
+            return outcome
         }
         val fallback = fallbackRequestStore[requestToken] ?: return PresentationDispatchOutcome.VerifierRejected
-        return dispatchFallbackPositive(fallback)
+        val outcome = dispatchFallbackPositive(fallback, vpToken)
+        fallbackRequestStore.remove(requestToken)
+        return outcome
     }
 
     override suspend fun dispatchNegative(requestToken: String): PresentationDispatchOutcome {
-        requestStore[requestToken]?.let { request ->
-            return dispatchOutcome(openId4Vp.dispatch(request, Consensus.NegativeConsensus, encryptionParameters))
+        val sdkRequest = requestStore[requestToken]
+        if (sdkRequest != null) {
+            val outcome = dispatchOutcome(openId4Vp.dispatch(sdkRequest, Consensus.NegativeConsensus, ephemeralEncryptionParameters()))
+            requestStore.remove(requestToken)
+            return outcome
         }
         val fallback = fallbackRequestStore[requestToken] ?: return PresentationDispatchOutcome.VerifierRejected
-        return dispatchFallbackNegative(fallback)
+        val outcome = dispatchFallbackNegative(fallback)
+        fallbackRequestStore.remove(requestToken)
+        return outcome
     }
 
     override suspend fun dispatchError(errorToken: String): PresentationDispatchOutcome {
         val (sdkError, sdkDispatchDetails) = errorStore[errorToken] ?: return PresentationDispatchOutcome.VerifierRejected
         val details = sdkDispatchDetails ?: return PresentationDispatchOutcome.VerifierRejected
-        return dispatchOutcome(openId4Vp.dispatchError(sdkError, details, encryptionParameters))
+        val outcome = dispatchOutcome(openId4Vp.dispatchError(sdkError, details, ephemeralEncryptionParameters()))
+        errorStore.remove(errorToken)
+        return outcome
     }
 
     private fun dispatchOutcome(outcome: DispatchOutcome): PresentationDispatchOutcome = when (outcome) {
@@ -205,6 +230,9 @@ class SdkOpenId4VpGateway(
             if (vpFormatsSupported?.msoMdoc != null) add(CredentialFormat.MDOC)
         }.ifEmpty { setOf(CredentialFormat.SD_JWT) }
 
+        val dcqlJson = query.toString()
+        val parsedQueries = DcqlSupport.parse(dcqlJson)
+
         return ResolvedAuthorizationRequest(
             requestToken = requestToken,
             requestUri = requestUri,
@@ -216,19 +244,21 @@ class SdkOpenId4VpGateway(
             redirectUri = responseMode.redirectUriOrNull(),
             verifierDisplayName = client.clientDisplayName(),
             requirements = PresentationRequirements(
-                dcqlQueryJson = query.toString(),
+                dcqlQueryJson = dcqlJson,
                 credentialQueryIds = queryIds,
                 requestedFormats = formats,
+                credentialQueries = parsedQueries,
             ),
             transactionDataJson = transactionData?.toString(),
             verifierInfoJson = verifierInfo?.toString(),
         )
     }
 
-    private fun dispatchFallbackPositive(fallback: FallbackRequest): PresentationDispatchOutcome {
+    private fun dispatchFallbackPositive(fallback: FallbackRequest, vpToken: VpToken): PresentationDispatchOutcome {
         return try {
             val target = fallback.responseUri ?: fallback.redirectUri
             if (target == null) return PresentationDispatchOutcome.VerifierRejected
+            val firstPresentation = vpToken.presentationsByQueryId.values.flatten().firstOrNull() ?: ""
 
             when (fallback.responseMode) {
                 PresentationResponseMode.DIRECT_POST, PresentationResponseMode.DIRECT_POST_JWT -> {
@@ -238,7 +268,7 @@ class SdkOpenId4VpGateway(
                         appendQuotedJson(fallback.state ?: "")
                         append(',')
                         append("\"vp_token\":")
-                        appendQuotedJson("dummy-vp-token")
+                        appendQuotedJson(firstPresentation)
                         append('}')
                     }
                     val conn = URL(target).openConnection() as HttpURLConnection

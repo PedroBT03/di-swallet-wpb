@@ -1,22 +1,33 @@
 package di.swallet.wpb.presentation
 
-import di.swallet.wpb.presentation.domain.*
+import di.swallet.wpb.presentation.domain.PresentationSession
+import di.swallet.wpb.presentation.domain.PresentationState
+import di.swallet.wpb.presentation.domain.SessionMetadata
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID
 
 class InMemoryPresentationSessionRepositoryTest {
-    @Test
-    fun `create and update should work and bump version`() {
-        val repo = InMemoryPresentationSessionRepository()
-        val id = UUID.randomUUID()
-        val now = Instant.now()
-        val meta = SessionMetadata(id, createdAt = now, updatedAt = now, expiresAt = now.plusSeconds(60))
-        val session = PresentationSession(sessionMeta = meta, state = PresentationState.RECEIVED)
 
-        val created = repo.create(session)
+    private fun newSession(): PresentationSession {
+        val now = Instant.now()
+        val meta = SessionMetadata(
+            sessionId = UUID.randomUUID(),
+            correlationId = UUID.randomUUID().toString(),
+            createdAt = now,
+            updatedAt = now,
+            expiresAt = now.plusSeconds(60),
+        )
+        return PresentationSession(sessionMeta = meta, state = PresentationState.RECEIVED)
+    }
+
+    @Test
+    fun `create and update bumps version`() {
+        val repo = InMemoryPresentationSessionRepository()
+        val created = repo.create(newSession())
         assertEquals(0, created.sessionMeta.version)
 
         val updated = repo.update(created.copy(state = PresentationState.REQUEST_RESOLVED))
@@ -24,25 +35,16 @@ class InMemoryPresentationSessionRepositoryTest {
     }
 
     @Test
-    fun `optimistic locking conflict should throw`() {
+    fun `optimistic locking rejects stale update`() {
         val repo = InMemoryPresentationSessionRepository()
-        val id = UUID.randomUUID()
-        val now = Instant.now()
-        val meta = SessionMetadata(id, createdAt = now, updatedAt = now, expiresAt = now.plusSeconds(60))
-        val session = PresentationSession(sessionMeta = meta, state = PresentationState.RECEIVED)
+        val created = repo.create(newSession())
+        val stale = created.copy()
 
-        val created = repo.create(session)
+        repo.update(created.copy(state = PresentationState.REQUEST_RESOLVED))
 
-        val staleCopy = created.copy(sessionMeta = created.sessionMeta.copy(version = created.sessionMeta.version))
-
-        // perform a real update to bump the version
-        val updated = repo.update(created.copy(state = PresentationState.REQUEST_RESOLVED))
-        assertEquals(1, updated.sessionMeta.version)
-
-        // attempt to update with stale copy (version 0) should fail
         try {
-            repo.update(staleCopy.copy(state = PresentationState.POLICY_EVALUATED))
-            fail("Expected version conflict")
+            repo.update(stale.copy(state = PresentationState.POLICY_EVALUATED))
+            fail<Unit>("Expected stale version to be rejected")
         } catch (e: IllegalArgumentException) {
             // expected
         }

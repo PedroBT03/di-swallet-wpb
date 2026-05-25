@@ -50,10 +50,15 @@ enum class PresentationState {
 
 /**
  * Metadata that scopes a single presentation lifecycle.
+ *
+ * `correlationId` is a stable, log-safe identifier used for tracing the full
+ * request/response cycle across logs, the event store, and the verifier
+ * emulator (`X-Correlation-Id` header).
  */
 data class SessionMetadata(
     val sessionId: UUID,
     val holderId: String? = null,
+    val correlationId: String,
     val createdAt: Instant,
     val updatedAt: Instant,
     val expiresAt: Instant,
@@ -70,12 +75,30 @@ data class VerifierIdentity(
 )
 
 /**
+ * A single DCQL-style credential query carried through the lifecycle.
+ *
+ * `requestedClaims` is a flat list of top-level claim names that the verifier
+ * asked for. For HAIP Phase 1 (SD-JWT only) we treat the DCQL `claims[].path`
+ * array as a single-element top-level claim name.
+ */
+data class CredentialQuery(
+    val id: String,
+    val format: CredentialFormat,
+    val credentialTypeHints: List<String> = emptyList(),
+    val requestedClaims: List<String> = emptyList(),
+)
+
+/**
  * Parsed requirements extracted from the verifier request.
+ *
+ * `credentialQueries` is the structured representation, while `credentialQueryIds`
+ * is kept for backward compatibility with earlier orchestrator code.
  */
 data class PresentationRequirements(
     val dcqlQueryJson: String,
     val credentialQueryIds: List<String>,
     val requestedFormats: Set<CredentialFormat> = setOf(CredentialFormat.SD_JWT),
+    val credentialQueries: List<CredentialQuery> = emptyList(),
 )
 
 /**
@@ -105,6 +128,9 @@ data class ConsentDecision(
 
 /**
  * Minimal candidate record that the matcher exposes to the orchestrator.
+ *
+ * `requestedClaims` carries the claim names that the verifier asked for via
+ * DCQL, so the VP builder can filter selective disclosures accordingly.
  */
 data class CredentialCandidate(
     val candidateId: String,
@@ -113,6 +139,7 @@ data class CredentialCandidate(
     val queryId: String,
     val credentialType: String,
     val format: CredentialFormat,
+    val requestedClaims: List<String> = emptyList(),
 )
 
 /**
@@ -125,6 +152,7 @@ data class SelectedCredential(
     val queryId: String,
     val credentialType: String,
     val format: CredentialFormat,
+    val requestedClaims: List<String> = emptyList(),
 )
 
 /**

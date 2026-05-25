@@ -1,97 +1,184 @@
 package di.swallet.wpb.presentation
 
-import di.swallet.wpb.openid4vp.protocol.*
-import di.swallet.wpb.presentation.domain.*
-import di.swallet.wpb.presentation.matching.CredentialMatcher
+import di.swallet.wpb.observability.InMemorySessionEventStore
+import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
+import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
+import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
+import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
+import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
+import di.swallet.wpb.presentation.domain.CredentialCandidate
+import di.swallet.wpb.presentation.domain.CredentialFormat
+import di.swallet.wpb.presentation.domain.PolicyDecision
+import di.swallet.wpb.presentation.domain.PresentationContext
+import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
+import di.swallet.wpb.presentation.domain.PresentationRequirements
+import di.swallet.wpb.presentation.domain.PresentationState
+import di.swallet.wpb.presentation.domain.TrustDecision
+import di.swallet.wpb.presentation.domain.VpToken
 import di.swallet.wpb.presentation.format.VpTokenBuilder
+import di.swallet.wpb.presentation.matching.CredentialMatcher
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.PolicyEngine
 import di.swallet.wpb.presentation.trust.TrustValidator
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import java.time.Instant
-import java.util.UUID
 
 class DefaultPresentationFlowOrchestratorTest {
 
-    private class GatewayStub(val request: ResolvedAuthorizationRequest) : di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway {
-        override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution = AuthorizationRequestResolution.Success(request)
+    private val resolved = ResolvedAuthorizationRequest(
+        requestToken = "rt-1",
+        requestUri = "http://verifier/request-1",
+        clientId = "verifier-demo-client",
+        responseMode = PresentationResponseMode.DIRECT_POST,
+        nonce = "n1",
+        state = "s1",
+        responseUri = "http://localhost:8090/callback",
+        verifierDisplayName = "Verifier",
+        requirements = PresentationRequirements(dcqlQueryJson = "{}", credentialQueryIds = listOf("q1")),
+    )
 
-        override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken): PresentationDispatchOutcome = PresentationDispatchOutcome.VerifierAccepted(null)
+    private class GatewayStub(val request: ResolvedAuthorizationRequest) : OpenId4VpGateway {
+        var lastPositiveToken: VpToken? = null
+        var negativeCount = 0
+        var errorCount = 0
+        override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution =
+            AuthorizationRequestResolution.Success(request)
 
-        override suspend fun dispatchNegative(requestToken: String): PresentationDispatchOutcome = PresentationDispatchOutcome.VerifierRejected
+        override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken): PresentationDispatchOutcome {
+            lastPositiveToken = vpToken
+            return PresentationDispatchOutcome.VerifierAccepted(null)
+        }
 
-        override suspend fun dispatchError(errorToken: String): PresentationDispatchOutcome = PresentationDispatchOutcome.VerifierRejected
+        override suspend fun dispatchNegative(requestToken: String): PresentationDispatchOutcome {
+            negativeCount++
+            return PresentationDispatchOutcome.VerifierAccepted(null)
+        }
+
+        override suspend fun dispatchError(errorToken: String): PresentationDispatchOutcome {
+            errorCount++
+            return PresentationDispatchOutcome.VerifierAccepted(null)
+        }
     }
 
-    private class AlwaysTrust : TrustValidator {
-        override fun validate(context: PresentationContext): PresentationContext = context.copy(trustDecision = TrustDecision(trusted = true))
+    private class StubTrust(private val trusted: Boolean = true) : TrustValidator {
+        override fun validate(context: PresentationContext): PresentationContext =
+            context.copy(trustDecision = TrustDecision(trusted = trusted, reason = if (trusted) "ok" else "denied"))
     }
 
-    private class AllowPolicy : PolicyEngine {
-        override fun evaluate(context: PresentationContext): PresentationContext = context.copy(policyDecision = PolicyDecision(allowed = true))
+    private class StubPolicy(private val allowed: Boolean = true) : PolicyEngine {
+        override fun evaluate(context: PresentationContext): PresentationContext =
+            context.copy(policyDecision = PolicyDecision(allowed = allowed, reason = if (allowed) "ok" else "denied"))
     }
 
-    private class SimpleMatcher : CredentialMatcher {
-        override fun match(context: PresentationContext): PresentationContext {
-            val cand = CredentialCandidate(
-                candidateId = "c1",
-                credentialId = 1L,
-                holderId = "holder-1",
-                queryId = context.presentationRequirements?.credentialQueryIds?.firstOrNull() ?: "q1",
-                credentialType = "VerifiableCredential",
-                format = CredentialFormat.SD_JWT,
+    private class StubMatcher(private val candidates: List<CredentialCandidate>) : CredentialMatcher {
+        override fun match(context: PresentationContext): PresentationContext =
+            context.copy(credentialCandidates = candidates)
+    }
+
+    private class StubVpBuilder : VpTokenBuilder {
+        override fun build(context: PresentationContext): PresentationContext =
+            context.copy(
+                vpToken = VpToken(
+                    presentationsByQueryId = mapOf("q1" to listOf("vp-placeholder")),
+                    format = CredentialFormat.SD_JWT,
+                ),
             )
-            return context.copy(credentialCandidates = listOf(cand))
-        }
     }
 
-    private class SimpleVpBuilder : VpTokenBuilder {
-        override fun build(context: PresentationContext): PresentationContext {
-            val vp = VpToken(mapOf("q1" to listOf("vp-placeholder")), format = CredentialFormat.SD_JWT, rawValue = "stub")
-            return context.copy(vpToken = vp)
-        }
+    private fun newOrchestrator(
+        gateway: OpenId4VpGateway = GatewayStub(resolved),
+        trust: TrustValidator = StubTrust(),
+        policy: PolicyEngine = StubPolicy(),
+        matcher: CredentialMatcher = StubMatcher(listOf(candidate())),
+        builder: VpTokenBuilder = StubVpBuilder(),
+    ) = DefaultPresentationFlowOrchestrator(
+        gateway = gateway,
+        repository = InMemoryPresentationSessionRepository(),
+        trustValidator = trust,
+        policyEngine = policy,
+        credentialMatcher = matcher,
+        vpTokenBuilder = builder,
+        eventStore = InMemorySessionEventStore(),
+    )
+
+    private fun candidate(queryId: String = "q1") = CredentialCandidate(
+        candidateId = "c1",
+        credentialId = 1L,
+        holderId = "holder-1",
+        queryId = queryId,
+        credentialType = "VerifiableCredential",
+        format = CredentialFormat.SD_JWT,
+    )
+
+    @Test
+    fun `happy path dispatches positive VP on consent`() = runBlocking {
+        val gateway = GatewayStub(resolved)
+        val orchestrator = newOrchestrator(gateway = gateway)
+
+        val ctx = orchestrator.startSession("http://verifier/request-1", "holder-1")
+        assertEquals(PresentationState.CONSENT_PENDING, ctx.state)
+
+        val after = orchestrator.submitConsent(
+            ctx.sessionMeta.sessionId,
+            ConsentSubmission(ctx.sessionMeta.sessionId.toString(), granted = true, selectedCredentialIds = listOf("c1")),
+        )
+        assertEquals(PresentationState.DISPATCHED, after.state)
+        assertNotNull(gateway.lastPositiveToken)
     }
 
     @Test
-    fun `orchestrator happy path creates session then dispatches on consent`() = runBlocking {
-        val repo = InMemoryPresentationSessionRepository()
-
-        val resolved = ResolvedAuthorizationRequest(
-            requestToken = "rt-1",
-            requestUri = "http://verifier/request-1",
-            clientId = "verifier-1",
-            responseMode = PresentationResponseMode.DIRECT_POST,
-            nonce = "n1",
-            state = "s1",
-            responseUri = "http://localhost:8090/callback",
-            redirectUri = null,
-            verifierDisplayName = "Verifier",
-            requirements = PresentationRequirements(dcqlQueryJson = "{}", credentialQueryIds = listOf("q1")),
-        )
-
+    fun `consent denial dispatches negative outcome`() = runBlocking {
         val gateway = GatewayStub(resolved)
-        val orchestrator = DefaultPresentationFlowOrchestrator(
-            gateway = gateway,
-            repository = repo,
-            trustValidator = AlwaysTrust(),
-            policyEngine = AllowPolicy(),
-            credentialMatcher = SimpleMatcher(),
-            vpTokenBuilder = SimpleVpBuilder(),
-            eventStore = di.swallet.wpb.observability.InMemorySessionEventStore(),
+        val orchestrator = newOrchestrator(gateway = gateway)
+        val ctx = orchestrator.startSession("http://verifier/request-1", "holder-1")
+
+        val after = orchestrator.submitConsent(
+            ctx.sessionMeta.sessionId,
+            ConsentSubmission(ctx.sessionMeta.sessionId.toString(), granted = false),
         )
-
-        val ctx = orchestrator.startSession("http://verifier/request-1", holderId = "holder-1")
-        assertEquals(PresentationState.CONSENT_PENDING, ctx.state)
-
-        val sessionId = ctx.sessionMeta.sessionId
-
-        val consent = ConsentSubmission(sessionId = sessionId.toString(), granted = true, selectedCredentialIds = listOf("c1"))
-        val after = orchestrator.submitConsent(sessionId, consent)
 
         assertEquals(PresentationState.DISPATCHED, after.state)
-        assertNotNull(after.dispatchOutcome)
+        assertEquals(1, gateway.negativeCount)
+    }
+
+    @Test
+    fun `untrusted verifier rejects and dispatches negative`() = runBlocking {
+        val gateway = GatewayStub(resolved)
+        val orchestrator = newOrchestrator(
+            gateway = gateway,
+            trust = StubTrust(trusted = false),
+        )
+        val ctx = orchestrator.startSession("http://verifier/request-1", "holder-1")
+        assertEquals(PresentationState.DISPATCHED, ctx.state)
+        assertTrue(gateway.negativeCount >= 1)
+    }
+
+    @Test
+    fun `empty candidates after match rejects and dispatches negative`() = runBlocking {
+        val gateway = GatewayStub(resolved)
+        val orchestrator = newOrchestrator(
+            gateway = gateway,
+            matcher = StubMatcher(emptyList()),
+            policy = StubPolicy(allowed = true),
+        )
+        val ctx = orchestrator.startSession("http://verifier/request-1", "holder-1")
+        assertEquals(PresentationState.DISPATCHED, ctx.state)
+        assertEquals(1, gateway.negativeCount)
+    }
+
+    @Test
+    fun `policy rejection dispatches negative outcome`() = runBlocking {
+        val gateway = GatewayStub(resolved)
+        val orchestrator = newOrchestrator(
+            gateway = gateway,
+            policy = StubPolicy(allowed = false),
+        )
+        val ctx = orchestrator.startSession("http://verifier/request-1", "holder-1")
+        assertEquals(PresentationState.DISPATCHED, ctx.state)
+        assertEquals(1, gateway.negativeCount)
     }
 }

@@ -66,6 +66,27 @@ Run the automated integration tests to verify the full cryptographic lifecycle:
 ```
 *The test suite produces clean audit logs showing the interaction between the Security Gateway and the HSM.*
 
+### Test coverage (JaCoCo)
+After tests run, Gradle generates a coverage report automatically (`test` is finalized by `jacocoTestReport`):
+
+```bash
+./gradlew :app:clean :app:test :app:jacocoTestReport
+```
+
+Open the HTML report:
+`app/build/reports/jacoco/test/html/index.html`
+
+XML report (for CI tools such as SonarQube):
+`app/build/reports/jacoco/test/jacocoTestReport.xml`
+
+Optional minimum line-coverage gate (30% on application code, excluding `WpbApplication`):
+
+```bash
+./gradlew :app:jacocoTestCoverageVerification
+```
+
+Integration tests that require SoftHSM2 must pass locally for coverage to reflect the full suite; unit tests (OpenID4VP lifecycle, DCQL, matcher, VP builder, etc.) run without the emulator.
+
 ## 📂 API Reference
 
 ### Mandatory Security

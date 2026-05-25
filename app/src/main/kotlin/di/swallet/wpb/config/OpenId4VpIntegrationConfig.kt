@@ -14,7 +14,6 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.security.cert.X509Certificate
@@ -22,10 +21,9 @@ import com.nimbusds.jose.JWEAlgorithm
 import com.nimbusds.jose.EncryptionMethod
 
 @Configuration
-class OpenId4VpIntegrationConfig {
-
-    @Value("\${wpb.openid4vp.demo-mode:false}")
-    private var demoMode: Boolean = false
+class OpenId4VpIntegrationConfig(
+    private val openId4VpProperties: OpenId4VpProperties,
+) {
 
     @Bean(destroyMethod = "close")
     fun openId4VpHttpClient(): HttpClient = HttpClient(CIO) {
@@ -38,7 +36,7 @@ class OpenId4VpIntegrationConfig {
     @Bean
     fun openId4VpConfig(): OpenId4VPConfig = OpenId4VPConfig(
         supportedClientIdPrefixes = buildList {
-            if (demoMode) {
+            if (openId4VpProperties.demoMode) {
                 add(
                     SupportedClientIdPrefix.Preregistered(
                         PreregisteredClient("verifier-demo-client", "Demo Verifier"),

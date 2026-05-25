@@ -10,6 +10,7 @@ plugins {
     kotlin("kapt") version "2.2.0"
     
     application
+    jacoco
 }
 
 group = "di.swallet.wpb"
@@ -89,8 +90,48 @@ tasks.withType<JavaExec> {
     environment("SOFTHSM2_CONF", "${System.getProperty("user.home")}/.softhsm2.conf")
 }
 
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+val jacocoCoverageExcludes = listOf(
+    "**/WpbApplication*",
+)
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+    classDirectories.setFrom(
+        sourceSets.main.get().output.classesDirs.files.map { classesDir ->
+            fileTree(classesDir) {
+                exclude(jacocoCoverageExcludes)
+            }
+        },
+    )
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.jacocoTestReport)
+    violationRules {
+        rule {
+            element = "BUNDLE"
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = 0.30.toBigDecimal()
+            }
+        }
+    }
+    classDirectories.setFrom(tasks.jacocoTestReport.get().classDirectories)
+}
+
 tasks.withType<Test> {
     useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
     
     // Activate 'test' profile to enable clean, human-readable reporting logs
     systemProperty("spring.profiles.active", "test")

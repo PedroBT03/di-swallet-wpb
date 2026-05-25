@@ -27,6 +27,23 @@
       "name": "wpb.hsm",
       "type": "di.swallet.wpb.config.HsmProperties",
       "sourceType": "di.swallet.wpb.config.HsmProperties"
+    },
+    {
+      "name": "wpb.openid4vp",
+      "type": "di.swallet.wpb.config.OpenId4VpProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties"
+    },
+    {
+      "name": "wpb.openid4vp.trust",
+      "type": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties",
+      "sourceMethod": "getTrust()"
+    },
+    {
+      "name": "wpb.openid4vp.session",
+      "type": "di.swallet.wpb.config.OpenId4VpProperties$SessionProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties",
+      "sourceMethod": "getSession()"
     }
   ],
   "properties": [
@@ -85,6 +102,27 @@
       "sourceType": "di.swallet.wpb.config.HsmProperties",
       "description": "PIN code for HSM authentication. Should be externalized via environment variable HSM_PIN in production.",
       "defaultValue": "1234"
+    },
+    {
+      "name": "wpb.openid4vp.demo-mode",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties",
+      "description": "Enables demo-only OpenID4VP fallback paths for the local verifier emulator. Never enable in production.",
+      "defaultValue": false
+    },
+    {
+      "name": "wpb.openid4vp.trust.allowed-client-ids",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Comma-separated allow-list of accepted verifier client_id values. When empty, trust validation is permissive (Phase 1 baseline only).",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vp.session.ttl-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$SessionProperties",
+      "description": "Presentation session time-to-live in seconds.",
+      "defaultValue": 600
     }
   ],
   "hints": []

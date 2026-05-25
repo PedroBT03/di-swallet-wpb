@@ -76,6 +76,21 @@ kapt {
     correctErrorTypes = true
 }
 
+// Kapt writes merged metadata under tmp/; expose it to the IDE classpath and packaged resources.
+sourceSets {
+    named("main") {
+        java.srcDir(layout.buildDirectory.dir("tmp/kapt3/classes/main"))
+    }
+}
+
+tasks.named<ProcessResources>("processResources") {
+    dependsOn(tasks.named("kaptKotlin"))
+    from(layout.buildDirectory.dir("tmp/kapt3/classes/main")) {
+        include("META-INF/spring-configuration-metadata.json")
+    }
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
 application {
     mainClass.set("di.swallet.wpb.WpbApplicationKt")
 }

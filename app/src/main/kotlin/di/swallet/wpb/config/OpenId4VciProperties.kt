@@ -1,6 +1,7 @@
 package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.NestedConfigurationProperty
 
 /**
  * Typed configuration for the OID4VCI / Phase 2 issuance subsystem.
@@ -19,10 +20,19 @@ class OpenId4VciProperties {
     /** Lifetime of an issuance session in seconds. */
     var sessionTtlSeconds: Long = 1800
 
+    @NestedConfigurationProperty
     var sdk: SdkProperties = SdkProperties()
+
+    @NestedConfigurationProperty
     var trust: TrustProperties = TrustProperties()
+
+    @NestedConfigurationProperty
     var policy: PolicyProperties = PolicyProperties()
+
+    @NestedConfigurationProperty
     var simulator: SimulatorProperties = SimulatorProperties()
+
+    @NestedConfigurationProperty
     var wia: WiaProperties = WiaProperties()
 
     class SdkProperties {

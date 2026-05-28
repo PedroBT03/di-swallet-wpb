@@ -8,6 +8,7 @@ import di.swallet.wpb.openid4vci.protocol.IssuanceOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import di.swallet.wpb.openid4vci.protocol.PreparedAuthorization
+import di.swallet.wpb.openid4vci.protocol.KeyAttestationTransport
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.openid4vci.protocol.ResolvedOffer
 import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
@@ -85,6 +86,7 @@ interface OpenId4VciGateway {
         adapterSessionId: String,
         request: IssuanceRequest,
         proof: ProofMaterial,
+        keyAttestation: KeyAttestationTransport?,
     ): IssuanceOutcome
 
     /**

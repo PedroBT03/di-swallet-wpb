@@ -79,6 +79,12 @@
       "type": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
       "sourceMethod": "getWia()"
+    },
+    {
+      "name": "wpb.openid4vci.ka",
+      "type": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
+      "sourceMethod": "getKa()"
     }
   ],
   "properties": [
@@ -237,6 +243,13 @@
       "defaultValue": true
     },
     {
+      "name": "wpb.openid4vci.sdk.strict-resolution",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$SdkProperties",
+      "description": "Require SDK resolver success and disable local fallback parsing for the real adapter.",
+      "defaultValue": true
+    },
+    {
       "name": "wpb.openid4vci.wia.enabled",
       "type": "java.lang.Boolean",
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
@@ -312,6 +325,111 @@
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$WiaProperties",
       "description": "Maximum retries when WIA is expired during authorization.",
       "defaultValue": 1
+    },
+    {
+      "name": "wpb.openid4vci.ka.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Enable KA processing for device-bound issuance.",
+      "defaultValue": true
+    },
+    {
+      "name": "wpb.openid4vci.ka.token-ttl-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "KA JWT technical TTL in seconds.",
+      "defaultValue": 21600
+    },
+    {
+      "name": "wpb.openid4vci.ka.min-status-maintenance-days",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Minimum key_storage_status maintenance horizon in days.",
+      "defaultValue": 31
+    },
+    {
+      "name": "wpb.openid4vci.ka.reuse-per-issuer",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Reuse KA per issuer (default false for privacy).",
+      "defaultValue": false
+    },
+    {
+      "name": "wpb.openid4vci.ka.key-storage",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "TS3 key_storage claim value.",
+      "defaultValue": "iso_18045_high"
+    },
+    {
+      "name": "wpb.openid4vci.ka.user-authentication",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "TS3 user_authentication claim value.",
+      "defaultValue": "iso_18045_high"
+    },
+    {
+      "name": "wpb.openid4vci.ka.certification-scheme",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Certification scheme used in KA payload.",
+      "defaultValue": "eidas"
+    },
+    {
+      "name": "wpb.openid4vci.ka.certification-assurance-level",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Certification assurance level in KA payload.",
+      "defaultValue": "high"
+    },
+    {
+      "name": "wpb.openid4vci.ka.certification-info",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Certification details included in KA payload.",
+      "defaultValue": "thesis-mvp-not-certified"
+    },
+    {
+      "name": "wpb.openid4vci.ka.issuer",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Issuer identifier used in KA claims.",
+      "defaultValue": "did:web:wpb.local"
+    },
+    {
+      "name": "wpb.openid4vci.ka.signing-x5c",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Optional x5c chain in KA header (comma-separated DER base64 values or PEM blocks).",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vci.ka.require-x5c",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Require x5c in key attestation trust validation.",
+      "defaultValue": false
+    },
+    {
+      "name": "wpb.openid4vci.ka.allowed-x5c-fingerprints",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Comma-separated allow-list of accepted attestation certificate fingerprints.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vci.ka.trust-mode",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Trust mode for KA x5c validation (`relaxed` or `strict`).",
+      "defaultValue": "relaxed"
+    },
+    {
+      "name": "wpb.openid4vci.ka.trust-anchor-pem-paths",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
+      "description": "Comma-separated file/classpath paths for PEM trust anchors used in strict mode.",
+      "defaultValue": ""
     }
   ],
   "hints": []

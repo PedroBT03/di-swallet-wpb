@@ -38,7 +38,26 @@ enum class WiaState {
     FAILED,
 }
 
+/**
+ * Lifecycle of the KA sub-context embedded in issuance.
+ */
+enum class KaState {
+    NOT_REQUIRED,
+    REQUIRED,
+    SELECTED,
+    ATTACHED,
+    VALIDATED,
+    EXPIRED,
+    FAILED,
+}
+
 data class WiaStatusReference(
+    val listId: String,
+    val index: Int,
+    val uri: String,
+)
+
+data class KaStatusReference(
     val listId: String,
     val index: Int,
     val uri: String,
@@ -68,6 +87,29 @@ data class WiaContext(
     val attestation: WalletInstanceAttestation? = null,
     val nonceMismatchRetries: Int = 0,
     val expiredRetries: Int = 0,
+    val lastErrorCode: String? = null,
+)
+
+/**
+ * Wallet Key Attestation envelope used by device-bound issuance.
+ */
+data class KeyAttestation(
+    val jwt: String,
+    val keyId: String,
+    val keyStorage: String,
+    val certification: String,
+    val attestedJkt: String,
+    val status: KaStatusReference,
+    val tokenExpiresAt: Instant,
+    val statusExpiresAt: Instant,
+    val issuedAt: Instant,
+    val issuerScope: String? = null,
+    val x5c: List<String> = emptyList(),
+)
+
+data class KaContext(
+    val state: KaState = KaState.NOT_REQUIRED,
+    val attestation: KeyAttestation? = null,
     val lastErrorCode: String? = null,
 )
 
@@ -178,6 +220,7 @@ data class IssuanceContext(
     val preparedAuthorization: PreparedAuthorization? = null,
     val authorizedContext: AuthorizedContext? = null,
     val wia: WiaContext? = null,
+    val ka: KaContext? = null,
     val deferredHandle: DeferredIssuanceHandle? = null,
     val issuedCredentials: List<IssuedCredential> = emptyList(),
     val notificationOutcome: String? = null,
@@ -201,6 +244,7 @@ data class IssuanceSession(
     val preparedAuthorization: PreparedAuthorization? = null,
     val authorizedContext: AuthorizedContext? = null,
     val wia: WiaContext? = null,
+    val ka: KaContext? = null,
     val deferredHandle: DeferredIssuanceHandle? = null,
     val issuedCredentials: List<IssuedCredential> = emptyList(),
     val notificationOutcome: String? = null,
@@ -221,6 +265,7 @@ fun IssuanceContext.toSession(): IssuanceSession = IssuanceSession(
     preparedAuthorization = preparedAuthorization,
     authorizedContext = authorizedContext,
     wia = wia,
+    ka = ka,
     deferredHandle = deferredHandle,
     issuedCredentials = issuedCredentials,
     notificationOutcome = notificationOutcome,
@@ -241,6 +286,7 @@ fun IssuanceSession.toContext(): IssuanceContext = IssuanceContext(
     preparedAuthorization = preparedAuthorization,
     authorizedContext = authorizedContext,
     wia = wia,
+    ka = ka,
     deferredHandle = deferredHandle,
     issuedCredentials = issuedCredentials,
     notificationOutcome = notificationOutcome,

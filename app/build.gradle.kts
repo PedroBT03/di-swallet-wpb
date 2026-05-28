@@ -29,6 +29,7 @@ dependencies {
 
     // --- OpenID4VP / EUDI SDK ---
     implementation("eu.europa.ec.eudi:eudi-lib-jvm-openid4vp-kt:0.13.0")
+    implementation("eu.europa.ec.eudi:eudi-lib-jvm-openid4vci-kt:0.7.0")
 
     // --- Ktor client used by the EUDI SDK wrapper ---
     implementation("io.ktor:ktor-client-cio:3.3.3")
@@ -70,13 +71,13 @@ dependencies {
     // --- Testing Framework ---
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("org.wiremock:wiremock-standalone:3.5.4")
 }
 
 kapt {
     correctErrorTypes = true
 }
 
-// Kapt writes merged metadata under tmp/; expose it to the IDE classpath and packaged resources.
 sourceSets {
     named("main") {
         java.srcDir(layout.buildDirectory.dir("tmp/kapt3/classes/main"))

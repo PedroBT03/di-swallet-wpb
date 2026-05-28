@@ -28,6 +28,10 @@ data class CredentialConfigurationDescriptor(
     val format: IssuanceCredentialFormat,
     val docType: String? = null,
     val vct: String? = null,
+    val cryptographicBindingMethodsSupported: List<String> = emptyList(),
+    val proofTypesSupported: List<String> = emptyList(),
+    val keyAttestationRequired: Boolean = false,
+    val preferredKeyStorageStatusPeriodDays: Int? = null,
     val display: List<Map<String, String>> = emptyList(),
 )
 
@@ -66,6 +70,7 @@ data class ResolvedOffer(
     val authorizationFlow: AuthorizationFlowKind,
     val preAuthorizedGrant: PreAuthorizedGrant? = null,
     val authorizationServer: String? = null,
+    val preAuthorizedCode: String? = null,
 )
 
 /**
@@ -111,6 +116,17 @@ data class WalletAttestationTransport(
     val popJwt: String,
     val cnfJkt: String,
     val expiresAt: Instant,
+)
+
+data class KeyAttestationTransport(
+    val jwt: String,
+    val keyId: String,
+    val attestedJkt: String,
+    val keyStorage: String,
+    val certification: String,
+    val expiresAt: Instant,
+    val statusListUri: String,
+    val statusListIndex: Int,
 )
 
 /**

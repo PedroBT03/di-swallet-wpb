@@ -3,6 +3,8 @@ package di.swallet.wpb.issuance.orchestration
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.issuance.domain.IssuanceContext
 import di.swallet.wpb.issuance.domain.IssuanceError
+import di.swallet.wpb.issuance.domain.KaContext
+import di.swallet.wpb.issuance.domain.KaState
 import di.swallet.wpb.issuance.domain.IssuanceSessionMetadata
 import di.swallet.wpb.issuance.domain.IssuanceState
 import di.swallet.wpb.issuance.domain.WiaContext
@@ -16,11 +18,15 @@ import di.swallet.wpb.issuance.storage.IssuedCredentialStorage
 import di.swallet.wpb.issuance.trust.IssuerTrustValidator
 import di.swallet.wpb.observability.IssuanceEvent
 import di.swallet.wpb.observability.IssuanceEventStore
+import di.swallet.wpb.ka.attestation.KeyAttestationProvider
+import di.swallet.wpb.ka.validation.KeyAttestationValidationException
+import di.swallet.wpb.ka.validation.KeyAttestationValidationService
 import di.swallet.wpb.openid4vci.adapter.OpenId4VciGateway
 import di.swallet.wpb.openid4vci.protocol.AuthorizationFlowKind
 import di.swallet.wpb.openid4vci.protocol.DeferredQueryOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
+import di.swallet.wpb.openid4vci.protocol.KeyAttestationTransport
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
 import di.swallet.wpb.wia.attestation.WalletAttestationProvider
@@ -43,6 +49,8 @@ class DefaultIssuanceFlowOrchestrator(
     private val proofProvider: ProofMaterialProvider,
     private val attestationProvider: WalletAttestationProvider,
     private val wiaValidationService: WiaValidationService,
+    private val keyAttestationProvider: KeyAttestationProvider,
+    private val keyAttestationValidationService: KeyAttestationValidationService,
     private val credentialStorage: IssuedCredentialStorage,
     private val eventStore: IssuanceEventStore,
     private val properties: OpenId4VciProperties,
@@ -228,6 +236,7 @@ class DefaultIssuanceFlowOrchestrator(
         }
         val metadata = ctx.issuerMetadata ?: throwBadRequest("issuer metadata not resolved")
         val proof = proofProvider.provide(ctx.sessionMeta.holderId ?: "anonymous", metadata)
+        val requestedConfiguration = resolveRequestedConfiguration(ctx, request)
         val requestedCtx = transitionAndPersist(ctx, IssuanceState.CREDENTIAL_REQUESTED)
         record(
             requestedCtx,
@@ -237,26 +246,91 @@ class DefaultIssuanceFlowOrchestrator(
                 "credentialIdentifier" to (request.credentialIdentifier ?: ""),
             ),
         )
+        val keyAttestation = if (shouldRequireKa(metadata, requestedConfiguration)) {
+            val config = requestedConfiguration ?: return fail(
+                requestedCtx,
+                IssuanceError("key_attestation_missing_configuration", "key attestation requires a resolved credential configuration"),
+            )
+            try {
+                issueOrReuseKa(requestedCtx, metadata, config, proof)
+            } catch (ex: KeyAttestationValidationException) {
+                if (ex.code == "ka_revoked") {
+                    record(
+                        requestedCtx,
+                        "ka.revoked",
+                        mapOf("code" to ex.code, "message" to (ex.message ?: "revoked")),
+                    )
+                }
+                return fail(
+                    requestedCtx.copy(
+                        ka = (requestedCtx.ka ?: KaContext()).copy(
+                            state = if (ex.code.contains("expired")) KaState.EXPIRED else KaState.FAILED,
+                            lastErrorCode = ex.code,
+                        ),
+                    ),
+                    IssuanceError(ex.code, ex.message ?: "key attestation validation failed", recoverable = ex.code in setOf("ka_expired", "ka_status_expired")),
+                )
+            }
+        } else {
+            null
+        }
+        val requestedWithKa = persistUpdate(
+            requestedCtx.copy(
+                ka = if (keyAttestation != null) {
+                    (requestedCtx.ka ?: KaContext()).copy(state = KaState.ATTACHED, attestation = keyAttestation, lastErrorCode = null)
+                } else {
+                    (requestedCtx.ka ?: KaContext()).copy(state = KaState.NOT_REQUIRED, attestation = null, lastErrorCode = null)
+                },
+            ),
+        )
+        if (keyAttestation != null) {
+            record(
+                requestedWithKa,
+                "ka.attached",
+                mapOf(
+                    "keyId" to keyAttestation.keyId,
+                    "statusIndex" to keyAttestation.status.index.toString(),
+                ),
+            )
+        }
 
         val outcome = try {
             gateway.requestCredential(
-                adapterSessionId = ctx.sessionMeta.sessionId.toString(),
+                adapterSessionId = requestedWithKa.sessionMeta.sessionId.toString(),
                 request = request,
                 proof = proof,
+                keyAttestation = keyAttestation?.toTransport(),
             )
         } catch (ex: Exception) {
-            return fail(requestedCtx, IssuanceError("credential_request_failed", ex.message ?: "credential request failed"))
+            return handleKaAwareFailure(requestedWithKa, ex)
         }
 
         return when (outcome) {
-            is IssuanceOutcome.Issued -> persistIssued(requestedCtx, outcome.credentials, terminalState = IssuanceState.CREDENTIAL_ISSUED)
+            is IssuanceOutcome.Issued -> {
+                val validated = if (keyAttestation != null) {
+                    requestedWithKa.copy(ka = requestedWithKa.ka?.copy(state = KaState.VALIDATED))
+                } else {
+                    requestedWithKa
+                }
+                if (keyAttestation != null) {
+                    record(
+                        validated,
+                        "ka.validated",
+                        mapOf(
+                            "keyId" to keyAttestation.keyId,
+                            "attestedJkt" to keyAttestation.attestedJkt,
+                        ),
+                    )
+                }
+                persistIssued(validated, outcome.credentials, terminalState = IssuanceState.CREDENTIAL_ISSUED)
+            }
             is IssuanceOutcome.Deferred -> {
-                val withDeferred = requestedCtx.copy(deferredHandle = outcome.handle)
+                val withDeferred = requestedWithKa.copy(deferredHandle = outcome.handle)
                 val saved = transitionAndPersist(withDeferred, IssuanceState.DEFERRED_PENDING)
                 record(saved, "credential.deferred", mapOf("transactionId" to outcome.handle.transactionId))
                 saved
             }
-            is IssuanceOutcome.Failed -> fail(requestedCtx, IssuanceError(outcome.code, outcome.message))
+            is IssuanceOutcome.Failed -> fail(requestedWithKa, IssuanceError(outcome.code, outcome.message))
         }
     }
 
@@ -352,6 +426,7 @@ class DefaultIssuanceFlowOrchestrator(
             ),
             state = IssuanceState.OFFER_RECEIVED,
             wia = WiaContext(state = WiaState.REQUIRED),
+            ka = KaContext(state = KaState.REQUIRED),
         )
     }
 
@@ -511,11 +586,107 @@ class DefaultIssuanceFlowOrchestrator(
         )
     }
 
+    private fun shouldRequireKa(
+        metadata: di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata,
+        configuration: di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor?,
+    ): Boolean {
+        if (!properties.ka.enabled) return false
+        if (configuration == null) return false
+        return configuration.keyAttestationRequired ||
+            configuration.proofTypesSupported.any { it.equals("attestation", ignoreCase = true) }
+    }
+
+    private fun resolveRequestedConfiguration(
+        ctx: IssuanceContext,
+        request: IssuanceRequest,
+    ): di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor? {
+        val metadata = ctx.issuerMetadata ?: return null
+        val requestedId = request.credentialConfigurationId
+            ?: request.credentialIdentifier
+            ?: ctx.credentialConfigurationIds.firstOrNull()
+        return metadata.credentialConfigurations.firstOrNull { it.id == requestedId }
+    }
+
+    private fun issueOrReuseKa(
+        ctx: IssuanceContext,
+        metadata: di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata,
+        configuration: di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor,
+        proof: di.swallet.wpb.issuance.proof.ProofMaterial,
+    ): di.swallet.wpb.issuance.domain.KeyAttestation {
+        val holderId = ctx.sessionMeta.holderId ?: throwBadRequest("holder id required for key attestation")
+        val existing = ctx.ka?.attestation
+        if (existing != null && existing.tokenExpiresAt.isAfter(Instant.now()) && existing.statusExpiresAt.isAfter(Instant.now())) {
+            keyAttestationValidationService.validateTechnical(existing, configuration)
+            keyAttestationValidationService.validateTrust(existing, configuration, metadata)
+            keyAttestationValidationService.validateBinding(existing, proof)
+            return existing
+        }
+        val attestation = keyAttestationProvider.issue(
+            holderId = holderId,
+            issuerId = if (properties.ka.reusePerIssuer) metadata.credentialIssuerId else null,
+            metadata = metadata,
+            configuration = configuration,
+            proofPublicKey = proof.publicKey,
+            proofKeyId = proof.keyId,
+        )
+        keyAttestationValidationService.validateTechnical(attestation, configuration)
+        keyAttestationValidationService.validateTrust(attestation, configuration, metadata)
+        keyAttestationValidationService.validateBinding(attestation, proof)
+        record(
+            ctx,
+            "ka.generated",
+            mapOf(
+                "keyId" to attestation.keyId,
+                "statusIndex" to attestation.status.index.toString(),
+                "configurationId" to configuration.id,
+            ),
+        )
+        return attestation
+    }
+
+    private fun handleKaAwareFailure(ctx: IssuanceContext, ex: Exception): IssuanceContext {
+        val message = ex.message ?: "credential request failed"
+        return when (ex) {
+            is KeyAttestationValidationException -> {
+                if (ex.code == "ka_revoked") {
+                    record(
+                        ctx,
+                        "ka.revoked",
+                        mapOf("code" to ex.code, "message" to message),
+                    )
+                }
+                fail(
+                    ctx.copy(
+                        ka = (ctx.ka ?: KaContext()).copy(
+                            state = if (ex.code.contains("expired")) KaState.EXPIRED else KaState.FAILED,
+                            lastErrorCode = ex.code,
+                        ),
+                    ),
+                    IssuanceError(ex.code, message, recoverable = ex.code in setOf("ka_expired", "ka_status_expired")),
+                )
+            }
+
+            else -> fail(ctx, IssuanceError("credential_request_failed", message))
+        }
+    }
+
     private fun di.swallet.wpb.issuance.domain.WalletInstanceAttestation.toTransport(): WalletAttestationTransport =
         WalletAttestationTransport(
             jwt = jwt,
             popJwt = popJwt,
             cnfJkt = cnfJkt,
             expiresAt = tokenExpiresAt,
+        )
+
+    private fun di.swallet.wpb.issuance.domain.KeyAttestation.toTransport(): KeyAttestationTransport =
+        KeyAttestationTransport(
+            jwt = jwt,
+            keyId = keyId,
+            attestedJkt = attestedJkt,
+            keyStorage = keyStorage,
+            certification = certification,
+            expiresAt = tokenExpiresAt,
+            statusListUri = status.uri,
+            statusListIndex = status.index,
         )
 }

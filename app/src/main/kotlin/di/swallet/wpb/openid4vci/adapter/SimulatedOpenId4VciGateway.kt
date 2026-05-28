@@ -12,6 +12,7 @@ import di.swallet.wpb.openid4vci.protocol.DeferredQueryOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
+import di.swallet.wpb.openid4vci.protocol.KeyAttestationTransport
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import di.swallet.wpb.openid4vci.protocol.PreAuthorizedGrant
 import di.swallet.wpb.openid4vci.protocol.PreparedAuthorization
@@ -57,6 +58,7 @@ class SimulatedOpenId4VciGateway(
         val refreshToken: String? = null,
         val cNonce: String? = null,
         val wiaCnfJkt: String? = null,
+        val keyAttestationJkt: String? = null,
         var deferredCounter: Int = 0,
     )
 
@@ -183,6 +185,7 @@ class SimulatedOpenId4VciGateway(
         adapterSessionId: String,
         request: IssuanceRequest,
         proof: ProofMaterial,
+        keyAttestation: KeyAttestationTransport?,
     ): IssuanceOutcome {
         val state = states[adapterSessionId]
             ?: return IssuanceOutcome.Failed("invalid_session", "unknown adapter session")
@@ -202,9 +205,22 @@ class SimulatedOpenId4VciGateway(
 
         val configDescriptor = metadata.credentialConfigurations.firstOrNull { it.id == configurationId }
         val format = configDescriptor?.format ?: IssuanceCredentialFormat.SD_JWT_VC
+        val deviceBound = configDescriptor?.keyAttestationRequired ?: false
 
         if (format == IssuanceCredentialFormat.MSO_MDOC) {
             return IssuanceOutcome.Failed("unsupported_format", "mdoc issuance deferred to Phase 7")
+        }
+        if (deviceBound) {
+            if (keyAttestation == null) {
+                return IssuanceOutcome.Failed("key_attestation_missing", "device-bound issuance requires key attestation")
+            }
+            if (keyAttestation.attestedJkt.isBlank()) {
+                return IssuanceOutcome.Failed("key_attestation_invalid", "attested jkt is missing")
+            }
+            if (state.cNonce == null) {
+                return IssuanceOutcome.Failed("c_nonce_missing", "authorization c_nonce missing")
+            }
+            states[adapterSessionId] = state.copy(keyAttestationJkt = keyAttestation.attestedJkt)
         }
 
         if (properties.simulator.alwaysDefer) {
@@ -310,6 +326,7 @@ class SimulatedOpenId4VciGateway(
         }
         val hasPreAuth = cleaned.contains("urn:ietf:params:oauth:grant-type:pre-authorized_code")
         val txRequired = cleaned.contains("\"tx_code\"")
+        val preAuthCode = extractJsonString(cleaned, "pre-authorized_code")
         val flow = if (hasPreAuth) AuthorizationFlowKind.PRE_AUTHORIZED_CODE else AuthorizationFlowKind.AUTHORIZATION_CODE
         val grant = if (hasPreAuth) PreAuthorizedGrant(txCodeRequired = txRequired) else null
 
@@ -320,6 +337,7 @@ class SimulatedOpenId4VciGateway(
             authorizationFlow = flow,
             preAuthorizedGrant = grant,
             authorizationServer = metadata.authorizationServers.firstOrNull()?.issuer,
+            preAuthorizedCode = preAuthCode,
         )
         return offer to metadata
     }
@@ -341,10 +359,16 @@ class SimulatedOpenId4VciGateway(
             ),
         )
         val configs = configurationIds.map { id ->
+            val normalized = id.lowercase()
+            val requiresKa = normalized.contains("pid") || normalized.contains("device")
             CredentialConfigurationDescriptor(
                 id = id,
                 format = IssuanceCredentialFormat.SD_JWT_VC,
                 vct = id,
+                cryptographicBindingMethodsSupported = listOf("jwk"),
+                proofTypesSupported = if (requiresKa) listOf("jwt", "attestation") else listOf("jwt"),
+                keyAttestationRequired = requiresKa,
+                preferredKeyStorageStatusPeriodDays = if (requiresKa) 31 else null,
                 display = listOf(mapOf("name" to id, "locale" to "en")),
             )
         }

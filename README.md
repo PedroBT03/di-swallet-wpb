@@ -381,3 +381,33 @@ Expected event types in the happy path:
 
 - `wia.attached`
 - `wia.binding.verified`
+
+## OpenID4VCI / KA (Key Attestation)
+
+KA is now enforced for device-bound issuance configurations inside the existing
+issuance lifecycle. There is no dedicated public KA endpoint: the wallet
+generates and validates KA just before `requestCredential`, then attaches it as
+`key_attestation` proof material in the credential request transport.
+
+### Explicit limitations (still non-production)
+
+| Limitation | Why acceptable now | Planned hardening |
+|---|---|---|
+| Trust validation policy is allow-list/config based (`require-x5c`, `allowed-x5c-fingerprints`) and not LoTE-grade chain validation. | Sufficient for thesis phase isolation and deterministic tests. | LoTE and trust-anchor validation hardening in trust phases. |
+| Strict SDK resolution requires SDK-compatible issuer endpoints (typically HTTPS); local `http://` offer/metadata testing requires explicitly disabling strict mode. | Keeps production path strict while preserving local mock-based integration tests. | Keep strict mode enabled by default and use test-only overrides when needed. |
+| Real-issuer interoperability validation is provided as an opt-in smoke test and depends on external issuer availability/configuration. | Avoids coupling CI stability to external systems while still enabling real environment validation. | Expand into repeatable interop suite when a stable issuer sandbox is available. |
+
+### Important notes
+
+- Keep `wpb.openid4vci.sdk.strict-resolution=true` in production-like environments; this disables local fallback parsing and forces SDK resolver success.
+- For local WireMock/`http://localhost` integration tests, set strict mode to `false` explicitly (test profile only).
+- Real issuer smoke validation is available through `SdkOpenId4VciGatewayRealIssuerIT` and runs only when:
+  - `WPB_REAL_ISSUER_ENABLED=true`
+  - `WPB_REAL_ISSUER_OFFER_URI=<real offer URI>`
+- Example:
+
+```bash
+WPB_REAL_ISSUER_ENABLED=true \
+WPB_REAL_ISSUER_OFFER_URI='openid-credential-offer://...' \
+./gradlew :app:test --tests "di.swallet.wpb.openid4vci.adapter.SdkOpenId4VciGatewayRealIssuerIT"
+```

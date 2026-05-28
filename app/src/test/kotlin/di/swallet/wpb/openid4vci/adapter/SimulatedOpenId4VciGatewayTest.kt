@@ -7,6 +7,7 @@ import di.swallet.wpb.openid4vci.protocol.AuthorizationFlowKind
 import di.swallet.wpb.openid4vci.protocol.DeferredQueryOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
+import di.swallet.wpb.openid4vci.protocol.KeyAttestationTransport
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -35,6 +36,17 @@ class SimulatedOpenId4VciGatewayTest {
         popJwt = "wia.pop",
         cnfJkt = "jkt-test",
         expiresAt = java.time.Instant.now().plusSeconds(3600),
+    )
+
+    private fun ka(keyId: String = "key-1") = KeyAttestationTransport(
+        jwt = "ka.jwt",
+        keyId = keyId,
+        attestedJkt = "proof-jkt",
+        keyStorage = "iso_18045_high",
+        certification = "test-cert",
+        expiresAt = java.time.Instant.now().plusSeconds(3600),
+        statusListUri = "/api/v1/wallet/status-lists/PRIMARY_LIST",
+        statusListIndex = 10,
     )
 
     @Test
@@ -74,7 +86,7 @@ class SimulatedOpenId4VciGatewayTest {
         assertTrue(authorized.accessTokenPresent)
         assertEquals("jkt-test", authorized.accessTokenCnfJkt)
 
-        val outcome = gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"), proof())
+        val outcome = gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"), proof(), ka())
         assertTrue(outcome is IssuanceOutcome.Issued)
         val issued = (outcome as IssuanceOutcome.Issued).credentials.first()
         assertTrue(issued.rawPayload.contains("~"))
@@ -106,7 +118,7 @@ class SimulatedOpenId4VciGatewayTest {
         val sessionId = UUID.randomUUID().toString()
         val prepared = gw.prepareAuthorization(sessionId, offer, metadata, proof(), wia())
         gw.authorizeWithCode(sessionId, "code-x", prepared.state, wia())
-        val req = gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"), proof())
+        val req = gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"), proof(), ka())
         assertTrue(req is IssuanceOutcome.Deferred)
         var handle = (req as IssuanceOutcome.Deferred).handle
 
@@ -121,7 +133,7 @@ class SimulatedOpenId4VciGatewayTest {
     @Test
     fun `requestCredential without authorization returns failed outcome`() {
         val gw = gateway()
-        val outcome = gw.requestCredential(UUID.randomUUID().toString(), IssuanceRequest("pid_jwt"), proof())
+        val outcome = gw.requestCredential(UUID.randomUUID().toString(), IssuanceRequest("pid_jwt"), proof(), null)
         assertTrue(outcome is IssuanceOutcome.Failed)
     }
 
@@ -143,7 +155,7 @@ class SimulatedOpenId4VciGatewayTest {
             },
         ), proof(), wia())
         gw.authorizeWithCode(sessionId, "c", prepared.state, wia())
-        val outcome = gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "driver_license"), proof())
+        val outcome = gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "driver_license"), proof(), null)
         assertTrue(outcome is IssuanceOutcome.Failed)
         assertEquals("unsupported_format", (outcome as IssuanceOutcome.Failed).code)
     }
@@ -157,7 +169,7 @@ class SimulatedOpenId4VciGatewayTest {
         )
         val prepared = gw.prepareAuthorization(sessionId, offer, metadata, proof(), wia())
         gw.authorizeWithCode(sessionId, "c", prepared.state, wia())
-        gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"), proof())
+        gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"), proof(), ka())
         assertTrue(gw.notify(sessionId, "notif-1", NotificationEvent.CREDENTIAL_ACCEPTED))
         gw.discard(sessionId)
         val again = gw.queryDeferred(sessionId, DeferredIssuanceHandle("tx-1"))
@@ -182,5 +194,24 @@ class SimulatedOpenId4VciGatewayTest {
         val metadata = gw.resolveMetadata("https://issuer.example", listOf("a", "b"))
         assertEquals(2, metadata.credentialConfigurations.size)
         assertEquals(listOf("a", "b"), metadata.credentialConfigurations.map { it.id })
+    }
+
+    @Test
+    fun `device-bound configuration fails when key attestation is missing`() {
+        val gw = gateway()
+        val (offer, metadata) = gw.resolveOffer(
+            """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}""",
+        )
+        val sessionId = UUID.randomUUID().toString()
+        val prepared = gw.prepareAuthorization(sessionId, offer, metadata, proof(), wia())
+        gw.authorizeWithCode(sessionId, "code", prepared.state, wia())
+        val outcome = gw.requestCredential(
+            adapterSessionId = sessionId,
+            request = IssuanceRequest(credentialConfigurationId = "pid_jwt"),
+            proof = proof(),
+            keyAttestation = null,
+        )
+        assertTrue(outcome is IssuanceOutcome.Failed)
+        assertEquals("key_attestation_missing", (outcome as IssuanceOutcome.Failed).code)
     }
 }

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.math.BigInteger
 import java.security.*
+import java.security.cert.Certificate
 import java.security.cert.X509Certificate
 import java.security.spec.ECGenParameterSpec
 import java.util.*
@@ -151,6 +152,22 @@ class HsmService(
     fun getUserKey(userId: String): WalletKey {
         return walletKeyRepository.findByUserId(userId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "User wallet not found") }
+    }
+
+    fun certificateChainBase64(walletKey: WalletKey): List<String> {
+        try {
+            val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
+            keyStore.load(null, pin.toCharArray())
+            val chain = keyStore.getCertificateChain(walletKey.keyAlias)
+                ?: keyStore.getCertificate(walletKey.keyAlias)?.let { arrayOf(it) }
+                ?: emptyArray()
+            return chain
+                .map(Certificate::getEncoded)
+                .map { Base64.getEncoder().encodeToString(it) }
+        } catch (e: Exception) {
+            logger.error("WSCA: Failed to resolve certificate chain for key ${walletKey.keyAlias}: ${e.message}")
+            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to resolve key certificate chain")
+        }
     }
 
     /**

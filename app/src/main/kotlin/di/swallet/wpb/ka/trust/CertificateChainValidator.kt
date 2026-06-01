@@ -31,22 +31,29 @@ class CertificateChainValidator(
     fun validatePkix(chain: List<X509Certificate>, trustAnchorPaths: List<String>) {
         require(chain.isNotEmpty()) { "x5c chain is required for PKIX validation" }
         val anchors = loadTrustAnchors(trustAnchorPaths)
-        require(anchors.isNotEmpty()) { "strict trust mode requires configured trust anchors" }
+        validatePkix(chain, anchors, "strict trust mode requires configured trust anchors")
+    }
 
+    fun validatePkix(
+        chain: List<X509Certificate>,
+        anchors: Set<TrustAnchor>,
+        emptyAnchorError: String = "trust anchors are required for PKIX validation",
+    ) {
+        require(chain.isNotEmpty()) { "x5c chain is required for PKIX validation" }
+        require(anchors.isNotEmpty()) { emptyAnchorError }
         val certPath = CertificateFactory.getInstance("X.509").generateCertPath(chain)
         val params = PKIXParameters(anchors).apply { isRevocationEnabled = false }
         CertPathValidator.getInstance("PKIX").validate(certPath, params)
     }
 
-    private fun loadTrustAnchors(paths: List<String>): Set<TrustAnchor> {
-        val certFactory = CertificateFactory.getInstance("X.509")
+    fun loadTrustAnchors(paths: List<String>): Set<TrustAnchor> {
         return paths.flatMap { path ->
             val pem = readPath(path)
-            pemToCertificates(pem, certFactory)
+            parsePemCertificates(pem)
         }.map { TrustAnchor(it, null) }.toSet()
     }
 
-    private fun readPath(path: String): String {
+    fun readPath(path: String): String {
         return when {
             path.startsWith("classpath:") -> {
                 val resource = resourceLoader.getResource(path)
@@ -56,7 +63,8 @@ class CertificateChainValidator(
         }
     }
 
-    private fun pemToCertificates(content: String, certFactory: CertificateFactory): List<X509Certificate> {
+    fun parsePemCertificates(content: String): List<X509Certificate> {
+        val certFactory = CertificateFactory.getInstance("X.509")
         val pemRegex = Regex("-----BEGIN CERTIFICATE-----([\\s\\S]*?)-----END CERTIFICATE-----")
         val pems = pemRegex.findAll(content).map { it.groupValues[1] }.toList()
         val chunks = if (pems.isNotEmpty()) pems else listOf(content)

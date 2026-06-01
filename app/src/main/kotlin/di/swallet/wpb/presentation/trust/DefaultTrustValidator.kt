@@ -2,29 +2,22 @@ package di.swallet.wpb.presentation.trust
 
 import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.TrustDecision
+import di.swallet.wpb.presentation.domain.TrustDecisionMode
 import di.swallet.wpb.presentation.domain.VerifierIdentity
-import org.springframework.beans.factory.annotation.Value
+import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.trust.core.TrustSnapshotAvailability
+import di.swallet.wpb.trust.core.TrustSnapshotResolver
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
-/**
- * Trust validator.
- *
- * This is intentionally a thin baseline — full trust chain validation against
- * the List of Trusted Entities (LoTE) and Access Certificate validation are
- * TODO.
- *
- * The validator enforces three baseline guarantees:
- *   1. An authorization request must have been resolved before trust is asked.
- *   2. The client identifier must declare a supported `clientIdPrefix` scheme.
- *   3. If an allow-list of client identifiers is configured, the verifier
- *      must be on it. An empty allow-list is treated as "open" (acceptable
- *      for local protocol validation, never for production).
- */
 @Service
 class DefaultTrustValidator(
-    @param:Value("\${wpb.openid4vp.trust.allowed-client-ids:}") private val allowedClientIdsCsv: String,
-    @param:Value("\${wpb.openid4vp.demo-mode:false}") private val demoMode: Boolean,
+    private val properties: OpenId4VpProperties,
+    private val trustSnapshotResolver: TrustSnapshotResolver,
+    private val certificateExtractor: VerifierCertificateExtractor,
+    private val certificateValidationService: AccessCertificateValidationService,
 ) : TrustValidator {
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     private val supportedPrefixes: Set<String> = setOf(
         "pre-registered",
@@ -34,14 +27,12 @@ class DefaultTrustValidator(
         "decentralized_identifier",
     )
 
-    private val allowedClientIds: Set<String> =
-        allowedClientIdsCsv.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-
     override fun validate(context: PresentationContext): PresentationContext {
         val request = context.authorizationRequest
             ?: return context.copy(
                 trustDecision = TrustDecision(
                     trusted = false,
+                    mode = TrustDecisionMode.REJECTED,
                     reason = "Authorization request must be resolved before trust validation",
                 ),
             )
@@ -60,32 +51,85 @@ class DefaultTrustValidator(
                 verifierIdentity = identity,
                 trustDecision = TrustDecision(
                     trusted = false,
+                    mode = TrustDecisionMode.REJECTED,
                     reason = "Unsupported client identifier scheme '$prefix' for client_id '$clientId'",
                 ),
             )
         }
 
-        val onAllowList = allowedClientIds.isEmpty() || clientId in allowedClientIds
-        if (!onAllowList && !demoMode) {
+        val trustAvailability = trustSnapshotResolver.currentAvailability()
+        val trustSnapshot = when (trustAvailability) {
+            is TrustSnapshotAvailability.Available -> trustAvailability.snapshot
+            is TrustSnapshotAvailability.Unavailable -> {
+                val failOpenAllowed = properties.demoMode && properties.trust.allowFailOpenInDemoMode
+                return if (failOpenAllowed) {
+                    logger.warn("event=trust.validation.degraded clientId={} reason={}", clientId, trustAvailability.reason)
+                    context.copy(
+                        verifierIdentity = identity,
+                        trustDecision = TrustDecision(
+                            trusted = true,
+                            mode = TrustDecisionMode.DEGRADED_DEMO_OPEN,
+                            reason = "Trust source unavailable in demo-mode (fail-open): ${trustAvailability.reason}",
+                        ),
+                    )
+                } else {
+                    logger.warn("event=trust.validation.failed clientId={} reason={}", clientId, trustAvailability.reason)
+                    context.copy(
+                        verifierIdentity = identity,
+                        trustDecision = TrustDecision(
+                            trusted = false,
+                            mode = TrustDecisionMode.REJECTED,
+                            reason = "Trust source unavailable: ${trustAvailability.reason}",
+                        ),
+                    )
+                }
+            }
+        }
+
+        val material = certificateExtractor.extract(request)
+            ?: return context.copy(
+                verifierIdentity = identity,
+                trustDecision = TrustDecision(
+                    trusted = false,
+                    mode = TrustDecisionMode.REJECTED,
+                    reason = "Verifier certificate not found in request metadata",
+                ),
+            )
+
+        when (val certValidation = certificateValidationService.validate(clientId, material, trustSnapshot)) {
+            is AccessCertificateValidationResult.Rejected -> {
+                return context.copy(
+                    verifierIdentity = identity,
+                    trustDecision = TrustDecision(
+                        trusted = false,
+                        mode = TrustDecisionMode.REJECTED,
+                        reason = certValidation.reason,
+                    ),
+                )
+            }
+
+            AccessCertificateValidationResult.Trusted -> Unit
+        }
+
+        val allowedClientIds = properties.trust.allowedClientIds()
+        if (allowedClientIds.isNotEmpty() && clientId !in allowedClientIds) {
             return context.copy(
                 verifierIdentity = identity,
                 trustDecision = TrustDecision(
                     trusted = false,
-                    reason = "Verifier '$clientId' is not on the configured trust list",
+                    mode = TrustDecisionMode.REJECTED,
+                    reason = "Verifier '$clientId' is not on the configured allow-list",
                 ),
             )
         }
 
-        val reason = when {
-            allowedClientIds.isEmpty() -> "Trust list not configured: accepting verifier by default (Phase 1 baseline)"
-            else -> "Verifier '$clientId' is on the configured trust list"
-        }
-
+        logger.info("event=trust.validation.passed clientId={}", clientId)
         return context.copy(
             verifierIdentity = identity,
             trustDecision = TrustDecision(
                 trusted = true,
-                reason = reason,
+                mode = TrustDecisionMode.TRUSTED,
+                reason = "Verifier certificate validated against trust anchors",
             ),
         )
     }

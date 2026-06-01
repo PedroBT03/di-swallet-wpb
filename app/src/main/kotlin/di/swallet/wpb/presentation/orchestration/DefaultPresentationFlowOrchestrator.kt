@@ -11,6 +11,7 @@ import di.swallet.wpb.presentation.domain.PresentationError
 import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.domain.SessionMetadata
 import di.swallet.wpb.presentation.domain.SelectedCredential
+import di.swallet.wpb.presentation.domain.TrustDecisionMode
 import di.swallet.wpb.presentation.domain.toContext
 import di.swallet.wpb.presentation.domain.toSession
 import di.swallet.wpb.presentation.format.VpTokenBuilder
@@ -117,7 +118,26 @@ class DefaultPresentationFlowOrchestrator(
             )
         }
         context = persistUpdate(context)
-        record(context, "trust.validated", mapOf("trusted" to trusted.toString()))
+        record(
+            context,
+            "trust.validated",
+            mapOf(
+                "trusted" to trusted.toString(),
+                "mode" to (trustEvaluated.trustDecision?.mode?.name ?: ""),
+                "reason" to (trustEvaluated.trustDecision?.reason ?: ""),
+            ),
+        )
+        when (trustEvaluated.trustDecision?.mode) {
+            TrustDecisionMode.TRUSTED -> {
+                record(context, "trust.validation.passed", mapOf("reason" to (trustEvaluated.trustDecision?.reason ?: "")))
+            }
+            TrustDecisionMode.DEGRADED_DEMO_OPEN -> {
+                record(context, "trust.validation.degraded", mapOf("reason" to (trustEvaluated.trustDecision?.reason ?: "")))
+            }
+            else -> {
+                record(context, "trust.validation.failed", mapOf("reason" to (trustEvaluated.trustDecision?.reason ?: "")))
+            }
+        }
 
         if (!trusted) {
             return dispatchTerminalNegative(context, "trust.dispatch.negative")

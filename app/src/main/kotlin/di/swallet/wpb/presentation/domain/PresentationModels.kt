@@ -104,8 +104,15 @@ data class PresentationRequirements(
 /**
  * Result of trust validation for the verifier.
  */
+enum class TrustDecisionMode {
+    TRUSTED,
+    DEGRADED_DEMO_OPEN,
+    REJECTED,
+}
+
 data class TrustDecision(
     val trusted: Boolean,
+    val mode: TrustDecisionMode = if (trusted) TrustDecisionMode.TRUSTED else TrustDecisionMode.REJECTED,
     val reason: String? = null,
 )
 

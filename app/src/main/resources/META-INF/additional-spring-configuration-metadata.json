@@ -159,6 +159,76 @@
       "defaultValue": ""
     },
     {
+      "name": "wpb.openid4vp.trust.source-mode",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Trust source mode for verifier authentication: file | remote | hybrid.",
+      "defaultValue": "hybrid"
+    },
+    {
+      "name": "wpb.openid4vp.trust.local-verifiers-path",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Optional path (classpath:/ or file) to JSON trusted verifier definitions.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vp.trust.local-trust-anchor-pem-paths",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Comma-separated local PEM trust anchor paths (classpath:/ or file).",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vp.trust.remote-trust-url",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Optional remote URL returning trust snapshot JSON.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vp.trust.remote-allowed-hosts",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Comma-separated remote trust hosts allowed in production mode (demo mode may be permissive).",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vp.trust.remote-refresh-interval-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Background refresh interval for remote trust source in seconds.",
+      "defaultValue": 900
+    },
+    {
+      "name": "wpb.openid4vp.trust.remote-connect-timeout-ms",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Remote trust source HTTP connect timeout in milliseconds.",
+      "defaultValue": 3000
+    },
+    {
+      "name": "wpb.openid4vp.trust.remote-read-timeout-ms",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Remote trust source HTTP read timeout in milliseconds.",
+      "defaultValue": 5000
+    },
+    {
+      "name": "wpb.openid4vp.trust.max-snapshot-age-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Maximum accepted age for cached trust snapshot in seconds.",
+      "defaultValue": 86400
+    },
+    {
+      "name": "wpb.openid4vp.trust.allow-fail-open-in-demo-mode",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
+      "description": "Allow fail-open on trust source outage only when demo-mode is enabled.",
+      "defaultValue": true
+    },
+    {
       "name": "wpb.openid4vp.session.ttl-seconds",
       "type": "java.lang.Long",
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$SessionProperties",

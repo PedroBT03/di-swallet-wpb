@@ -8,6 +8,7 @@ import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
 import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
 import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
+import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
@@ -19,7 +20,16 @@ import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.DefaultPolicyEngine
+import di.swallet.wpb.presentation.trust.AccessCertificateValidationResult
+import di.swallet.wpb.presentation.trust.AccessCertificateValidationService
 import di.swallet.wpb.presentation.trust.DefaultTrustValidator
+import di.swallet.wpb.presentation.trust.VerifierCertificateExtractor
+import di.swallet.wpb.presentation.trust.VerifierCertificateMaterial
+import di.swallet.wpb.trust.core.TrustBindingRule
+import di.swallet.wpb.trust.core.TrustSnapshot
+import di.swallet.wpb.trust.core.TrustSnapshotAvailability
+import di.swallet.wpb.trust.core.TrustSnapshotResolver
+import di.swallet.wpb.trust.core.TrustedEntity
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -27,6 +37,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.`when`
 import org.mockito.Mockito.mock
+import java.security.cert.X509Certificate
+import java.time.Instant
 
 /**
  * Locks in the Phase 1 lifecycle fix: with the **real** trust validator,
@@ -86,10 +98,47 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
         demoMode: Boolean = false,
     ): Pair<DefaultPresentationFlowOrchestrator, GatewayStub> {
         val gateway = GatewayStub(resolved)
+        val trustProperties = OpenId4VpProperties().apply {
+            this.demoMode = demoMode
+            this.trust.allowedClientIds = allowed
+            this.trust.allowFailOpenInDemoMode = false
+        }
+        val trustSnapshot = TrustSnapshot(
+            trustAnchors = emptyList(),
+            entities = mapOf(
+                "verifier-demo-client" to TrustedEntity(
+                    entityId = "verifier-demo-client",
+                    bindings = setOf(TrustBindingRule("client_id", "verifier-demo-client")),
+                ),
+            ),
+            source = "test",
+            loadedAt = Instant.now(),
+        )
+        val resolver = object : TrustSnapshotResolver {
+            override fun currentAvailability(): TrustSnapshotAvailability = TrustSnapshotAvailability.Available(trustSnapshot)
+        }
+        val extractor = object : VerifierCertificateExtractor {
+            override fun extract(request: ResolvedAuthorizationRequest): VerifierCertificateMaterial? {
+                val cert = mock(X509Certificate::class.java)
+                return VerifierCertificateMaterial(chain = listOf(cert), leaf = cert)
+            }
+        }
+        val certValidator = object : AccessCertificateValidationService {
+            override fun validate(
+                requestClientId: String,
+                material: VerifierCertificateMaterial,
+                snapshot: TrustSnapshot,
+            ): AccessCertificateValidationResult = AccessCertificateValidationResult.Trusted
+        }
         val orchestrator = DefaultPresentationFlowOrchestrator(
             gateway = gateway,
             repository = InMemoryPresentationSessionRepository(),
-            trustValidator = DefaultTrustValidator(allowedClientIdsCsv = allowed, demoMode = demoMode),
+            trustValidator = DefaultTrustValidator(
+                properties = trustProperties,
+                trustSnapshotResolver = resolver,
+                certificateExtractor = extractor,
+                certificateValidationService = certValidator,
+            ),
             policyEngine = DefaultPolicyEngine(demoMode = demoMode),
             credentialMatcher = DefaultCredentialMatcher(repository, demoMode = demoMode),
             vpTokenBuilder = StubVpBuilder(),

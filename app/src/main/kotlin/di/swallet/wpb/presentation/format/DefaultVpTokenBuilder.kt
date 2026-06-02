@@ -1,10 +1,10 @@
 package di.swallet.wpb.presentation.format
 
+import di.swallet.wpb.format.sdjwt.SdJwtVpBuilder
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.SelectedCredential
 import di.swallet.wpb.presentation.domain.VpToken
-import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 /**
@@ -12,16 +12,14 @@ import org.springframework.stereotype.Service
  *
  *  - SD-JWT credentials are encoded as full SD-JWT VC presentations including
  *    the Key Binding JWT (HAIP).
- *  - MDOC is declared in the configuration but not implemented at runtime
- *    (Phase 7); selecting an MDOC candidate will fail explicitly so the
- *    verifier receives an error rather than a malformed VP.
+ *  - MDOC credentials are encoded via [MdocVpBuilder] and carried as opaque
+ *    mdoc payload strings through the adapter boundary.
  */
 @Service
 class DefaultVpTokenBuilder(
     private val sdJwtVpBuilder: SdJwtVpBuilder,
+    private val mdocVpBuilder: MdocVpBuilder,
 ) : VpTokenBuilder {
-
-    private val logger = LoggerFactory.getLogger(javaClass)
 
     override fun build(context: PresentationContext): PresentationContext {
         val selected = context.selectedCredentials
@@ -55,9 +53,6 @@ class DefaultVpTokenBuilder(
         verifierNonce: String,
     ): String = when (selected.format) {
         CredentialFormat.SD_JWT -> sdJwtVpBuilder.build(selected, verifierAudience, verifierNonce).presentation
-        CredentialFormat.MDOC -> {
-            logger.error("MDOC presentations are not implemented in Phase 1 (selected={})", selected.candidateId)
-            throw UnsupportedOperationException("MDOC presentations are not implemented in Phase 1 (deferred to Phase 7)")
-        }
+        CredentialFormat.MDOC -> mdocVpBuilder.build(selected, verifierAudience, verifierNonce).presentation
     }
 }

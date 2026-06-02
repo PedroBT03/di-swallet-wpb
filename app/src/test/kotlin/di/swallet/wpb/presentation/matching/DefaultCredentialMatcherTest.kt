@@ -2,6 +2,10 @@ package di.swallet.wpb.presentation.matching
 
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
+import di.swallet.wpb.format.mdoc.MdocCredentialDocument
+import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
 import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
 import di.swallet.wpb.presentation.domain.CredentialFormat
@@ -21,6 +25,8 @@ import java.util.UUID
 class DefaultCredentialMatcherTest {
 
     private lateinit var repository: WalletCredentialRepository
+    private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
+    private val mdocRegistry = MdocDocTypeRegistry()
 
     @BeforeEach
     fun setUp() {
@@ -59,7 +65,7 @@ class DefaultCredentialMatcherTest {
         val credential = WalletCredential(id = 42L, userId = "holder-1", credentialType = "PID", encodedData = "jwt", encryptedDisclosures = "")
         `when`(repository.findByUserId("holder-1")).thenReturn(listOf(credential))
 
-        val matcher = DefaultCredentialMatcher(repository, demoMode = false)
+        val matcher = DefaultCredentialMatcher(repository, mdocCodec, mdocRegistry, demoMode = false)
         val result = matcher.match(
             context("""{"credentials":[{"id":"pid","format":"vc+sd-jwt","claims":[{"path":["given_name"]}]}]}"""),
         )
@@ -70,21 +76,34 @@ class DefaultCredentialMatcherTest {
     }
 
     @Test
-    fun `skips mdoc queries silently in non-demo`() {
-        val credential = WalletCredential(id = 1L, userId = "holder-1", credentialType = "PID", encodedData = "jwt", encryptedDisclosures = "")
+    fun `matches mdoc queries in non-demo when wallet contains mdoc credential`() {
+        val credential = WalletCredential(
+            id = 1L,
+            userId = "holder-1",
+            credentialType = "org.iso.18013.5.1.mDL",
+            encodedData = mdocCodec.encode(
+                MdocCredentialDocument(
+                    docType = "org.iso.18013.5.1.mDL",
+                    namespace = "org.iso.18013.5.1",
+                    claims = mapOf("given_name" to "Alice"),
+                ),
+            ),
+            encryptedDisclosures = "",
+        )
         `when`(repository.findByUserId("holder-1")).thenReturn(listOf(credential))
 
-        val matcher = DefaultCredentialMatcher(repository, demoMode = false)
+        val matcher = DefaultCredentialMatcher(repository, mdocCodec, mdocRegistry, demoMode = false)
         val result = matcher.match(
-            context("""{"credentials":[{"id":"mdoc-query","format":"mso_mdoc","meta":{"doctype_values":["org.iso.18013.5.1.mDL"]}}]}"""),
+            context("""{"credentials":[{"id":"mdoc-query","format":"mso_mdoc","meta":{"doctype_values":["org.iso.18013.5.1.mDL"]},"claims":[{"path":["given_name"]}]}]}"""),
         )
-        assertTrue(result.credentialCandidates.isEmpty())
+        assertEquals(1, result.credentialCandidates.size)
+        assertEquals(CredentialFormat.MDOC, result.credentialCandidates.first().format)
     }
 
     @Test
     fun `demo mode synthesises candidate when wallet is empty`() {
         `when`(repository.findByUserId("holder-1")).thenReturn(emptyList())
-        val matcher = DefaultCredentialMatcher(repository, demoMode = true)
+        val matcher = DefaultCredentialMatcher(repository, mdocCodec, mdocRegistry, demoMode = true)
         val result = matcher.match(
             context("""{"query":[{"type":"Credential","fields":["name"]}]}"""),
         )

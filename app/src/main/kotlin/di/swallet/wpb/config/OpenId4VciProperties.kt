@@ -73,7 +73,7 @@ class OpenId4VciProperties {
     }
 
     class PolicyProperties {
-        /** Allow `mso_mdoc` credentials. Defaults to false (deferred to Phase 7). */
+        /** Allow `mso_mdoc` credentials. Defaults to false and is controlled by policy gate. */
         var allowMdoc: Boolean = false
     }
 

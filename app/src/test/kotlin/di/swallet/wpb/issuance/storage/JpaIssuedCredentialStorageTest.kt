@@ -4,9 +4,14 @@ import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
+import di.swallet.wpb.format.mdoc.MdocCredentialDocument
+import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.service.format.DisclosureCipherService
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
@@ -18,6 +23,8 @@ import org.mockito.Mockito.`when`
 class JpaIssuedCredentialStorageTest {
 
     private fun cipher() = DisclosureCipherService(WalletProperties())
+    private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
+    private val mdocRegistry = MdocDocTypeRegistry()
 
     @Test
     fun `splits SD-JWT VC into encoded data and encrypted disclosures`() {
@@ -33,7 +40,7 @@ class JpaIssuedCredentialStorageTest {
             )
         }
 
-        val storage = JpaIssuedCredentialStorage(repo, cipher())
+        val storage = JpaIssuedCredentialStorage(repo, cipher(), mdocCodec, mdocRegistry)
         val issued = IssuedCredential(
             credentialConfigurationId = "pid_jwt",
             format = IssuanceCredentialFormat.SD_JWT_VC,
@@ -55,26 +62,65 @@ class JpaIssuedCredentialStorageTest {
     }
 
     @Test
-    fun `non SD-JWT credential is persisted with raw payload and empty disclosures`() {
+    fun `valid mdoc payload is preserved byte-identical in storage and retrieval`() {
         val repo = mock(WalletCredentialRepository::class.java)
+        var persisted: WalletCredential? = null
         `when`(repo.save(any(WalletCredential::class.java))).thenAnswer {
             val arg = it.getArgument<WalletCredential>(0)
-            WalletCredential(
+            persisted = WalletCredential(
                 id = 5L,
                 userId = arg.userId,
                 credentialType = arg.credentialType,
                 encodedData = arg.encodedData,
                 encryptedDisclosures = arg.encryptedDisclosures,
             )
+            persisted
         }
+        `when`(repo.findByUserId("holder-2")).thenAnswer { listOfNotNull(persisted) }
 
-        val storage = JpaIssuedCredentialStorage(repo, cipher())
+        val storage = JpaIssuedCredentialStorage(repo, cipher(), mdocCodec, mdocRegistry)
+        val issuedPayload = mdocCodec.encode(
+            MdocCredentialDocument(
+                docType = "org.iso.18013.5.1.mDL",
+                namespace = "org.iso.18013.5.1",
+                claims = mapOf(
+                    "given_name" to "Alice",
+                    "driving_privileges" to listOf("B"),
+                ),
+            ),
+        )
         val issued = IssuedCredential(
-            credentialConfigurationId = "driver_license",
+            credentialConfigurationId = "org.iso.18013.5.1.mDL",
             format = IssuanceCredentialFormat.MSO_MDOC,
-            rawPayload = "binary-mdoc-payload",
+            rawPayload = issuedPayload,
         )
         val id = storage.store("holder-2", issued)
         assertEquals(5L, id)
+        val captor = ArgumentCaptor.forClass(WalletCredential::class.java)
+        verify(repo).save(captor.capture())
+        val saved = captor.value
+        val recovered = repo.findByUserId("holder-2").single()
+
+        assertEquals(issuedPayload, saved.encodedData)
+        assertEquals(issuedPayload, recovered.encodedData)
+        assertTrue(
+            java.util.Base64.getUrlDecoder().decode(issuedPayload)
+                .contentEquals(java.util.Base64.getUrlDecoder().decode(saved.encodedData)),
+        )
+        assertTrue(mdocCodec.validateIssuerSigned(saved.encodedData))
+    }
+
+    @Test
+    fun `invalid mdoc payload is rejected instead of silently rebuilt`() {
+        val repo = mock(WalletCredentialRepository::class.java)
+        val storage = JpaIssuedCredentialStorage(repo, cipher(), mdocCodec, mdocRegistry)
+        val issued = IssuedCredential(
+            credentialConfigurationId = "org.iso.18013.5.1.mDL",
+            format = IssuanceCredentialFormat.MSO_MDOC,
+            rawPayload = "not-a-valid-cbor-mdoc",
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            storage.store("holder-x", issued)
+        }
     }
 }

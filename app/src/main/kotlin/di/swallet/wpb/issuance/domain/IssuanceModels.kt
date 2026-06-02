@@ -12,10 +12,7 @@ import java.util.UUID
 /**
  * Credential formats supported.
  *
- * Only `SD_JWT_VC` is exercised end-to-end. `MSO_MDOC` is declared so the
- * matching/policy code can recognise issuer-advertised mdoc configurations
- * but the orchestrator refuses to complete a real issuance for it (see
- * [DefaultIssuanceFlowOrchestrator]).
+ * `SD_JWT_VC` and `MSO_MDOC` are both supported in runtime issuance paths.
  */
 enum class IssuanceCredentialFormat {
     SD_JWT_VC,

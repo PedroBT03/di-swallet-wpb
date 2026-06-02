@@ -3,7 +3,7 @@ package di.swallet.wpb.service
 import di.swallet.wpb.config.HsmProperties
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletKeyRepository
-import di.swallet.wpb.presentation.format.KeyBindingJwtSigner
+import di.swallet.wpb.format.sdjwt.KeyBindingJwtSigner
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder

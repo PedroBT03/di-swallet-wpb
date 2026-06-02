@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.nimbusds.jose.JWSObject
 import com.nimbusds.jose.crypto.ECDSAVerifier
 import com.nimbusds.jose.util.Base64URL
-import di.swallet.wpb.service.format.SdJwtService
+import di.swallet.wpb.format.sdjwt.SdJwtService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.security.KeyFactory

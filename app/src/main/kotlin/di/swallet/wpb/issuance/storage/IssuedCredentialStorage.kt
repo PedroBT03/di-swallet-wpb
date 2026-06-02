@@ -4,6 +4,9 @@ import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
+import di.swallet.wpb.format.mdoc.MdocCredentialDocument
+import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.service.format.DisclosureCipherService
 import org.springframework.stereotype.Component
@@ -18,9 +21,9 @@ import org.springframework.stereotype.Component
  *   - `encodedData`: the issuer-signed JWT (without disclosures)
  *   - `encryptedDisclosures`: the AES-GCM ciphertext of the disclosure list
  *
- * Non-SD-JWT formats are persisted with the raw payload in `encodedData`
- * and an empty disclosure set so the row is non-null. They are not yet
- * consumable by the Phase 1 presentation builder (deferred to Phase 7).
+ * Non-SD-JWT formats are persisted with empty disclosure sets; for mdoc the
+ * payload is normalized to a structured runtime envelope consumed by the
+ * Phase 7 presentation path.
  */
 interface IssuedCredentialStorage {
     fun store(holderId: String, issued: IssuedCredential, walletKey: WalletKey? = null): Long
@@ -30,6 +33,8 @@ interface IssuedCredentialStorage {
 class JpaIssuedCredentialStorage(
     private val repository: WalletCredentialRepository,
     private val disclosureCipher: DisclosureCipherService,
+    private val mdocCredentialCodec: MdocCredentialCodec,
+    private val mdocDocTypeRegistry: MdocDocTypeRegistry,
 ) : IssuedCredentialStorage {
     override fun store(
         holderId: String,
@@ -38,7 +43,8 @@ class JpaIssuedCredentialStorage(
     ): Long {
         val (encoded, encryptedDisclosures) = when (issued.format) {
             IssuanceCredentialFormat.SD_JWT_VC -> splitSdJwt(issued.rawPayload)
-            else -> issued.rawPayload to disclosureCipher.encrypt(emptyList())
+            IssuanceCredentialFormat.MSO_MDOC -> normalizeMdoc(issued) to disclosureCipher.encrypt(emptyList())
+            IssuanceCredentialFormat.UNKNOWN -> issued.rawPayload to disclosureCipher.encrypt(emptyList())
         }
 
         val credentialType = inferCredentialType(issued.credentialConfigurationId, issued.format)
@@ -68,5 +74,13 @@ class JpaIssuedCredentialStorage(
             IssuanceCredentialFormat.MSO_MDOC -> "MsoMdoc"
             IssuanceCredentialFormat.UNKNOWN -> "Unknown"
         }
+    }
+
+    private fun normalizeMdoc(issued: IssuedCredential): String {
+        if (mdocCredentialCodec.isEncodedMdoc(issued.rawPayload)) return issued.rawPayload
+        throw IllegalArgumentException(
+            "Invalid mdoc payload for '${issued.credentialConfigurationId}'. " +
+                "Wallet storage preserves issuer artifacts and does not rebuild IssuerSigned silently.",
+        )
     }
 }

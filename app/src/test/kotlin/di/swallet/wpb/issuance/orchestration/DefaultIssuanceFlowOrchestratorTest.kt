@@ -14,6 +14,9 @@ import di.swallet.wpb.observability.InMemoryIssuanceEventStore
 import di.swallet.wpb.ka.attestation.KeyAttestationProvider
 import di.swallet.wpb.ka.validation.KeyAttestationValidationException
 import di.swallet.wpb.ka.validation.KeyAttestationValidationService
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
+import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
 import di.swallet.wpb.openid4vci.adapter.SimulatedOpenId4VciGateway
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
@@ -33,6 +36,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.web.server.ResponseStatusException
 
 class DefaultIssuanceFlowOrchestratorTest {
+    private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
 
     /**
      * In-memory storage stub avoids JPA/H2 wiring for the unit tests.
@@ -147,7 +151,11 @@ class DefaultIssuanceFlowOrchestratorTest {
             override fun validateBinding(attestation: KeyAttestation, proof: di.swallet.wpb.issuance.proof.ProofMaterial) = Unit
         }
         return DefaultIssuanceFlowOrchestrator(
-            gateway = SimulatedOpenId4VciGateway(properties),
+            gateway = SimulatedOpenId4VciGateway(
+                properties,
+                MdocDocTypeRegistry(),
+                mdocCodec,
+            ),
             repository = InMemoryIssuanceSessionRepository(),
             trustValidator = DefaultIssuerTrustValidator(properties),
             policy = DefaultIssuancePolicy(properties),
@@ -294,11 +302,10 @@ class DefaultIssuanceFlowOrchestratorTest {
         val orch = orchestrator(OpenId4VciProperties().apply {
             policy.allowMdoc = false
         })
-        // Use offer with sd-jwt id but rewrite metadata? The simulator always synthesises SD_JWT_VC,
-        // so we directly invoke the policy through the orchestrator using mdoc by injecting via offer
-        // string substitution is not possible. Just test the SD-JWT positive path is allowed.
-        val ctx = orch.resolveOffer(offerByValue, holderId = "holder-policy")
-        assertTrue(ctx.policyDecision!!.allowed)
+        val mdocOffer =
+            """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["org.iso.18013.5.1.mDL"]}"""
+        val ctx = orch.resolveOffer(mdocOffer, holderId = "holder-policy")
+        assertFalse(ctx.policyDecision!!.allowed)
     }
 
     @Test

@@ -9,6 +9,9 @@ import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
 import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
 import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
+import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
@@ -155,7 +158,12 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
             ),
             registryValidator = registryValidator,
             policyEngine = DefaultPolicyEngine(demoMode = demoMode),
-            credentialMatcher = DefaultCredentialMatcher(repository, demoMode = demoMode),
+            credentialMatcher = DefaultCredentialMatcher(
+                repository,
+                MdocCredentialCodec(MdocIsoRuntimeService()),
+                MdocDocTypeRegistry(),
+                demoMode = demoMode,
+            ),
             vpTokenBuilder = StubVpBuilder(),
             eventStore = InMemorySessionEventStore(),
         )

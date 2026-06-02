@@ -12,6 +12,9 @@ import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.ka.trust.CertificateChainValidator
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
+import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
 import di.swallet.wpb.observability.InMemorySessionEventStore
 import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
@@ -68,6 +71,7 @@ import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
 
 class Phase6Ts5RegistryOpenId4VpE2ETest {
+    private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
 
     @Test
     fun `ts5 signed registry response changes openid4vp runtime decision`() = runBlocking {
@@ -158,7 +162,7 @@ class Phase6Ts5RegistryOpenId4VpE2ETest {
                 trustValidator = trustValidator,
                 registryValidator = registryValidator,
                 policyEngine = DefaultPolicyEngine(demoMode = false),
-                credentialMatcher = DefaultCredentialMatcher(repository, demoMode = false),
+                credentialMatcher = DefaultCredentialMatcher(repository, mdocCodec, MdocDocTypeRegistry(), demoMode = false),
                 vpTokenBuilder = vpBuilderStub(),
                 eventStore = eventStore,
             )

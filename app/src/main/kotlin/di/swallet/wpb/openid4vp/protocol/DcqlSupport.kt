@@ -78,7 +78,8 @@ object DcqlSupport {
         val meta = entry["meta"] as? JsonObject ?: return emptyList()
         val vctValues = (meta["vct_values"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
         val docTypeValues = (meta["doctype_values"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
-        return (vctValues + docTypeValues).distinct()
+        val docTypeSingle = listOfNotNull(meta["doctype"]?.jsonPrimitive?.contentOrNull)
+        return (vctValues + docTypeValues + docTypeSingle).distinct()
     }
 
     private fun extractClaims(entry: JsonObject): List<String> {

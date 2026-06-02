@@ -1,6 +1,7 @@
 package di.swallet.wpb.service.format
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import di.swallet.wpb.format.sdjwt.SdJwtService
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 

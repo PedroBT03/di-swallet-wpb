@@ -364,7 +364,7 @@
       "name": "wpb.openid4vci.policy.allow-mdoc",
       "type": "java.lang.Boolean",
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$PolicyProperties",
-      "description": "Allow mso_mdoc credential configurations (deferred to Phase 7).",
+      "description": "Allow mso_mdoc credential configurations behind policy gate.",
       "defaultValue": false
     },
     {

@@ -2,7 +2,11 @@ package di.swallet.wpb.openid4vci.adapter
 
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.issuance.domain.DeferredIssuanceHandle
+import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.issuance.proof.ProofMaterial
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
+import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
 import di.swallet.wpb.openid4vci.protocol.AuthorizationFlowKind
 import di.swallet.wpb.openid4vci.protocol.DeferredQueryOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceOutcome
@@ -21,8 +25,14 @@ import java.security.spec.ECGenParameterSpec
 import java.util.UUID
 
 class SimulatedOpenId4VciGatewayTest {
+    private val isoRuntime = MdocIsoRuntimeService()
+    private val codec = MdocCredentialCodec(isoRuntime)
 
-    private fun gateway(properties: OpenId4VciProperties = OpenId4VciProperties()) = SimulatedOpenId4VciGateway(properties)
+    private fun gateway(properties: OpenId4VciProperties = OpenId4VciProperties()) = SimulatedOpenId4VciGateway(
+        properties,
+        MdocDocTypeRegistry(),
+        codec,
+    )
 
     private fun proof(): ProofMaterial {
         val kp = KeyPairGenerator.getInstance("EC").apply {
@@ -111,7 +121,7 @@ class SimulatedOpenId4VciGatewayTest {
             simulator.alwaysDefer = true
             simulator.deferredPollsBeforeIssue = 2
         }
-        val gw = SimulatedOpenId4VciGateway(props)
+        val gw = SimulatedOpenId4VciGateway(props, MdocDocTypeRegistry(), codec)
         val (offer, metadata) = gw.resolveOffer(
             """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}""",
         )
@@ -138,26 +148,25 @@ class SimulatedOpenId4VciGatewayTest {
     }
 
     @Test
-    fun `mdoc credential configuration is rejected at adapter level`() {
+    fun `mdoc credential configuration is issued when requested`() {
         val gw = gateway()
-        // Force mdoc metadata using wallet-initiated resolveMetadata
-        val metadata = gw.resolveMetadata("https://issuer.example", listOf("driver_license"))
-        // Override the configuration format to mdoc through internal state by providing an offer
-        // We re-resolve with an offer pointing at the same id but mdoc descriptor will come back as SD_JWT.
-        // To exercise the MDOC guard, we forge a request to mdoc:
+        val metadata = gw.resolveMetadata("https://issuer.example", listOf("org.iso.18013.5.1.mDL"))
         val (offer, _) = gw.resolveOffer(
-            """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["driver_license"]}""",
+            """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["org.iso.18013.5.1.mDL"]}""",
         )
         val sessionId = UUID.randomUUID().toString()
-        val prepared = gw.prepareAuthorization(sessionId, offer, metadata.copy(
-            credentialConfigurations = metadata.credentialConfigurations.map {
-                it.copy(format = di.swallet.wpb.issuance.domain.IssuanceCredentialFormat.MSO_MDOC)
-            },
-        ), proof(), wia())
+        val prepared = gw.prepareAuthorization(sessionId, offer, metadata, proof(), wia())
         gw.authorizeWithCode(sessionId, "c", prepared.state, wia())
-        val outcome = gw.requestCredential(sessionId, IssuanceRequest(credentialConfigurationId = "driver_license"), proof(), null)
-        assertTrue(outcome is IssuanceOutcome.Failed)
-        assertEquals("unsupported_format", (outcome as IssuanceOutcome.Failed).code)
+        val outcome = gw.requestCredential(
+            sessionId,
+            IssuanceRequest(credentialConfigurationId = "org.iso.18013.5.1.mDL"),
+            proof(),
+            null,
+        )
+        assertTrue(outcome is IssuanceOutcome.Issued)
+        val issued = (outcome as IssuanceOutcome.Issued).credentials.first()
+        assertEquals(IssuanceCredentialFormat.MSO_MDOC, issued.format)
+        assertTrue(codec.validateIssuerSigned(issued.rawPayload))
     }
 
     @Test

@@ -4,6 +4,9 @@ import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.issuance.domain.DeferredIssuanceHandle
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.issuance.proof.ProofMaterial
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
+import di.swallet.wpb.format.mdoc.MdocCredentialDocument
+import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.openid4vci.protocol.AuthorizationFlowKind
 import di.swallet.wpb.openid4vci.protocol.AuthorizationServerMetadata
 import di.swallet.wpb.openid4vci.protocol.AuthorizedContext
@@ -28,6 +31,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.time.Instant
 
 /**
  * In-process simulated OID4VCI adapter used in demo and tests.
@@ -46,6 +50,8 @@ import java.util.concurrent.ConcurrentHashMap
 @ConditionalOnMissingBean(name = ["sdkOpenId4VciGateway"])
 class SimulatedOpenId4VciGateway(
     private val properties: OpenId4VciProperties,
+    private val mdocDocTypeRegistry: MdocDocTypeRegistry,
+    private val mdocCredentialCodec: MdocCredentialCodec,
 ) : OpenId4VciGateway {
 
     private data class AdapterState(
@@ -207,9 +213,6 @@ class SimulatedOpenId4VciGateway(
         val format = configDescriptor?.format ?: IssuanceCredentialFormat.SD_JWT_VC
         val deviceBound = configDescriptor?.keyAttestationRequired ?: false
 
-        if (format == IssuanceCredentialFormat.MSO_MDOC) {
-            return IssuanceOutcome.Failed("unsupported_format", "mdoc issuance deferred to Phase 7")
-        }
         if (deviceBound) {
             if (keyAttestation == null) {
                 return IssuanceOutcome.Failed("key_attestation_missing", "device-bound issuance requires key attestation")
@@ -232,11 +235,22 @@ class SimulatedOpenId4VciGateway(
             return IssuanceOutcome.Deferred(handle)
         }
 
-        val rawSdJwt = buildFakeSdJwtVc(configurationId, configDescriptor?.vct ?: configurationId, proof)
+        val rawPayload = when (format) {
+            IssuanceCredentialFormat.SD_JWT_VC ->
+                buildFakeSdJwtVc(configurationId, configDescriptor?.vct ?: configurationId, proof)
+            IssuanceCredentialFormat.MSO_MDOC ->
+                buildFakeMdoc(
+                    configurationId = configurationId,
+                    docTypeHint = configDescriptor?.docType,
+                    vctHint = configDescriptor?.vct,
+                )
+            IssuanceCredentialFormat.UNKNOWN ->
+                buildFakeSdJwtVc(configurationId, configDescriptor?.vct ?: configurationId, proof)
+        }
         val credential = IssuedCredential(
             credentialConfigurationId = configurationId,
             format = format,
-            rawPayload = rawSdJwt,
+            rawPayload = rawPayload,
             notificationId = "notif-${UUID.randomUUID()}",
         )
         return IssuanceOutcome.Issued(listOf(credential))
@@ -259,11 +273,23 @@ class SimulatedOpenId4VciGateway(
         require(sessionId == adapterSessionId) { "deferred context bound to a different session" }
         val proof = state.proof ?: return DeferredQueryOutcome.Failed("invalid_state", "missing proof material")
         val descriptor = state.metadata?.credentialConfigurations?.firstOrNull { it.id == configurationId }
-        val rawSdJwt = buildFakeSdJwtVc(configurationId, descriptor?.vct ?: configurationId, proof)
+        val format = descriptor?.format ?: IssuanceCredentialFormat.SD_JWT_VC
+        val rawPayload = when (format) {
+            IssuanceCredentialFormat.SD_JWT_VC ->
+                buildFakeSdJwtVc(configurationId, descriptor?.vct ?: configurationId, proof)
+            IssuanceCredentialFormat.MSO_MDOC ->
+                buildFakeMdoc(
+                    configurationId = configurationId,
+                    docTypeHint = descriptor?.docType,
+                    vctHint = descriptor?.vct,
+                )
+            IssuanceCredentialFormat.UNKNOWN ->
+                buildFakeSdJwtVc(configurationId, descriptor?.vct ?: configurationId, proof)
+        }
         val credential = IssuedCredential(
             credentialConfigurationId = configurationId,
-            format = descriptor?.format ?: IssuanceCredentialFormat.SD_JWT_VC,
-            rawPayload = rawSdJwt,
+            format = format,
+            rawPayload = rawPayload,
             notificationId = handle.notificationId ?: "notif-${UUID.randomUUID()}",
         )
         return DeferredQueryOutcome.Issued(listOf(credential))
@@ -360,10 +386,13 @@ class SimulatedOpenId4VciGateway(
         )
         val configs = configurationIds.map { id ->
             val normalized = id.lowercase()
+            val inferredDocType = mdocDocTypeRegistry.infer(configurationId = id, docTypeHint = null, vctHint = null)
+            val mdocById = inferredDocType != null
             val requiresKa = normalized.contains("pid") || normalized.contains("device")
             CredentialConfigurationDescriptor(
                 id = id,
-                format = IssuanceCredentialFormat.SD_JWT_VC,
+                format = if (mdocById) IssuanceCredentialFormat.MSO_MDOC else IssuanceCredentialFormat.SD_JWT_VC,
+                docType = inferredDocType?.docType,
                 vct = id,
                 cryptographicBindingMethodsSupported = listOf("jwk"),
                 proofTypesSupported = if (requiresKa) listOf("jwt", "attestation") else listOf("jwt"),
@@ -414,6 +443,39 @@ class SimulatedOpenId4VciGateway(
         val signature = base64Url(randomToken(43))
         val disclosure = base64Url("""["${randomToken(8)}","given_name","Alice"]""")
         return "$header.$payload.$signature~$disclosure~"
+    }
+
+    private fun buildFakeMdoc(
+        configurationId: String,
+        docTypeHint: String?,
+        vctHint: String?,
+    ): String {
+        val definition = mdocDocTypeRegistry.infer(configurationId, docTypeHint, vctHint)
+            ?: mdocDocTypeRegistry.all().first()
+        val claims = when (definition.docType) {
+            "eu.europa.ec.eudi.pid.1" -> mapOf(
+                "given_name" to "Alice",
+                "family_name" to "Doe",
+                "birth_date" to "1990-01-01",
+                "nationalities" to listOf("PT"),
+            )
+            "org.iso.18013.5.1.mDL" -> mapOf(
+                "given_name" to "Alice",
+                "family_name" to "Doe",
+                "birth_date" to "1990-01-01",
+                "driving_privileges" to listOf("B"),
+            )
+            else -> mapOf("given_name" to "Alice")
+        }
+        return mdocCredentialCodec.encode(
+            MdocCredentialDocument(
+                docType = definition.docType,
+                namespace = definition.namespace,
+                claims = claims,
+                issuer = "https://issuer.example.org",
+                issuedAtEpochSeconds = Instant.now().epochSecond,
+            ),
+        )
     }
 
     private fun extractJsonString(json: String, key: String): String? {

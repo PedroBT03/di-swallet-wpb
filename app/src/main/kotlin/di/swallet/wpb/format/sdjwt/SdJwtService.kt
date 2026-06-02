@@ -1,10 +1,10 @@
-package di.swallet.wpb.service.format
+package di.swallet.wpb.format.sdjwt
 
 import com.nimbusds.jose.util.Base64URL
 import org.springframework.stereotype.Service
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.*
+import java.util.Base64
 
 /**
  * Service responsible for SD-JWT (Selective Disclosure) logic.
@@ -27,7 +27,7 @@ class SdJwtService {
 
         // 2. Format the disclosure: [salt, name, value]
         val disclosureArray = "[\"$saltBase64\", \"$claimName\", \"$claimValue\"]"
-        
+
         // 3. Return the Base64URL encoded version
         return Base64.getUrlEncoder().withoutPadding().encodeToString(disclosureArray.toByteArray())
     }

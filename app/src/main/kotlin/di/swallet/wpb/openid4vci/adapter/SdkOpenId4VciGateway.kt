@@ -74,6 +74,7 @@ class SdkOpenId4VciGateway(
         val accessToken: String? = null,
         val refreshToken: String? = null,
         val cNonce: String? = null,
+        val lastRequestedConfigurationId: String? = null,
     )
 
     override fun resolveOffer(offerUri: String): Pair<ResolvedOffer, ResolvedIssuerMetadata> {
@@ -372,6 +373,12 @@ class SdkOpenId4VciGateway(
             )
         }
         return try {
+            val configurationId = request.credentialConfigurationId
+                ?: request.credentialIdentifier
+                ?: session.offer?.credentialConfigurationIds?.firstOrNull()
+                ?: "unknown"
+            val descriptor = metadata.credentialConfigurations.firstOrNull { it.id == configurationId }
+            val format = descriptor?.format ?: IssuanceCredentialFormat.SD_JWT_VC
             val responseBody = restClient.post()
                 .uri(endpoint)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -387,14 +394,20 @@ class SdkOpenId4VciGateway(
                     notificationId = node["notification_id"]?.asText(),
                     serializedContext = node["transaction_id"].asText(),
                 )
+                states[adapterSessionId] = session.copy(lastRequestedConfigurationId = configurationId)
                 return IssuanceOutcome.Deferred(handle)
             }
-            val credentialPayload = node["credential"]?.asText() ?: raw
+            val credentialPayload = when {
+                node.hasNonNull("credential") && node["credential"].isTextual -> node["credential"].asText()
+                node.hasNonNull("credential") -> mapper.writeValueAsString(node["credential"])
+                else -> raw
+            }
+            states[adapterSessionId] = session.copy(lastRequestedConfigurationId = configurationId)
             IssuanceOutcome.Issued(
                 credentials = listOf(
                     IssuedCredential(
-                        credentialConfigurationId = request.credentialConfigurationId ?: request.credentialIdentifier ?: "unknown",
-                        format = IssuanceCredentialFormat.SD_JWT_VC,
+                        credentialConfigurationId = configurationId,
+                        format = format,
                         rawPayload = credentialPayload,
                         notificationId = node["notification_id"]?.asText(),
                     ),
@@ -426,13 +439,20 @@ class SdkOpenId4VciGateway(
                 .body(String::class.java)
                 ?: throw IllegalStateException("empty deferred response")
             val node = mapper.readTree(response)
-            val credential = node["credential"]?.asText()
+            val credential = when {
+                node.hasNonNull("credential") && node["credential"].isTextual -> node["credential"].asText()
+                node.hasNonNull("credential") -> mapper.writeValueAsString(node["credential"])
+                else -> null
+            }
+            val configurationId = session.lastRequestedConfigurationId ?: "deferred"
+            val descriptor = session.metadata?.credentialConfigurations?.firstOrNull { it.id == configurationId }
+            val format = descriptor?.format ?: IssuanceCredentialFormat.SD_JWT_VC
             if (!credential.isNullOrBlank()) {
                 DeferredQueryOutcome.Issued(
                     listOf(
                         IssuedCredential(
-                            credentialConfigurationId = "deferred",
-                            format = IssuanceCredentialFormat.SD_JWT_VC,
+                            credentialConfigurationId = configurationId,
+                            format = format,
                             rawPayload = credential,
                             notificationId = node["notification_id"]?.asText() ?: handle.notificationId,
                         ),

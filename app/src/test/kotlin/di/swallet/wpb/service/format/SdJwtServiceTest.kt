@@ -1,5 +1,6 @@
 package di.swallet.wpb.service.format
 
+import di.swallet.wpb.format.sdjwt.SdJwtService
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import com.nimbusds.jose.util.Base64URL

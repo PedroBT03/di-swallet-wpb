@@ -1,6 +1,8 @@
 package di.swallet.wpb.presentation.matching
 
 import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
+import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.openid4vp.protocol.DcqlSupport
 import di.swallet.wpb.presentation.domain.CredentialCandidate
 import di.swallet.wpb.presentation.domain.CredentialFormat
@@ -21,6 +23,8 @@ import org.springframework.stereotype.Service
 @Service
 class DefaultCredentialMatcher(
     private val walletCredentialRepository: WalletCredentialRepository,
+    private val mdocCredentialCodec: MdocCredentialCodec,
+    private val mdocDocTypeRegistry: MdocDocTypeRegistry,
     @param:Value("\${wpb.openid4vp.demo-mode:false}") private val demoMode: Boolean,
 ) : CredentialMatcher {
 
@@ -54,10 +58,16 @@ class DefaultCredentialMatcher(
         query: CredentialQuery,
         wallet: List<di.swallet.wpb.domain.WalletCredential>,
     ): List<CredentialCandidate> {
-        if (query.format != CredentialFormat.SD_JWT) {
-            // mdoc / other formats are not implemented yet (Phase 7).
-            return emptyList()
+        return when (query.format) {
+            CredentialFormat.SD_JWT -> matchSdJwt(query, wallet)
+            CredentialFormat.MDOC -> matchMdoc(query, wallet)
         }
+    }
+
+    private fun matchSdJwt(
+        query: CredentialQuery,
+        wallet: List<di.swallet.wpb.domain.WalletCredential>,
+    ): List<CredentialCandidate> {
         val typeFilter: (di.swallet.wpb.domain.WalletCredential) -> Boolean = { credential ->
             query.credentialTypeHints.isEmpty() ||
                 query.credentialTypeHints.any { hint -> hint.equals(credential.credentialType, ignoreCase = true) }
@@ -74,6 +84,40 @@ class DefaultCredentialMatcher(
                     credentialType = credential.credentialType,
                     format = CredentialFormat.SD_JWT,
                     requestedClaims = query.requestedClaims,
+                )
+            }
+            .toList()
+    }
+
+    private fun matchMdoc(
+        query: CredentialQuery,
+        wallet: List<di.swallet.wpb.domain.WalletCredential>,
+    ): List<CredentialCandidate> {
+        return wallet.asSequence()
+            .mapNotNull { credential ->
+                val credentialPk = credential.id ?: return@mapNotNull null
+                val decoded = mdocCredentialCodec.decode(credential.encodedData) ?: return@mapNotNull null
+                val effectiveDocType = if (decoded.docType == "unknown") credential.credentialType else decoded.docType
+                val docTypeMatches = query.credentialTypeHints.isEmpty() ||
+                    query.credentialTypeHints.any { hint -> hint.equals(effectiveDocType, ignoreCase = true) }
+                if (!docTypeMatches) return@mapNotNull null
+                val definition = mdocDocTypeRegistry.resolve(effectiveDocType)
+                val canonicalRequested = query.requestedClaims.map { claim ->
+                    definition?.claimMapping?.get(claim) ?: definition?.claimMapping?.get(claim.lowercase()) ?: claim
+                }
+                val availableClaimNames = decoded.claims.keys.map { it.substringAfterLast('.') }.toSet()
+                val claimsSatisfied = canonicalRequested.isEmpty() || canonicalRequested.all {
+                    it in availableClaimNames || it in decoded.claims.keys
+                }
+                if (!claimsSatisfied) return@mapNotNull null
+                CredentialCandidate(
+                    candidateId = "query:${query.id}:credential:$credentialPk",
+                    credentialId = credentialPk,
+                    holderId = credential.userId,
+                    queryId = query.id,
+                    credentialType = effectiveDocType,
+                    format = CredentialFormat.MDOC,
+                    requestedClaims = canonicalRequested,
                 )
             }
             .toList()

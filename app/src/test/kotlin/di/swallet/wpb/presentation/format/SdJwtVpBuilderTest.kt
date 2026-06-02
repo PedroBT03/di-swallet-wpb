@@ -3,10 +3,12 @@ package di.swallet.wpb.presentation.format
 import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.format.sdjwt.KeyBindingJwtSigner
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.SelectedCredential
 import di.swallet.wpb.service.format.DisclosureCipherService
-import di.swallet.wpb.service.format.SdJwtService
+import di.swallet.wpb.format.sdjwt.SdJwtVpBuilder
+import di.swallet.wpb.format.sdjwt.SdJwtService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull

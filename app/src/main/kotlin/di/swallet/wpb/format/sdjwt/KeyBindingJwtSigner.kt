@@ -1,4 +1,4 @@
-package di.swallet.wpb.presentation.format
+package di.swallet.wpb.format.sdjwt
 
 /**
  * Signs a Key Binding JWT (KB-JWT) for SD-JWT presentations.

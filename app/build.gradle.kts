@@ -45,6 +45,8 @@ dependencies {
     // --- Identity & Credential Formats (Format Engine) ---
     // Used for JWS, JWT, and SD-JWT operations
     implementation("com.nimbusds:nimbus-jose-jwt:9.37.3")
+    // CBOR/COSE/mdoc tooling for ISO 18013-5 interoperable artifacts.
+    implementation("com.authlete:cbor:1.19")
 
     // Reactive streams (coroutines interop) required for suspending controller support
     implementation("org.reactivestreams:reactive-streams:1.0.4")
@@ -72,6 +74,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("org.wiremock:wiremock-standalone:3.5.4")
+    testImplementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.20.1")
+    testImplementation("com.augustcellars.cose:cose-java:1.1.0")
 }
 
 kapt {

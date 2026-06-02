@@ -1,4 +1,4 @@
-package di.swallet.wpb.presentation.format
+package di.swallet.wpb.format.sdjwt
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.nimbusds.jose.util.Base64URL
@@ -108,7 +108,7 @@ class SdJwtVpBuilder(
             val decoded = String(Base64URL(base64UrlDisclosure).decode())
             val asList = objectMapper.readValue(decoded, List::class.java)
             asList.getOrNull(1) as? String
-        } catch (t: Throwable) {
+        } catch (_: Throwable) {
             null
         }
     }

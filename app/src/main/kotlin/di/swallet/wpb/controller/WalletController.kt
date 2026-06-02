@@ -12,7 +12,7 @@ import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.service.MockIssuerService
 import di.swallet.wpb.service.StatusListService
 import di.swallet.wpb.service.Fido2Service
-import di.swallet.wpb.service.format.SdJwtService
+import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.service.format.PresentationService
 import di.swallet.wpb.service.format.DisclosureCipherService
 import di.swallet.wpb.domain.WalletKey

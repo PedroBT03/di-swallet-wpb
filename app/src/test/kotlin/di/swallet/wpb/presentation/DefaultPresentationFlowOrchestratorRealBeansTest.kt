@@ -20,6 +20,7 @@ import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.DefaultPolicyEngine
+import di.swallet.wpb.presentation.registry.RegistryValidator
 import di.swallet.wpb.presentation.trust.AccessCertificateValidationResult
 import di.swallet.wpb.presentation.trust.AccessCertificateValidationService
 import di.swallet.wpb.presentation.trust.DefaultTrustValidator
@@ -96,6 +97,7 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
         repository: WalletCredentialRepository,
         allowed: String = "verifier-demo-client",
         demoMode: Boolean = false,
+        registryAccepted: Boolean = true,
     ): Pair<DefaultPresentationFlowOrchestrator, GatewayStub> {
         val gateway = GatewayStub(resolved)
         val trustProperties = OpenId4VpProperties().apply {
@@ -130,6 +132,18 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
                 snapshot: TrustSnapshot,
             ): AccessCertificateValidationResult = AccessCertificateValidationResult.Trusted
         }
+        val registryValidator = object : RegistryValidator {
+            override fun validate(context: PresentationContext): PresentationContext =
+                context.copy(
+                    registryDecision = di.swallet.wpb.presentation.domain.RegistryDecision(
+                        accepted = registryAccepted,
+                        reason = if (registryAccepted) "ok" else "registry denied",
+                        rpIdentifier = context.authorizationRequest?.clientId,
+                        sourceEndpoint = "/wrp/{identifier}",
+                        intendedUseChecked = true,
+                    ),
+                )
+        }
         val orchestrator = DefaultPresentationFlowOrchestrator(
             gateway = gateway,
             repository = InMemoryPresentationSessionRepository(),
@@ -139,6 +153,7 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
                 certificateExtractor = extractor,
                 certificateValidationService = certValidator,
             ),
+            registryValidator = registryValidator,
             policyEngine = DefaultPolicyEngine(demoMode = demoMode),
             credentialMatcher = DefaultCredentialMatcher(repository, demoMode = demoMode),
             vpTokenBuilder = StubVpBuilder(),

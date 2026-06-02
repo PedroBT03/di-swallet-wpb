@@ -40,6 +40,12 @@
       "sourceMethod": "getTrust()"
     },
     {
+      "name": "wpb.openid4vp.registry",
+      "type": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties",
+      "sourceMethod": "getRegistry()"
+    },
+    {
       "name": "wpb.openid4vp.session",
       "type": "di.swallet.wpb.config.OpenId4VpProperties$SessionProperties",
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties",
@@ -226,6 +232,104 @@
       "type": "java.lang.Boolean",
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
       "description": "Allow fail-open on trust source outage only when demo-mode is enabled.",
+      "defaultValue": true
+    },
+    {
+      "name": "wpb.openid4vp.registry.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Enable TS5/TS6 RP registry validation during presentation flow.",
+      "defaultValue": false
+    },
+    {
+      "name": "wpb.openid4vp.registry.specification-version",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Registry API specification version reference for observability and audit.",
+      "defaultValue": "TS5-1.2"
+    },
+    {
+      "name": "wpb.openid4vp.registry.base-url",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Base URL for TS5 RP registry endpoints.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vp.registry.remote-allowed-hosts",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Comma-separated allow-list of registry hosts accepted in production.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vp.registry.connect-timeout-ms",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Registry HTTP connect timeout in milliseconds.",
+      "defaultValue": 3000
+    },
+    {
+      "name": "wpb.openid4vp.registry.read-timeout-ms",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Registry HTTP read timeout in milliseconds.",
+      "defaultValue": 5000
+    },
+    {
+      "name": "wpb.openid4vp.registry.max-cache-age-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Maximum age of cached registry entries in seconds.",
+      "defaultValue": 900
+    },
+    {
+      "name": "wpb.openid4vp.registry.verification-key-pem-paths",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Comma-separated paths to PEM public keys/certs used to verify TS5 response JWS signatures.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vp.registry.require-signed-responses",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Require signed registry read responses (application/jwt JWS).",
+      "defaultValue": true
+    },
+    {
+      "name": "wpb.openid4vp.registry.require-signed-envelope-fields",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Require TS5 envelope fields iss/iat/data in signed payload.",
+      "defaultValue": true
+    },
+    {
+      "name": "wpb.openid4vp.registry.allowed-issuers",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Comma-separated allow-list for accepted JWT iss claim values.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vp.registry.expected-audience",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Optional expected JWT audience for registry responses.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.openid4vp.registry.clock-skew-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Allowed skew in seconds for JWT temporal claim checks.",
+      "defaultValue": 60
+    },
+    {
+      "name": "wpb.openid4vp.registry.prefer-check-intended-use-endpoint",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
+      "description": "Prefer /wrp/check-intended-use over local intended use inference when available.",
       "defaultValue": true
     },
     {

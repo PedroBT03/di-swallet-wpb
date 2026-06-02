@@ -20,6 +20,7 @@ import di.swallet.wpb.presentation.matching.CredentialMatcher
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.PolicyEngine
+import di.swallet.wpb.presentation.registry.RegistryValidator
 import di.swallet.wpb.presentation.trust.TrustValidator
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -74,6 +75,19 @@ class DefaultPresentationFlowOrchestratorTest {
             context.copy(policyDecision = PolicyDecision(allowed = allowed, reason = if (allowed) "ok" else "denied"))
     }
 
+    private class StubRegistry(private val accepted: Boolean = true) : RegistryValidator {
+        override fun validate(context: PresentationContext): PresentationContext =
+            context.copy(
+                registryDecision = di.swallet.wpb.presentation.domain.RegistryDecision(
+                    accepted = accepted,
+                    reason = if (accepted) "ok" else "denied",
+                    rpIdentifier = context.authorizationRequest?.clientId,
+                    sourceEndpoint = "/wrp/{identifier}",
+                    intendedUseChecked = true,
+                ),
+            )
+    }
+
     private class StubMatcher(private val candidates: List<CredentialCandidate>) : CredentialMatcher {
         override fun match(context: PresentationContext): PresentationContext =
             context.copy(credentialCandidates = candidates)
@@ -92,6 +106,7 @@ class DefaultPresentationFlowOrchestratorTest {
     private fun newOrchestrator(
         gateway: OpenId4VpGateway = GatewayStub(resolved),
         trust: TrustValidator = StubTrust(),
+        registry: RegistryValidator = StubRegistry(),
         policy: PolicyEngine = StubPolicy(),
         matcher: CredentialMatcher = StubMatcher(listOf(candidate())),
         builder: VpTokenBuilder = StubVpBuilder(),
@@ -99,6 +114,7 @@ class DefaultPresentationFlowOrchestratorTest {
         gateway = gateway,
         repository = InMemoryPresentationSessionRepository(),
         trustValidator = trust,
+        registryValidator = registry,
         policyEngine = policy,
         credentialMatcher = matcher,
         vpTokenBuilder = builder,
@@ -180,5 +196,21 @@ class DefaultPresentationFlowOrchestratorTest {
         val ctx = orchestrator.startSession("http://verifier/request-1", "holder-1")
         assertEquals(PresentationState.DISPATCHED, ctx.state)
         assertEquals(1, gateway.negativeCount)
+    }
+
+    @Test
+    fun `registry rejection dispatches negative even when trust is valid`() = runBlocking {
+        val gateway = GatewayStub(resolved)
+        val orchestrator = newOrchestrator(
+            gateway = gateway,
+            trust = StubTrust(trusted = true),
+            registry = StubRegistry(accepted = false),
+            policy = StubPolicy(allowed = true),
+            matcher = StubMatcher(listOf(candidate())),
+        )
+        val ctx = orchestrator.startSession("http://verifier/request-1", "holder-1")
+        assertEquals(PresentationState.DISPATCHED, ctx.state)
+        assertEquals("registry_rejected", ctx.error?.code)
+        assertTrue(gateway.negativeCount >= 1)
     }
 }

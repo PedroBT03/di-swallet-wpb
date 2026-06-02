@@ -18,6 +18,7 @@ import di.swallet.wpb.presentation.format.VpTokenBuilder
 import di.swallet.wpb.presentation.matching.CredentialMatcher
 import di.swallet.wpb.presentation.persistence.PresentationSessionRepository
 import di.swallet.wpb.presentation.policy.PolicyEngine
+import di.swallet.wpb.presentation.registry.RegistryValidator
 import di.swallet.wpb.presentation.trust.TrustValidator
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -33,6 +34,7 @@ class DefaultPresentationFlowOrchestrator(
     private val gateway: OpenId4VpGateway,
     private val repository: PresentationSessionRepository,
     private val trustValidator: TrustValidator,
+    private val registryValidator: RegistryValidator,
     private val policyEngine: PolicyEngine,
     private val credentialMatcher: CredentialMatcher,
     private val vpTokenBuilder: VpTokenBuilder,
@@ -105,7 +107,7 @@ class DefaultPresentationFlowOrchestrator(
         val trustEvaluated = trustValidator.validate(context)
         val trusted = trustEvaluated.trustDecision?.trusted == true
         context = if (trusted) {
-            transitionTo(trustEvaluated, PresentationState.VERIFIER_VALIDATED)
+            trustEvaluated
         } else {
             transitionTo(
                 trustEvaluated.copy(
@@ -141,6 +143,39 @@ class DefaultPresentationFlowOrchestrator(
 
         if (!trusted) {
             return dispatchTerminalNegative(context, "trust.dispatch.negative")
+        }
+
+        val registryEvaluated = registryValidator.validate(context)
+        val registryAccepted = registryEvaluated.registryDecision?.accepted == true
+        context = if (registryAccepted) {
+            transitionTo(registryEvaluated, PresentationState.VERIFIER_VALIDATED)
+        } else {
+            transitionTo(
+                registryEvaluated.copy(
+                    error = PresentationError(
+                        code = "registry_rejected",
+                        message = registryEvaluated.registryDecision?.reason ?: "RP registry validation failed",
+                    ),
+                ),
+                PresentationState.REJECTED,
+            )
+        }
+        context = persistUpdate(context)
+        record(
+            context,
+            "registry.validated",
+            mapOf(
+                "accepted" to registryAccepted.toString(),
+                "reason" to (registryEvaluated.registryDecision?.reason ?: ""),
+                "endpoint" to (registryEvaluated.registryDecision?.sourceEndpoint ?: ""),
+                "identifier" to (registryEvaluated.registryDecision?.rpIdentifier ?: ""),
+            ),
+        )
+        if (registryAccepted) {
+            record(context, "registry.validation.passed", mapOf("identifier" to (registryEvaluated.registryDecision?.rpIdentifier ?: "")))
+        } else {
+            record(context, "registry.validation.failed", mapOf("reason" to (registryEvaluated.registryDecision?.reason ?: "")))
+            return dispatchTerminalNegative(context, "registry.dispatch.negative")
         }
 
         context = credentialMatcher.match(context)

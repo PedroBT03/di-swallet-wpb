@@ -17,6 +17,8 @@ class OpenId4VpProperties {
 
     var trust: TrustProperties = TrustProperties()
 
+    var registry: RegistryProperties = RegistryProperties()
+
     var session: SessionProperties = SessionProperties()
 
     class TrustProperties {
@@ -69,6 +71,67 @@ class OpenId4VpProperties {
         fun remoteAllowedHosts(): Set<String> = remoteAllowedHosts
             .split(',')
             .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() }
+            .toSet()
+    }
+
+    class RegistryProperties {
+        /** Enables TS5/TS6 RP registry validation in presentation flows. */
+        var enabled: Boolean = false
+
+        /** TS version reference used for runtime observability and audit. */
+        var specificationVersion: String = "TS5-1.2"
+
+        /** Base URL of the national RP registry API. */
+        var baseUrl: String = ""
+
+        /** Comma-separated allow-list of hosts accepted for production registry fetches. */
+        var remoteAllowedHosts: String = ""
+
+        /** HTTP connect timeout for registry calls in milliseconds. */
+        var connectTimeoutMs: Long = 3000
+
+        /** HTTP read timeout for registry calls in milliseconds. */
+        var readTimeoutMs: Long = 5000
+
+        /** Max accepted age for cached registry records in seconds. */
+        var maxCacheAgeSeconds: Long = 900
+
+        /** Comma-separated paths to PEM public keys (or certs) used for JWS verification. */
+        var verificationKeyPemPaths: String = ""
+
+        /** Whether registry read responses must be signed JWTs (TS5 baseline). */
+        var requireSignedResponses: Boolean = true
+
+        /** Whether to require TS5 signed envelope claims: iss, iat, data. */
+        var requireSignedEnvelopeFields: Boolean = true
+
+        /** Optional allow-list of accepted registry issuers (`iss` claim). */
+        var allowedIssuers: String = ""
+
+        /** Optional expected audience for registry response JWTs. */
+        var expectedAudience: String = ""
+
+        /** Clock skew tolerance for JWT temporal claim checks. */
+        var clockSkewSeconds: Long = 60
+
+        /** Prefer TS5 check-intended-use endpoint over local inference when reachable. */
+        var preferCheckIntendedUseEndpoint: Boolean = true
+
+        fun remoteAllowedHosts(): Set<String> = remoteAllowedHosts
+            .split(',')
+            .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() }
+            .toSet()
+
+        fun verificationKeyPemPaths(): List<String> = verificationKeyPemPaths
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        fun allowedIssuers(): Set<String> = allowedIssuers
+            .split(',')
+            .map { it.trim() }
             .filter { it.isNotBlank() }
             .toSet()
     }

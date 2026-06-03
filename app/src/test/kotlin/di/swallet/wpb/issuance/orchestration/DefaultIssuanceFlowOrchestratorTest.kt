@@ -34,6 +34,8 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.web.server.ResponseStatusException
+import di.swallet.wpb.service.KeyBindingRuntimeService
+import org.mockito.Mockito.mock
 
 class DefaultIssuanceFlowOrchestratorTest {
     private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
@@ -45,7 +47,12 @@ class DefaultIssuanceFlowOrchestratorTest {
      */
     private class StubIssuedCredentialStorage : IssuedCredentialStorage {
         private val seq = java.util.concurrent.atomic.AtomicLong()
-        override fun store(holderId: String, issued: IssuedCredential, walletKey: WalletKey?): Long =
+        override fun store(
+            holderId: String,
+            issued: IssuedCredential,
+            walletKey: WalletKey?,
+            keyAliasHint: String?,
+        ): Long =
             seq.incrementAndGet()
     }
 
@@ -165,6 +172,7 @@ class DefaultIssuanceFlowOrchestratorTest {
             keyAttestationProvider = StubKeyAttestationProvider(),
             keyAttestationValidationService = validationService,
             credentialStorage = StubIssuedCredentialStorage(),
+            keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),
             eventStore = InMemoryIssuanceEventStore(),
             properties = properties,
         )

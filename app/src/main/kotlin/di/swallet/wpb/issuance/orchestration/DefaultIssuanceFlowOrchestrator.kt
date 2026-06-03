@@ -32,6 +32,7 @@ import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
 import di.swallet.wpb.wia.attestation.WalletAttestationProvider
 import di.swallet.wpb.wia.validation.WiaValidationException
 import di.swallet.wpb.wia.validation.WiaValidationService
+import di.swallet.wpb.service.KeyBindingRuntimeService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -52,6 +53,7 @@ class DefaultIssuanceFlowOrchestrator(
     private val keyAttestationProvider: KeyAttestationProvider,
     private val keyAttestationValidationService: KeyAttestationValidationService,
     private val credentialStorage: IssuedCredentialStorage,
+    private val keyBindingRuntimeService: KeyBindingRuntimeService,
     private val eventStore: IssuanceEventStore,
     private val properties: OpenId4VciProperties,
 ) : IssuanceFlowOrchestrator {
@@ -322,7 +324,12 @@ class DefaultIssuanceFlowOrchestrator(
                         ),
                     )
                 }
-                persistIssued(validated, outcome.credentials, terminalState = IssuanceState.CREDENTIAL_ISSUED)
+                persistIssued(
+                    validated,
+                    outcome.credentials,
+                    terminalState = IssuanceState.CREDENTIAL_ISSUED,
+                    keyAliasHint = proof.keyId,
+                )
             }
             is IssuanceOutcome.Deferred -> {
                 val withDeferred = requestedWithKa.copy(deferredHandle = outcome.handle)
@@ -347,7 +354,12 @@ class DefaultIssuanceFlowOrchestrator(
         }
 
         return when (outcome) {
-            is DeferredQueryOutcome.Issued -> persistIssued(ctx, outcome.credentials, terminalState = IssuanceState.DEFERRED_ISSUED)
+            is DeferredQueryOutcome.Issued -> persistIssued(
+                ctx,
+                outcome.credentials,
+                terminalState = IssuanceState.DEFERRED_ISSUED,
+                keyAliasHint = null,
+            )
             is DeferredQueryOutcome.StillPending -> {
                 val updated = ctx.copy(deferredHandle = outcome.updatedHandle)
                 val saved = transitionAndPersist(updated, IssuanceState.DEFERRED_PENDING)
@@ -393,9 +405,14 @@ class DefaultIssuanceFlowOrchestrator(
         ctx: IssuanceContext,
         credentials: List<di.swallet.wpb.openid4vci.protocol.IssuedCredential>,
         terminalState: IssuanceState,
+        keyAliasHint: String?,
     ): IssuanceContext {
         val storedIds = credentials.map { issued ->
-            credentialStorage.store(ctx.sessionMeta.holderId ?: "anonymous", issued)
+            credentialStorage.store(
+                holderId = ctx.sessionMeta.holderId ?: "anonymous",
+                issued = issued,
+                keyAliasHint = keyAliasHint,
+            )
         }
         val withIssued = ctx.copy(issuedCredentials = ctx.issuedCredentials + credentials)
         val saved = transitionAndPersist(withIssued, terminalState)
@@ -619,6 +636,7 @@ class DefaultIssuanceFlowOrchestrator(
             keyAttestationValidationService.validateTechnical(existing, configuration)
             keyAttestationValidationService.validateTrust(existing, configuration, metadata)
             keyAttestationValidationService.validateBinding(existing, proof)
+            keyBindingRuntimeService.registerKeyAttestation(holderId, existing)
             return existing
         }
         val attestation = keyAttestationProvider.issue(
@@ -632,6 +650,7 @@ class DefaultIssuanceFlowOrchestrator(
         keyAttestationValidationService.validateTechnical(attestation, configuration)
         keyAttestationValidationService.validateTrust(attestation, configuration, metadata)
         keyAttestationValidationService.validateBinding(attestation, proof)
+        keyBindingRuntimeService.registerKeyAttestation(holderId, attestation)
         record(
             ctx,
             "ka.generated",

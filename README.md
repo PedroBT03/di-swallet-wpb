@@ -411,3 +411,66 @@ WPB_REAL_ISSUER_ENABLED=true \
 WPB_REAL_ISSUER_OFFER_URI='openid-credential-offer://...' \
 ./gradlew :app:test --tests "di.swallet.wpb.openid4vci.adapter.SdkOpenId4VciGatewayRealIssuerIT"
 ```
+
+## Phase 8 - Device binding and key management runtime
+
+This section captures the implemented runtime model for device binding and key
+management aligned with the DI_Swallet server-side architecture.
+
+### Summary of decisions
+
+- The architecture baseline remains **DI_Swallet server-side** with holder keys in
+  **remote WSCD/HSM**.
+- Device bootstrap keys are **not** holder keys:
+  - device-local keys: device authentication / DPoP / wallet bootstrap
+  - holder keys: SD-JWT and mdoc holder binding, presentation signatures
+- Two bindings are mandatory and independent:
+  - `device -> wallet`
+  - `credential -> holder key`
+- Key Attestation (KA) is modeled as a **first-class persisted aggregate**, not
+  only projected fields on keys.
+- Anti-correlation default policy is `new KA + new key` per issuance/re-issuance.
+  ISSU_12b key-reuse remains a policy exception (not default).
+
+### Conceptual cardinality
+
+```mermaid
+flowchart LR
+  walletUnit["WalletUnit"]
+  deviceBinding["DeviceWalletBinding"]
+  wia["WIA"]
+  ka["KeyAttestation"]
+  attestedKey["AttestedKey"]
+  credential["Credential"]
+  credKeyBinding["CredentialKeyBinding"]
+  holderKey["HolderKey(RemoteWSCD)"]
+
+  walletUnit --> deviceBinding
+  walletUnit --> wia
+  walletUnit --> ka
+  ka --> attestedKey
+  attestedKey --> holderKey
+  attestedKey --> credKeyBinding
+  credential --> credKeyBinding
+```
+
+
+```text
+WalletUnit
+  ├─ DeviceWalletBinding
+  ├─ WIA
+  └─ KeyAttestation
+       └─ AttestedKey
+            ├─ HolderKey (RemoteWSCD)
+            └─ CredentialKeyBinding
+                 └─ Credential
+```
+
+### Non-production simplifications
+
+- Device attestation cryptographic verification pipeline is still simulated
+  (no full platform attestation trust-chain validation yet).
+- DB schema evolution currently relies on `spring.jpa.hibernate.ddl-auto=update`;
+  explicit migration scripts are still pending.
+- Wallet init / bind payloads currently accept JWK material directly and use a
+  deterministic thumbprint hash as binding key in this MVP increment.

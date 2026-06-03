@@ -5,6 +5,8 @@ import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.presentation.domain.SelectedCredential
+import di.swallet.wpb.service.CredentialBindingValidationService
+import di.swallet.wpb.domain.CredentialBindingFormat
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -13,6 +15,7 @@ class MdocVpBuilder(
     private val walletCredentialRepository: WalletCredentialRepository,
     private val mdocCredentialCodec: MdocCredentialCodec,
     private val mdocDocTypeRegistry: MdocDocTypeRegistry,
+    private val credentialBindingValidationService: CredentialBindingValidationService? = null,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -25,6 +28,7 @@ class MdocVpBuilder(
             ?: return demoFallback(selected, verifierAudience, verifierNonce)
         val credential = walletCredentialRepository.findById(credentialId)
             .orElseThrow { IllegalStateException("Selected credential $credentialId not found") }
+        credentialBindingValidationService?.requireBinding(credentialId, CredentialBindingFormat.MDOC)
         val decoded = mdocCredentialCodec.decode(credential.encodedData)
             ?: throw IllegalStateException("Selected credential $credentialId is not a decodable mdoc payload")
         val effectiveDocType = if (decoded.docType == "unknown") credential.credentialType else decoded.docType
@@ -40,6 +44,7 @@ class MdocVpBuilder(
             requestedClaims = selected.requestedClaims,
             audience = verifierAudience,
             nonce = verifierNonce,
+            holderKeyAlias = runCatching { credential.walletKey?.keyAlias }.getOrNull(),
         )
 
         logger.info(

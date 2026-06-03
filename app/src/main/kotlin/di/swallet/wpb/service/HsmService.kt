@@ -146,12 +146,37 @@ class HsmService(
         }
     }
 
+    fun signDataWithAlias(keyAlias: String, dataToSign: ByteArray): ByteArray {
+        val walletKey = getKeyByAlias(keyAlias)
+        validateKeyStatus(walletKey)
+        try {
+            val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
+            keyStore.load(null, pin.toCharArray())
+
+            val privateKey = keyStore.getKey(walletKey.keyAlias, null) as? PrivateKey
+                ?: throw RuntimeException("Key alias ${walletKey.keyAlias} not found in HSM")
+
+            val signature = Signature.getInstance("SHA256withECDSA", pkcs11Provider)
+            signature.initSign(privateKey)
+            signature.update(dataToSign)
+            return signature.sign()
+        } catch (e: Exception) {
+            logger.error("WSCA: Signing failed for alias $keyAlias: ${e.message}")
+            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Signing failed: ${e.message}")
+        }
+    }
+
     /**
      * Finds the wallet metadata for a specific user ID.
      */
     fun getUserKey(userId: String): WalletKey {
         return walletKeyRepository.findByUserId(userId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "User wallet not found") }
+    }
+
+    fun getKeyByAlias(keyAlias: String): WalletKey {
+        return walletKeyRepository.findByKeyAlias(keyAlias)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet key alias not found") }
     }
 
     fun certificateChainBase64(walletKey: WalletKey): List<String> {
@@ -280,5 +305,26 @@ class HsmService(
         val jwsSignatureBytes = ECDSA.transcodeSignatureToConcat(derSignature, 64)
         val base64UrlSignature = Base64URL.encode(jwsSignatureBytes)
         return "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$base64UrlSignature"
+    }
+
+    override fun signKeyBindingJwtForKeyAlias(keyAlias: String, payload: Map<String, Any>): String {
+        val walletKey = getKeyByAlias(keyAlias)
+        validateKeyStatus(walletKey)
+
+        val header = JWSHeader.Builder(JWSAlgorithm.ES256)
+            .keyID(walletKey.keyAlias)
+            .type(JOSEObjectType("kb+jwt"))
+            .build()
+
+        val jwsObject = JWSObject(header, Payload(payload))
+        val derSignature = signDataWithAlias(keyAlias, jwsObject.signingInput)
+        val jwsSignatureBytes = ECDSA.transcodeSignatureToConcat(derSignature, 64)
+        val base64UrlSignature = Base64URL.encode(jwsSignatureBytes)
+        return "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$base64UrlSignature"
+    }
+
+    fun signCoseEs256WithAlias(keyAlias: String, bytesToSign: ByteArray): ByteArray {
+        val derSignature = signDataWithAlias(keyAlias, bytesToSign)
+        return ECDSA.transcodeSignatureToConcat(derSignature, 64)
     }
 }

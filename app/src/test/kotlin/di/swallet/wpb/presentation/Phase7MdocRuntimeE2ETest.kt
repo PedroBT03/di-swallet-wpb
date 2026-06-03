@@ -4,6 +4,7 @@ import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.issuance.proof.ProofMaterial
 import di.swallet.wpb.issuance.storage.JpaIssuedCredentialStorage
 import di.swallet.wpb.format.mdoc.MdocCredentialCodec
@@ -38,6 +39,7 @@ import di.swallet.wpb.presentation.policy.DefaultPolicyEngine
 import di.swallet.wpb.presentation.registry.RegistryValidator
 import di.swallet.wpb.presentation.trust.TrustValidator
 import di.swallet.wpb.service.format.DisclosureCipherService
+import di.swallet.wpb.service.KeyBindingRuntimeService
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -65,9 +67,11 @@ class Phase7MdocRuntimeE2ETest {
         val credentialRepository = inMemoryRepository(storedCredentials)
         val storage = JpaIssuedCredentialStorage(
             repository = credentialRepository,
+            walletKeyRepository = mock(WalletKeyRepository::class.java),
             disclosureCipher = DisclosureCipherService(WalletProperties()),
             mdocCredentialCodec = mdocCodec,
             mdocDocTypeRegistry = mdocRegistry,
+            keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),
         )
 
         val issuanceGateway = SimulatedOpenId4VciGateway(

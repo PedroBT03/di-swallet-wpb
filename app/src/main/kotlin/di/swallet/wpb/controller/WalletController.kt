@@ -12,6 +12,8 @@ import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.service.MockIssuerService
 import di.swallet.wpb.service.StatusListService
 import di.swallet.wpb.service.Fido2Service
+import di.swallet.wpb.service.DeviceBindingService
+import di.swallet.wpb.service.WalletInitCommand
 import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.service.format.PresentationService
 import di.swallet.wpb.service.format.DisclosureCipherService
@@ -37,6 +39,23 @@ data class PresentationRequest(
     val claimsToDisclose: List<String>
 )
 
+data class WalletInitRequest(
+    val holderId: String? = null,
+    val platform: String,
+    val devicePubJwk: String,
+    val pidPubJwk: String? = null,
+)
+
+data class DpopBindRequest(
+    val walletId: String,
+    val devicePubJwk: String,
+)
+
+data class PidKeyBindRequest(
+    val walletId: String,
+    val pidPubJwk: String,
+)
+
 /**
  * Wallet Provider Interface (WPI) implementation.
  * Manages keys and credential issuance flows.
@@ -53,7 +72,8 @@ class WalletController(
     private val credentialRepository: WalletCredentialRepository,
     private val challengeService: ChallengeService,
     private val statusListService: StatusListService,
-    private val fido2Service: Fido2Service
+    private val fido2Service: Fido2Service,
+    private val deviceBindingService: DeviceBindingService,
 ) {
 
     // --- SECTION 1: AUTHENTICATION & ONBOARDING ---
@@ -92,6 +112,49 @@ class WalletController(
             "userId" to userId,
             "challenge" to challenge,
             "info" to "Sign this challenge using your device to authorize the next operation."
+        )
+    }
+
+    @PostMapping("/init")
+    @Operation(summary = "Initialize wallet unit and bind bootstrap keys")
+    fun walletInit(@RequestBody request: WalletInitRequest): Map<String, Any> {
+        val result = deviceBindingService.initWallet(
+            WalletInitCommand(
+                holderId = request.holderId,
+                platform = request.platform,
+                devicePubJwk = request.devicePubJwk,
+                pidPubJwk = request.pidPubJwk,
+            ),
+        )
+        return mapOf(
+            "walletId" to result.walletId,
+            "state" to result.state.name,
+            "dpopBound" to result.dpopBound,
+            "pidKeyBound" to result.pidKeyBound,
+        )
+    }
+
+    @PostMapping("/auth/dpop/bind")
+    @Operation(summary = "Bind DPoP device key to wallet")
+    fun bindDpop(@RequestBody request: DpopBindRequest): Map<String, Any> {
+        val result = deviceBindingService.bindDpop(request.walletId, request.devicePubJwk)
+        return mapOf(
+            "walletId" to result.walletId,
+            "state" to result.state.name,
+            "dpopBound" to result.dpopBound,
+            "pidKeyBound" to result.pidKeyBound,
+        )
+    }
+
+    @PostMapping("/auth/pid_key/bind")
+    @Operation(summary = "Bind PID key to wallet")
+    fun bindPidKey(@RequestBody request: PidKeyBindRequest): Map<String, Any> {
+        val result = deviceBindingService.bindPidKey(request.walletId, request.pidPubJwk)
+        return mapOf(
+            "walletId" to result.walletId,
+            "state" to result.state.name,
+            "dpopBound" to result.dpopBound,
+            "pidKeyBound" to result.pidKeyBound,
         )
     }
 

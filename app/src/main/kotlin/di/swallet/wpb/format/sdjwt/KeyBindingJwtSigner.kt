@@ -8,4 +8,7 @@ package di.swallet.wpb.format.sdjwt
  */
 interface KeyBindingJwtSigner {
     fun signKeyBindingJwt(userId: String, payload: Map<String, Any>): String
+
+    fun signKeyBindingJwtForKeyAlias(keyAlias: String, payload: Map<String, Any>): String =
+        signKeyBindingJwt(keyAlias, payload)
 }

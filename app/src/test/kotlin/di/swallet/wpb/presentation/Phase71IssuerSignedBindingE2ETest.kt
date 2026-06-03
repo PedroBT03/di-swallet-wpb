@@ -3,6 +3,7 @@ package di.swallet.wpb.presentation
 import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.issuance.storage.JpaIssuedCredentialStorage
 import di.swallet.wpb.format.mdoc.IndependentMdocVerifier
@@ -15,6 +16,7 @@ import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.SelectedCredential
 import di.swallet.wpb.presentation.format.MdocVpBuilder
 import di.swallet.wpb.service.format.DisclosureCipherService
+import di.swallet.wpb.service.KeyBindingRuntimeService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -68,9 +70,11 @@ class Phase71IssuerSignedBindingE2ETest {
 
         val storage = JpaIssuedCredentialStorage(
             repository = repository,
+            walletKeyRepository = mock(WalletKeyRepository::class.java),
             disclosureCipher = DisclosureCipherService(WalletProperties()),
             mdocCredentialCodec = codec,
             mdocDocTypeRegistry = registry,
+            keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),
         )
         val credentialId = storage.store(
             holderId = "holder-1",

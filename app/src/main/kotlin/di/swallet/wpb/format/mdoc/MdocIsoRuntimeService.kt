@@ -86,6 +86,7 @@ class MdocIsoRuntimeService {
         requestedClaims: List<String>,
         audience: String,
         nonce: String,
+        holderKeyAlias: String? = null,
     ): String {
         val issuerSignedItem = when {
             !originalIssuedPayload.isNullOrBlank() ->

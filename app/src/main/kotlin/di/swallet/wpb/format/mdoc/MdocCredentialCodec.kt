@@ -33,6 +33,7 @@ class MdocCredentialCodec(
         requestedClaims: List<String>,
         audience: String,
         nonce: String,
+        holderKeyAlias: String? = null,
     ): String = isoRuntime.buildDeviceResponse(
         originalIssuedPayload = originalIssuedPayload,
         docType = docType,
@@ -40,6 +41,7 @@ class MdocCredentialCodec(
         requestedClaims = requestedClaims,
         audience = audience,
         nonce = nonce,
+        holderKeyAlias = holderKeyAlias,
     )
 }
 

@@ -3,7 +3,9 @@ package di.swallet.wpb.format.sdjwt
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.nimbusds.jose.util.Base64URL
 import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.domain.CredentialBindingFormat
 import di.swallet.wpb.presentation.domain.SelectedCredential
+import di.swallet.wpb.service.CredentialBindingValidationService
 import di.swallet.wpb.service.format.DisclosureCipherService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -30,6 +32,7 @@ class SdJwtVpBuilder(
     private val disclosureCipherService: DisclosureCipherService,
     private val keyBindingJwtSigner: KeyBindingJwtSigner,
     private val objectMapper: ObjectMapper,
+    private val credentialBindingValidationService: CredentialBindingValidationService? = null,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -44,6 +47,7 @@ class SdJwtVpBuilder(
 
         val credential = walletCredentialRepository.findById(credentialId)
             .orElseThrow { IllegalStateException("Selected credential $credentialId not found") }
+        credentialBindingValidationService?.requireBinding(credentialId, CredentialBindingFormat.SD_JWT)
 
         val signedJwt = credential.encodedData.substringBefore('~')
         val storedDisclosures = if (credential.encodedData.contains('~')) {
@@ -67,7 +71,12 @@ class SdJwtVpBuilder(
             "nonce" to verifierNonce,
             "sd_hash" to sdHash,
         )
-        val kbJwt = keyBindingJwtSigner.signKeyBindingJwt(credential.userId, kbJwtPayload)
+        val keyAlias = runCatching { credential.walletKey?.keyAlias }.getOrNull()
+        val kbJwt = if (!keyAlias.isNullOrBlank()) {
+            keyBindingJwtSigner.signKeyBindingJwtForKeyAlias(keyAlias, kbJwtPayload)
+        } else {
+            keyBindingJwtSigner.signKeyBindingJwt(credential.userId, kbJwtPayload)
+        }
         val presentation = "$canonicalSdJwt$kbJwt"
 
         logger.info(

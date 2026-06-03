@@ -3,12 +3,15 @@ package di.swallet.wpb.issuance.storage
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.WalletKey
+import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.service.format.DisclosureCipherService
+import di.swallet.wpb.service.KeyBindingRuntimeService
+import di.swallet.wpb.domain.CredentialBindingFormat
 import org.springframework.stereotype.Component
 
 /**
@@ -26,20 +29,28 @@ import org.springframework.stereotype.Component
  * Phase 7 presentation path.
  */
 interface IssuedCredentialStorage {
-    fun store(holderId: String, issued: IssuedCredential, walletKey: WalletKey? = null): Long
+    fun store(
+        holderId: String,
+        issued: IssuedCredential,
+        walletKey: WalletKey? = null,
+        keyAliasHint: String? = null,
+    ): Long
 }
 
 @Component
 class JpaIssuedCredentialStorage(
     private val repository: WalletCredentialRepository,
+    private val walletKeyRepository: WalletKeyRepository,
     private val disclosureCipher: DisclosureCipherService,
     private val mdocCredentialCodec: MdocCredentialCodec,
     private val mdocDocTypeRegistry: MdocDocTypeRegistry,
+    private val keyBindingRuntimeService: KeyBindingRuntimeService,
 ) : IssuedCredentialStorage {
     override fun store(
         holderId: String,
         issued: IssuedCredential,
         walletKey: WalletKey?,
+        keyAliasHint: String?,
     ): Long {
         val (encoded, encryptedDisclosures) = when (issued.format) {
             IssuanceCredentialFormat.SD_JWT_VC -> splitSdJwt(issued.rawPayload)
@@ -49,14 +60,28 @@ class JpaIssuedCredentialStorage(
 
         val credentialType = inferCredentialType(issued.credentialConfigurationId, issued.format)
 
+        val resolvedKey = walletKey
+            ?: keyAliasHint?.let { walletKeyRepository.findByKeyAlias(it).orElse(null) }
+
         val entity = WalletCredential(
             userId = holderId,
             credentialType = credentialType,
             encodedData = encoded,
             encryptedDisclosures = encryptedDisclosures,
-            walletKey = walletKey,
+            walletKey = resolvedKey,
         )
-        return repository.save(entity).id ?: error("WalletCredential persisted without id")
+        val savedId = repository.save(entity).id ?: error("WalletCredential persisted without id")
+        resolvedKey?.let {
+            keyBindingRuntimeService.bindCredentialToKey(
+                credentialId = savedId,
+                keyAlias = it.keyAlias,
+                format = when (issued.format) {
+                    IssuanceCredentialFormat.MSO_MDOC -> CredentialBindingFormat.MDOC
+                    else -> CredentialBindingFormat.SD_JWT
+                },
+            )
+        }
+        return savedId
     }
 
     private fun splitSdJwt(raw: String): Pair<String, String> {

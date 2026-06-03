@@ -31,18 +31,16 @@ class AuthorizationInterceptor(
             return true
         }
 
-        // Allow access to endpoints used for the initial security handshake and device pairing
-        // TODO: Register path will be protected with a High LoA identity check
-        if (request.requestURI.contains("/auth/challenge") || request.requestURI.contains("/auth/register")) {
+        // Public bootstrap endpoints. Binding endpoints remain protected.
+        if (
+            request.requestURI.contains("/auth/challenge") ||
+            request.requestURI.contains("/auth/register") ||
+            request.requestURI.endsWith("/wallet/init")
+        ) {
             return true
         }
 
         val authHeader = request.getHeader("X-Wallet-Authorization")
-
-        // DevelopmentBypass: "xxx" token for easy Swagger testing
-        if (authHeader == "xxx") {
-            return true
-        }
 
         // Expects "fido2-assertion:<Base64URL_JSON>"
         if (authHeader != null && authHeader.startsWith("fido2-assertion:")) {

@@ -7,4 +7,5 @@ import java.util.*
 @Repository
 interface WalletKeyRepository : JpaRepository<WalletKey, Long> {
     fun findByUserId(userId: String): Optional<WalletKey>
+    fun findByKeyAlias(keyAlias: String): Optional<WalletKey>
 }

@@ -265,7 +265,7 @@ class TrustSnapshotServiceTest {
     }
 
     private fun writeTempFile(content: String): String {
-        val path = Files.createTempFile("phase5-trust", ".tmp")
+        val path = Files.createTempFile("lote-trust", ".tmp")
         Files.writeString(path, content)
         return path.toAbsolutePath().toString()
     }

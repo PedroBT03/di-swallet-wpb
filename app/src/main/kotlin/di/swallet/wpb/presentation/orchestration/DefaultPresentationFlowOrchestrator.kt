@@ -408,7 +408,7 @@ class DefaultPresentationFlowOrchestrator(
                 queryId = it.queryId,
                 credentialType = it.credentialType,
                 format = it.format,
-                requestedClaims = it.requestedClaims,
+                requestedClaimPaths = it.requestedClaimPaths,
             )
         }
     }

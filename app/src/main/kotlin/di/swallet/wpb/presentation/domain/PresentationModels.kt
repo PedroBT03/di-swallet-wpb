@@ -77,16 +77,18 @@ data class VerifierIdentity(
 /**
  * A single DCQL-style credential query carried through the lifecycle.
  *
- * `requestedClaims` is a flat list of top-level claim names that the verifier
- * asked for. For HAIP Phase 1 (SD-JWT only) we treat the DCQL `claims[].path`
- * array as a single-element top-level claim name.
+ * [requestedClaimPaths] preserves the full DCQL Claims Path Pointer per claim entry.
  */
 data class CredentialQuery(
     val id: String,
     val format: CredentialFormat,
     val credentialTypeHints: List<String> = emptyList(),
-    val requestedClaims: List<String> = emptyList(),
-)
+    val requestedClaimPaths: List<ClaimPath> = emptyList(),
+) {
+    /** Dot-notation projection for registry (TS5) and mdoc claim filters. */
+    val requestedClaims: List<String>
+        get() = requestedClaimPaths.map { it.toDotNotation() }
+}
 
 /**
  * Parsed requirements extracted from the verifier request.
@@ -136,8 +138,7 @@ data class ConsentDecision(
 /**
  * Minimal candidate record that the matcher exposes to the orchestrator.
  *
- * `requestedClaims` carries the claim names that the verifier asked for via
- * DCQL, so the VP builder can filter selective disclosures accordingly.
+ * [requestedClaimPaths] drives SD-JWT selective disclosure in the VP builder.
  */
 data class CredentialCandidate(
     val candidateId: String,
@@ -146,8 +147,11 @@ data class CredentialCandidate(
     val queryId: String,
     val credentialType: String,
     val format: CredentialFormat,
-    val requestedClaims: List<String> = emptyList(),
-)
+    val requestedClaimPaths: List<ClaimPath> = emptyList(),
+) {
+    val requestedClaims: List<String>
+        get() = requestedClaimPaths.map { it.toDotNotation() }
+}
 
 /**
  * Selected credentials after consent.
@@ -159,8 +163,11 @@ data class SelectedCredential(
     val queryId: String,
     val credentialType: String,
     val format: CredentialFormat,
-    val requestedClaims: List<String> = emptyList(),
-)
+    val requestedClaimPaths: List<ClaimPath> = emptyList(),
+) {
+    val requestedClaims: List<String>
+        get() = requestedClaimPaths.map { it.toDotNotation() }
+}
 
 /**
  * Minimal VP token abstraction used by the orchestrator.

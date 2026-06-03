@@ -1,5 +1,7 @@
 package di.swallet.wpb.openid4vp.protocol
 
+import di.swallet.wpb.presentation.domain.ClaimPath
+import di.swallet.wpb.presentation.domain.ClaimPathSegment
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.CredentialQuery
 import kotlinx.serialization.json.Json
@@ -59,12 +61,12 @@ object DcqlSupport {
         val id = entry["id"]?.jsonPrimitive?.contentOrNull ?: "query_$index"
         val format = entry["format"]?.jsonPrimitive?.contentOrNull?.let(::toFormat) ?: CredentialFormat.SD_JWT
         val typeHints = extractTypeHints(entry)
-        val claims = extractClaims(entry)
+        val claimPaths = extractClaimPaths(entry)
         return CredentialQuery(
             id = id,
             format = format,
             credentialTypeHints = typeHints,
-            requestedClaims = claims,
+            requestedClaimPaths = claimPaths,
         )
     }
 
@@ -82,25 +84,41 @@ object DcqlSupport {
         return (vctValues + docTypeValues + docTypeSingle).distinct()
     }
 
-    private fun extractClaims(entry: JsonObject): List<String> {
-        // Standard DCQL: claims[].path[]
+    private fun extractClaimPaths(entry: JsonObject): List<ClaimPath> {
         val claimsArray = entry["claims"] as? JsonArray
         if (claimsArray != null) {
             return claimsArray.mapNotNull { claim ->
                 val obj = claim as? JsonObject ?: return@mapNotNull null
-                when (val path = obj["path"]) {
-                    is JsonArray -> path.firstOrNull()?.jsonPrimitive?.contentOrNull
-                    is JsonPrimitive -> path.contentOrNull
-                    null, JsonNull -> obj["name"]?.jsonPrimitive?.contentOrNull
-                    else -> null
-                }
-            }.distinct()
+                parseClaimPathElement(obj["path"])
+                    ?: obj["name"]?.jsonPrimitive?.contentOrNull?.let { ClaimPath.key(it) }
+            }
         }
-        // Emulator shape: fields[] is a flat array of names
         val fieldsArray = entry["fields"] as? JsonArray
         if (fieldsArray != null) {
-            return fieldsArray.mapNotNull { it.jsonPrimitive.contentOrNull }.distinct()
+            return fieldsArray.mapNotNull { field ->
+                field.jsonPrimitive.contentOrNull?.let { ClaimPath.key(it) }
+            }
         }
         return emptyList()
+    }
+
+    private fun parseClaimPathElement(pathElement: JsonElement?): ClaimPath? {
+        val segments = when (pathElement) {
+            is JsonArray -> pathElement.mapNotNull { segment -> parsePathSegment(segment) }
+            is JsonPrimitive -> pathElement.contentOrNull?.let { listOf(ClaimPathSegment.Key(it)) }
+            null, JsonNull -> null
+            else -> null
+        }
+        return ClaimPath.fromDcqlPath(segments ?: return null)
+    }
+
+    private fun parsePathSegment(segment: JsonElement): ClaimPathSegment? = when (segment) {
+        JsonNull -> ClaimPathSegment.Wildcard
+        is JsonPrimitive -> when {
+            segment.isString -> ClaimPathSegment.Key(segment.content)
+            else -> segment.content.toIntOrNull()?.let { ClaimPathSegment.Index(it) }
+                ?: segment.content.toLongOrNull()?.let { ClaimPathSegment.Index(it.toInt()) }
+        }
+        else -> null
     }
 }

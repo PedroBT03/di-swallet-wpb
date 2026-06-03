@@ -27,7 +27,7 @@ import org.mockito.Mockito.`when`
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicLong
 
-class Phase71IssuerSignedBindingE2ETest {
+class IssuerSignedMdocBindingE2ETest {
     private val runtime = MdocIsoRuntimeService()
     private val codec = MdocCredentialCodec(runtime)
     private val registry = MdocDocTypeRegistry()
@@ -98,7 +98,7 @@ class Phase71IssuerSignedBindingE2ETest {
                 queryId = "pid",
                 credentialType = "eu.europa.ec.eudi.pid.1",
                 format = CredentialFormat.MDOC,
-                requestedClaims = listOf("given_name"),
+                requestedClaimPaths = listOf(di.swallet.wpb.presentation.domain.ClaimPath.key("given_name")),
             ),
             verifierAudience = "verifier-demo-client",
             verifierNonce = "nonce-123",

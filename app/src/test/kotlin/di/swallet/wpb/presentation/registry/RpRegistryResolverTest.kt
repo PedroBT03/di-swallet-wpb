@@ -52,7 +52,7 @@ class RpRegistryResolverTest {
                 CredentialQuery(
                     id = "pid",
                     format = CredentialFormat.SD_JWT,
-                    requestedClaims = listOf("given_name"),
+                    requestedClaimPaths = listOf(di.swallet.wpb.presentation.domain.ClaimPath.key("given_name")),
                 ),
             ),
         )
@@ -85,7 +85,13 @@ class RpRegistryResolverTest {
 
         val result = resolver.resolveAndValidate(
             rpIdentifier = "rp-123",
-            credentialQueries = listOf(CredentialQuery("pid", CredentialFormat.SD_JWT, requestedClaims = listOf("given_name"))),
+            credentialQueries = listOf(
+                CredentialQuery(
+                    "pid",
+                    CredentialFormat.SD_JWT,
+                    requestedClaimPaths = listOf(di.swallet.wpb.presentation.domain.ClaimPath.key("given_name")),
+                ),
+            ),
         )
         assertTrue(result is RegistryResolution.Rejected)
         val rejected = result as RegistryResolution.Rejected
@@ -118,7 +124,13 @@ class RpRegistryResolverTest {
 
         val result = resolver.resolveAndValidate(
             rpIdentifier = "rp-123",
-            credentialQueries = listOf(CredentialQuery("pid", CredentialFormat.SD_JWT, requestedClaims = listOf("given_name"))),
+            credentialQueries = listOf(
+                CredentialQuery(
+                    "pid",
+                    CredentialFormat.SD_JWT,
+                    requestedClaimPaths = listOf(di.swallet.wpb.presentation.domain.ClaimPath.key("given_name")),
+                ),
+            ),
         )
         assertTrue(result is RegistryResolution.Rejected)
         val rejected = result as RegistryResolution.Rejected

@@ -19,7 +19,12 @@ class MockIssuerService {
             "family_name" to "Tavares",
             "birthdate" to "2000-01-01",
             "nationality" to "PT",
-            "userId" to userId
+            "nationalities" to listOf("PT", "ES"),
+            "address" to mapOf(
+                "locality" to "Lisbon",
+                "country" to "PT",
+            ),
+            "userId" to userId,
         )
     }
 }

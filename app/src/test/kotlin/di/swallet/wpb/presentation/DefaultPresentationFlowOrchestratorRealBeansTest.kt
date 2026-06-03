@@ -45,7 +45,7 @@ import java.security.cert.X509Certificate
 import java.time.Instant
 
 /**
- * Locks in the Phase 1 lifecycle fix: with the **real** trust validator,
+ * Locks in the lifecycle fix: with the **real** trust validator,
  * credential matcher and policy engine, the wallet must reach
  * `CONSENT_PENDING` when there is at least one matching wallet credential —
  * even with `demo-mode = false`. The previous bug had policy run before
@@ -158,7 +158,7 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
             ),
             registryValidator = registryValidator,
             policyEngine = DefaultPolicyEngine(demoMode = demoMode),
-            credentialMatcher = DefaultCredentialMatcher(
+            credentialMatcher = PresentationTestSupport.credentialMatcher(
                 repository,
                 MdocCredentialCodec(MdocIsoRuntimeService()),
                 MdocDocTypeRegistry(),
@@ -174,15 +174,7 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
     fun `non-demo session with matching wallet credential reaches consent`() = runBlocking {
         val repository = mock(WalletCredentialRepository::class.java)
         `when`(repository.findByUserId("holder-1")).thenReturn(
-            listOf(
-                WalletCredential(
-                    id = 1L,
-                    userId = "holder-1",
-                    credentialType = "PID",
-                    encodedData = "HEAD.PAYLOAD.SIG",
-                    encryptedDisclosures = "",
-                ),
-            ),
+            listOf(PresentationTestSupport.sdJwtCredential(1L, "holder-1", "given_name")),
         )
 
         val (orchestrator, _) = orchestrator(repository)
@@ -218,15 +210,7 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
     fun `consent submission dispatches positive VP`() = runBlocking {
         val repository = mock(WalletCredentialRepository::class.java)
         `when`(repository.findByUserId("holder-1")).thenReturn(
-            listOf(
-                WalletCredential(
-                    id = 1L,
-                    userId = "holder-1",
-                    credentialType = "PID",
-                    encodedData = "HEAD.PAYLOAD.SIG",
-                    encryptedDisclosures = "",
-                ),
-            ),
+            listOf(PresentationTestSupport.sdJwtCredential(1L, "holder-1", "given_name")),
         )
 
         val (orchestrator, gateway) = orchestrator(repository)

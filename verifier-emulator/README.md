@@ -8,6 +8,7 @@ Files
 
 - `app.py` - Flask emulator.
 - `requests/` - example Authorization Requests (`direct_post.json`, `redirect_query.json`, `redirect_fragment.json`).
+- `requests/conformance/` - DCQL fixtures for selective-disclosure smoke runs (`simple_claim.json`, `nested_claim.json`, etc.).
 
 Quick start
 
@@ -71,5 +72,5 @@ Troubleshooting
 
 Next steps
 
-- Hook wallet authorize flow using `request_uri` pointing to `http://localhost:8081/request/<file>.json`.
+- Hook wallet authorize flow using `request_uri` pointing to `http://localhost:8081/request/<file>.json` (e.g. `http://localhost:8081/request/conformance/simple_claim.json`).
 - Use `/logs` to follow lifecycle: resolution → matching → consent → dispatch → callback.

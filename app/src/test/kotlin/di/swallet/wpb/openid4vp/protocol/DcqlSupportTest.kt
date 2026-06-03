@@ -1,5 +1,6 @@
 package di.swallet.wpb.openid4vp.protocol
 
+import di.swallet.wpb.presentation.domain.ClaimPathSegment
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -32,6 +33,42 @@ class DcqlSupportTest {
         assertEquals(CredentialFormat.SD_JWT, q.format)
         assertEquals(listOf("PID"), q.credentialTypeHints)
         assertEquals(listOf("given_name", "family_name"), q.requestedClaims)
+        assertEquals(
+            listOf(listOf("given_name"), listOf("family_name")),
+            q.requestedClaimPaths.map { path -> path.segments.map { it.toPathString() } },
+        )
+    }
+
+    @Test
+    fun `parses multi-segment DCQL path`() {
+        val json = """
+            {
+              "credentials": [{
+                "id": "pid",
+                "format": "vc+sd-jwt",
+                "claims": [{ "path": ["address", "locality"] }]
+              }]
+            }
+        """.trimIndent()
+        val path = DcqlSupport.parse(json).single().requestedClaimPaths.single()
+        assertEquals(listOf("address", "locality"), path.segments.map { it.toPathString() })
+        assertEquals("address.locality", path.toDotNotation())
+    }
+
+    @Test
+    fun `parses array wildcard segment as null`() {
+        val json = """
+            {
+              "credentials": [{
+                "id": "pid",
+                "format": "vc+sd-jwt",
+                "claims": [{ "path": ["nationalities", null] }]
+              }]
+            }
+        """.trimIndent()
+        val segments = DcqlSupport.parse(json).single().requestedClaimPaths.single().segments
+        assertEquals(ClaimPathSegment.Key("nationalities"), segments[0])
+        assertEquals(ClaimPathSegment.Wildcard, segments[1])
     }
 
     @Test

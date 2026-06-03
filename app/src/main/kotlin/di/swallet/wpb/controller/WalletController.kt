@@ -17,11 +17,13 @@ import di.swallet.wpb.service.WalletInitCommand
 import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.service.format.PresentationService
 import di.swallet.wpb.service.format.DisclosureCipherService
+import di.swallet.wpb.domain.CredentialBindingFormat
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.UserDevice
 import di.swallet.wpb.security.ChallengeService
+import di.swallet.wpb.service.KeyBindingRuntimeService
 
 /**
  * Data Transfer Object for signing requests.
@@ -74,6 +76,7 @@ class WalletController(
     private val statusListService: StatusListService,
     private val fido2Service: Fido2Service,
     private val deviceBindingService: DeviceBindingService,
+    private val keyBindingRuntimeService: KeyBindingRuntimeService,
 ) {
 
     // --- SECTION 1: AUTHENTICATION & ONBOARDING ---
@@ -234,25 +237,18 @@ class WalletController(
         val walletKey = hsmService.getUserKey(userId)
         val userData = mockIssuerService.fetchUserData(userId)
 
-        // Process each attribute with salted hashing to enable selective disclosure
-        val disclosures = mutableListOf<String>()
-        val hashedDisclosures = mutableListOf<String>()
-        userData.forEach { (key, value) ->
-            val disclosure = sdJwtService.createDisclosure(key, value)
-            disclosures.add(disclosure)
-            hashedDisclosures.add(sdJwtService.hashDisclosure(disclosure))
-        }
+        val issued = sdJwtService.disclosuresFromClaimMap(userData)
 
         val sdPayload = mapOf(
             "iss" to "https://pt-mock-issuer.gov.pt",
             "sub" to userId,
             "iat" to System.currentTimeMillis() / 1000,
-            "_sd" to hashedDisclosures.sorted(),
+            "_sd" to issued.digests,
             "_sd_alg" to "sha-256"
         )
 
         val signedJwt = hsmService.signSdJwt(userId, sdPayload)
-        val encryptedDisclosures = disclosureCipherService.encrypt(disclosures)
+        val encryptedDisclosures = disclosureCipherService.encrypt(issued.disclosures)
 
         val credential = WalletCredential(
             userId = userId,
@@ -262,7 +258,14 @@ class WalletController(
             walletKey = walletKey
         )
 
-        return credentialRepository.save(credential)
+        val saved = credentialRepository.save(credential)
+        val credentialId = saved.id ?: error("WalletCredential persisted without id")
+        keyBindingRuntimeService.bindCredentialToKey(
+            credentialId = credentialId,
+            keyAlias = walletKey.keyAlias,
+            format = CredentialBindingFormat.SD_JWT,
+        )
+        return saved
     }
 
     // --- SECTION 4: CREDENTIAL USAGE & SIGNING ---

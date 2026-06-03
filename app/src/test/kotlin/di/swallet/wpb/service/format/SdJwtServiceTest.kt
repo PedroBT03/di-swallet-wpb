@@ -1,5 +1,6 @@
 package di.swallet.wpb.service.format
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.format.sdjwt.SdJwtService
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -7,7 +8,7 @@ import com.nimbusds.jose.util.Base64URL
 
 class SdJwtServiceTest {
 
-    private val sdJwtService = SdJwtService()
+    private val sdJwtService = SdJwtService(ObjectMapper())
 
     /**
      * Verifies that a disclosure is a valid Base64URL encoded JSON array.
@@ -36,5 +37,30 @@ class SdJwtServiceTest {
         val disclosure2 = sdJwtService.createDisclosure("age", 25)
         
         assertNotEquals(disclosure1, disclosure2)
+    }
+
+    @Test
+    fun `nested object issuance includes parent and child disclosures`() {
+        val issued = sdJwtService.createNestedObjectDisclosures(
+            "address",
+            mapOf("locality" to "Lisbon"),
+        )
+        assertEquals(2, issued.disclosures.size)
+        assertEquals(2, issued.digests.size)
+        val decoded = String(Base64URL(issued.disclosures.last()).decode())
+        assertTrue(decoded.contains("_sd"))
+        assertTrue(decoded.contains("address"))
+    }
+
+    @Test
+    fun `disclosuresFromClaimMap nests maps and flattens scalars`() {
+        val issued = sdJwtService.disclosuresFromClaimMap(
+            mapOf(
+                "given_name" to "Pedro",
+                "address" to mapOf("locality" to "Lisbon"),
+            ),
+        )
+        assertEquals(3, issued.disclosures.size)
+        assertEquals(3, issued.digests.size)
     }
 }

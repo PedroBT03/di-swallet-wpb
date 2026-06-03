@@ -1,6 +1,7 @@
 package di.swallet.wpb.service.format
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import di.swallet.wpb.format.sdjwt.SdJwtDisclosureSelector
 import di.swallet.wpb.format.sdjwt.SdJwtService
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -8,8 +9,10 @@ import org.junit.jupiter.api.Test
 class PresentationServiceTest {
 
     private val objectMapper = ObjectMapper()
-    private val sdJwtService = SdJwtService()
-    private val presentationService = PresentationService(objectMapper)
+    private val sdJwtService = SdJwtService(objectMapper)
+    private val presentationService = PresentationService(
+        SdJwtDisclosureSelector(objectMapper, sdJwtService),
+    )
 
     /**
      * Verifies that the presentation only includes requested disclosures.

@@ -57,12 +57,12 @@ import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
-class Phase7MdocRuntimeE2ETest {
+class MdocOpenId4VpRuntimeE2ETest {
     private val mdocRegistry = MdocDocTypeRegistry()
     private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
 
     @Test
-    fun `phase7 mdoc runtime supports PID and mDL positive and negative`() = runBlocking {
+    fun `mdoc runtime supports PID and mDL positive and negative`() = runBlocking {
         val storedCredentials = mutableListOf<WalletCredential>()
         val credentialRepository = inMemoryRepository(storedCredentials)
         val storage = JpaIssuedCredentialStorage(
@@ -144,19 +144,19 @@ class Phase7MdocRuntimeE2ETest {
         gateway: PresentationGatewayStub,
         repository: WalletCredentialRepository,
     ): DefaultPresentationFlowOrchestrator {
-        val matcher = DefaultCredentialMatcher(
-            walletCredentialRepository = repository,
-            mdocCredentialCodec = mdocCodec,
-            mdocDocTypeRegistry = mdocRegistry,
+        val matcher = PresentationTestSupport.credentialMatcher(
+            repository,
+            mdocCodec,
+            mdocRegistry,
             demoMode = false,
         )
         val sdJwtBuilder = SdJwtVpBuilder(
             walletCredentialRepository = repository,
             disclosureCipherService = DisclosureCipherService(WalletProperties()),
+            disclosureSelector = PresentationTestSupport.disclosureSelector,
             keyBindingJwtSigner = object : KeyBindingJwtSigner {
                 override fun signKeyBindingJwt(userId: String, payload: Map<String, Any>): String = "kb.jwt.stub"
             },
-            objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper(),
         )
         val vpBuilder = DefaultVpTokenBuilder(
             sdJwtVpBuilder = sdJwtBuilder,
@@ -167,14 +167,14 @@ class Phase7MdocRuntimeE2ETest {
             repository = InMemoryPresentationSessionRepository(),
             trustValidator = object : TrustValidator {
                 override fun validate(context: PresentationContext): PresentationContext =
-                    context.copy(trustDecision = TrustDecision(trusted = true, reason = "phase7-e2e"))
+                    context.copy(trustDecision = TrustDecision(trusted = true, reason = "mdoc-runtime-e2e"))
             },
             registryValidator = object : RegistryValidator {
                 override fun validate(context: PresentationContext): PresentationContext =
                     context.copy(
                         registryDecision = RegistryDecision(
                             accepted = true,
-                            reason = "phase7-e2e",
+                            reason = "mdoc-runtime-e2e",
                             rpIdentifier = context.authorizationRequest?.clientId,
                             sourceEndpoint = "/wrp/check-intended-use",
                             intendedUseChecked = true,

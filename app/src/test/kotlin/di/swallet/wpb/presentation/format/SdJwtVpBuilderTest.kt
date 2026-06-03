@@ -8,7 +8,9 @@ import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.SelectedCredential
 import di.swallet.wpb.service.format.DisclosureCipherService
 import di.swallet.wpb.format.sdjwt.SdJwtVpBuilder
+import di.swallet.wpb.format.sdjwt.SdJwtDisclosureSelector
 import di.swallet.wpb.format.sdjwt.SdJwtService
+import di.swallet.wpb.presentation.domain.ClaimPath
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -22,7 +24,8 @@ import java.util.Optional
 class SdJwtVpBuilderTest {
 
     private val objectMapper = ObjectMapper()
-    private val sdJwtService = SdJwtService()
+    private val sdJwtService = SdJwtService(objectMapper)
+    private val disclosureSelector = SdJwtDisclosureSelector(objectMapper, sdJwtService)
 
     private class CapturingSigner : KeyBindingJwtSigner {
         var lastUserId: String? = null
@@ -54,7 +57,12 @@ class SdJwtVpBuilderTest {
         `when`(cipher.decrypt(anyString())).thenReturn(listOf(disclosureGiven, disclosureCountry))
 
         val signer = CapturingSigner()
-        val builder = SdJwtVpBuilder(repository, cipher, signer, objectMapper)
+        val builder = SdJwtVpBuilder(
+            repository,
+            cipher,
+            disclosureSelector,
+            signer,
+        )
 
         val selected = SelectedCredential(
             candidateId = "c",
@@ -63,7 +71,7 @@ class SdJwtVpBuilderTest {
             queryId = "pid",
             credentialType = "PID",
             format = CredentialFormat.SD_JWT,
-            requestedClaims = listOf("given_name"),
+            requestedClaimPaths = listOf(ClaimPath.key("given_name")),
         )
 
         val result = builder.build(selected, "verifier-demo-client", "n-123")
@@ -80,7 +88,7 @@ class SdJwtVpBuilderTest {
     }
 
     @Test
-    fun `includes all disclosures when no specific claims are requested`() {
+    fun `includes no disclosures when claim paths are empty`() {
         val disclosureA = sdJwtService.createDisclosure("a", "1")
         val disclosureB = sdJwtService.createDisclosure("b", "2")
         val credential = WalletCredential(
@@ -95,7 +103,12 @@ class SdJwtVpBuilderTest {
         val cipher = mock(DisclosureCipherService::class.java)
         `when`(cipher.decrypt(anyString())).thenReturn(listOf(disclosureA, disclosureB))
 
-        val builder = SdJwtVpBuilder(repository, cipher, CapturingSigner(), objectMapper)
+        val builder = SdJwtVpBuilder(
+            repository,
+            cipher,
+            disclosureSelector,
+            CapturingSigner(),
+        )
         val selected = SelectedCredential(
             candidateId = "c",
             credentialId = 1L,
@@ -103,10 +116,51 @@ class SdJwtVpBuilderTest {
             queryId = "q",
             credentialType = "PID",
             format = CredentialFormat.SD_JWT,
-            requestedClaims = emptyList(),
+            requestedClaimPaths = emptyList(),
         )
         val result = builder.build(selected, "verifier", "n")
-        assertEquals(2, result.disclosuresIncluded)
+        assertEquals(0, result.disclosuresIncluded)
+        assertTrue(result.presentation.startsWith("HEAD.PAYLOAD.SIG~"))
+        assertFalse(result.presentation.contains(disclosureA))
+        assertTrue(result.presentation.endsWith("KB.JWT.SIG"))
+    }
+
+    @Test
+    fun `includes dot-notation disclosure for nested DCQL path`() {
+        val locality = sdJwtService.createDisclosure("address.locality", "Lisbon")
+        val country = sdJwtService.createDisclosure("address.country", "PT")
+        val credential = WalletCredential(
+            id = 2L,
+            userId = "holder",
+            credentialType = "PID",
+            encodedData = "HEAD.PAYLOAD.SIG",
+            encryptedDisclosures = "ignored",
+        )
+        val repository = mock(WalletCredentialRepository::class.java)
+        `when`(repository.findById(2L)).thenReturn(Optional.of(credential))
+        val cipher = mock(DisclosureCipherService::class.java)
+        `when`(cipher.decrypt(anyString())).thenReturn(listOf(locality, country))
+
+        val builder = SdJwtVpBuilder(
+            repository,
+            cipher,
+            disclosureSelector,
+            CapturingSigner(),
+        )
+        val path = ClaimPath.fromDotNotation("address.locality")
+        val selected = SelectedCredential(
+            candidateId = "c",
+            credentialId = 2L,
+            holderId = "holder",
+            queryId = "pid",
+            credentialType = "PID",
+            format = CredentialFormat.SD_JWT,
+            requestedClaimPaths = listOf(path),
+        )
+        val result = builder.build(selected, "verifier", "nonce")
+        assertEquals(1, result.disclosuresIncluded)
+        assertTrue(result.presentation.contains(locality))
+        assertFalse(result.presentation.contains(country))
     }
 
     @Test
@@ -114,8 +168,8 @@ class SdJwtVpBuilderTest {
         val builder = SdJwtVpBuilder(
             walletCredentialRepository = mock(WalletCredentialRepository::class.java),
             disclosureCipherService = mock(DisclosureCipherService::class.java),
+            disclosureSelector = disclosureSelector,
             keyBindingJwtSigner = CapturingSigner(),
-            objectMapper = objectMapper,
         )
         val selected = SelectedCredential(
             candidateId = "demo:q",

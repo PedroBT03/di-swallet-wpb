@@ -1,13 +1,19 @@
 package di.swallet.wpb.controller
 
 import di.swallet.wpb.BaseIntegrationTest
+import di.swallet.wpb.domain.CredentialBindingFormat
+import di.swallet.wpb.domain.CredentialKeyBindingRepository
 import di.swallet.wpb.domain.WalletCredential
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.*
 import java.util.*
 
 class WalletCredentialTest : BaseIntegrationTest() {
+
+    @Autowired
+    private lateinit var credentialKeyBindingRepository: CredentialKeyBindingRepository
 
     /**
      * Validates the Format Engine ability to issue complex SD-JWT credentials.
@@ -34,8 +40,12 @@ class WalletCredentialTest : BaseIntegrationTest() {
         )
         
         assertThat(issueResponse.statusCode).isEqualTo(HttpStatus.OK)
+        val credentialId = issueResponse.body?.id!!
         val encodedData = issueResponse.body?.encodedData
         assertThat(encodedData).doesNotContain("~")
+        val binding = credentialKeyBindingRepository.findByCredentialId(credentialId)
+        assertThat(binding).isPresent
+        assertThat(binding.get().bindingFormat).isEqualTo(CredentialBindingFormat.SD_JWT)
         logger.info("Result: Stored credential payload is minimized (signed JWT only)")
 
         // Step 3: PersistenceVerification. Fresh handshake to list credentials

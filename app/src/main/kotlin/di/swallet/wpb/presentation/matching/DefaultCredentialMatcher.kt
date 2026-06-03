@@ -3,7 +3,9 @@ package di.swallet.wpb.presentation.matching
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.sdjwt.SdJwtDisclosureSelector
 import di.swallet.wpb.openid4vp.protocol.DcqlSupport
+import di.swallet.wpb.service.format.DisclosureCipherService
 import di.swallet.wpb.presentation.domain.CredentialCandidate
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.CredentialQuery
@@ -25,6 +27,8 @@ class DefaultCredentialMatcher(
     private val walletCredentialRepository: WalletCredentialRepository,
     private val mdocCredentialCodec: MdocCredentialCodec,
     private val mdocDocTypeRegistry: MdocDocTypeRegistry,
+    private val disclosureCipherService: DisclosureCipherService,
+    private val sdJwtDisclosureSelector: SdJwtDisclosureSelector,
     @param:Value("\${wpb.openid4vp.demo-mode:false}") private val demoMode: Boolean,
 ) : CredentialMatcher {
 
@@ -74,6 +78,7 @@ class DefaultCredentialMatcher(
         }
         return wallet.asSequence()
             .filter(typeFilter)
+            .filter { credential -> sdJwtCredentialSatisfiesQuery(credential, query) }
             .mapNotNull { credential ->
                 val credentialPk = credential.id ?: return@mapNotNull null
                 CredentialCandidate(
@@ -83,10 +88,27 @@ class DefaultCredentialMatcher(
                     queryId = query.id,
                     credentialType = credential.credentialType,
                     format = CredentialFormat.SD_JWT,
-                    requestedClaims = query.requestedClaims,
+                    requestedClaimPaths = query.requestedClaimPaths,
                 )
             }
             .toList()
+    }
+
+    private fun sdJwtCredentialSatisfiesQuery(
+        credential: di.swallet.wpb.domain.WalletCredential,
+        query: CredentialQuery,
+    ): Boolean {
+        if (query.requestedClaimPaths.isEmpty()) return true
+        val disclosures = loadStoredDisclosures(credential)
+        return sdJwtDisclosureSelector.canSatisfy(disclosures, query.requestedClaimPaths)
+    }
+
+    private fun loadStoredDisclosures(credential: di.swallet.wpb.domain.WalletCredential): List<String> {
+        if (credential.encodedData.contains('~')) {
+            return credential.encodedData.split('~').drop(1).filter { it.isNotBlank() }
+        }
+        if (credential.encryptedDisclosures.isBlank()) return emptyList()
+        return disclosureCipherService.decrypt(credential.encryptedDisclosures)
     }
 
     private fun matchMdoc(
@@ -102,7 +124,8 @@ class DefaultCredentialMatcher(
                     query.credentialTypeHints.any { hint -> hint.equals(effectiveDocType, ignoreCase = true) }
                 if (!docTypeMatches) return@mapNotNull null
                 val definition = mdocDocTypeRegistry.resolve(effectiveDocType)
-                val canonicalRequested = query.requestedClaims.map { claim ->
+                val canonicalRequested = query.requestedClaimPaths.map { path ->
+                    val claim = path.toDotNotation()
                     definition?.claimMapping?.get(claim) ?: definition?.claimMapping?.get(claim.lowercase()) ?: claim
                 }
                 val availableClaimNames = decoded.claims.keys.map { it.substringAfterLast('.') }.toSet()
@@ -117,7 +140,7 @@ class DefaultCredentialMatcher(
                     queryId = query.id,
                     credentialType = effectiveDocType,
                     format = CredentialFormat.MDOC,
-                    requestedClaims = canonicalRequested,
+                    requestedClaimPaths = query.requestedClaimPaths,
                 )
             }
             .toList()
@@ -133,7 +156,7 @@ class DefaultCredentialMatcher(
                 queryId = query.id,
                 credentialType = query.credentialTypeHints.firstOrNull() ?: "DemoCredential",
                 format = query.format,
-                requestedClaims = query.requestedClaims,
+                requestedClaimPaths = query.requestedClaimPaths,
             ),
         )
     }

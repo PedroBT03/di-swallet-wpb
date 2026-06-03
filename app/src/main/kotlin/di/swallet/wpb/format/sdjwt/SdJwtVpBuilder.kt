@@ -1,7 +1,5 @@
 package di.swallet.wpb.format.sdjwt
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.nimbusds.jose.util.Base64URL
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.CredentialBindingFormat
 import di.swallet.wpb.presentation.domain.SelectedCredential
@@ -21,8 +19,8 @@ import java.util.Base64
  *
  * Where:
  *  - `<issuer-signed-jwt>` is the previously issued SD-JWT (no disclosures).
- *  - `<dN>` are only the disclosures whose claim names match the verifier
- *    request (or all disclosures when the request did not list any).
+ *  - `<dN>` are only the disclosures required for the DCQL claim paths
+ *    (including ancestor `_sd` closure); empty paths → no disclosures.
  *  - `<kb-jwt>` is signed inside the HSM, binding the presentation to the
  *    verifier `nonce`, `aud` and to the canonical SD-JWT digest (`sd_hash`).
  */
@@ -30,8 +28,8 @@ import java.util.Base64
 class SdJwtVpBuilder(
     private val walletCredentialRepository: WalletCredentialRepository,
     private val disclosureCipherService: DisclosureCipherService,
+    private val disclosureSelector: SdJwtDisclosureSelector,
     private val keyBindingJwtSigner: KeyBindingJwtSigner,
-    private val objectMapper: ObjectMapper,
     private val credentialBindingValidationService: CredentialBindingValidationService? = null,
 ) {
 
@@ -56,7 +54,10 @@ class SdJwtVpBuilder(
             disclosureCipherService.decrypt(credential.encryptedDisclosures)
         }
 
-        val filteredDisclosures = filterDisclosures(storedDisclosures, selected.requestedClaims)
+        val filteredDisclosures = disclosureSelector.selectDisclosures(
+            storedDisclosures,
+            selected.requestedClaimPaths,
+        )
 
         val canonicalSdJwt = buildString {
             append(signedJwt)
@@ -101,25 +102,6 @@ class SdJwtVpBuilder(
         val payload = "demo-vp:${selected.candidateId}:aud=$verifierAudience:nonce=$verifierNonce"
         logger.warn("vp.built using demo fallback for synthetic candidate {}", selected.candidateId)
         return SdJwtVpResult(presentation = payload, disclosuresIncluded = 0, isDemo = true)
-    }
-
-    private fun filterDisclosures(stored: List<String>, requestedClaims: List<String>): List<String> {
-        if (requestedClaims.isEmpty()) return stored
-        val requestedSet = requestedClaims.toSet()
-        return stored.filter { disclosure ->
-            val claimName = readClaimName(disclosure) ?: return@filter false
-            claimName in requestedSet
-        }
-    }
-
-    private fun readClaimName(base64UrlDisclosure: String): String? {
-        return try {
-            val decoded = String(Base64URL(base64UrlDisclosure).decode())
-            val asList = objectMapper.readValue(decoded, List::class.java)
-            asList.getOrNull(1) as? String
-        } catch (_: Throwable) {
-            null
-        }
     }
 
     private fun sha256Base64Url(value: String): String {

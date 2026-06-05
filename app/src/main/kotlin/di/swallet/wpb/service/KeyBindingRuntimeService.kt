@@ -10,26 +10,30 @@ import di.swallet.wpb.domain.KeyAttestationRecord
 import di.swallet.wpb.domain.KeyAttestationRecordRepository
 import di.swallet.wpb.domain.KeyAttestationState
 import di.swallet.wpb.domain.WalletCredentialRepository
-import di.swallet.wpb.domain.WalletUnit
+import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.issuance.domain.KeyAttestation
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
-import java.util.UUID
 
 @Service
 class KeyBindingRuntimeService(
     private val walletUnitRepository: WalletUnitRepository,
+    private val walletUnitLifecycleService: WalletUnitLifecycleService,
     private val keyAttestationRepository: KeyAttestationRecordRepository,
     private val attestedKeyRepository: AttestedKeyRecordRepository,
     private val credentialRepository: WalletCredentialRepository,
     private val credentialKeyBindingRepository: CredentialKeyBindingRepository,
+    private val walletKeyRepository: WalletKeyRepository,
 ) {
     fun registerKeyAttestation(holderId: String, ka: KeyAttestation): KeyAttestationRecord {
-        val walletUnit = ensureWalletUnit(holderId)
+        val walletUnit = walletUnitLifecycleService.requireIssuanceEligible(holderId)
         val existing = keyAttestationRepository.findByAttestationId(attestationId(ka)).orElse(null)
         if (existing != null) return existing
 
+        val walletKey = walletKeyRepository.findByKeyAlias(ka.keyId).orElse(null)
         val kaRecord = keyAttestationRepository.save(
             KeyAttestationRecord(
                 walletUnit = walletUnit,
@@ -51,6 +55,7 @@ class KeyBindingRuntimeService(
                 keyThumbprint = ka.attestedJkt,
                 batchPosition = 0,
                 state = AttestedKeyState.ATTESTED,
+                walletKey = walletKey,
             ),
         )
         return kaRecord
@@ -66,7 +71,10 @@ class KeyBindingRuntimeService(
         if (credentialKeyBindingRepository.findByCredentialId(credentialId).isPresent) return
 
         val attestedKey = attestedKeyRepository.findByKeyAlias(keyAlias).orElse(null)
-            ?: createSyntheticAttestedKey(credential.userId, keyAlias)
+            ?: throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "No attested key for alias '$keyAlias'; synthetic KA bypass is disabled",
+            )
 
         credentialKeyBindingRepository.save(
             CredentialKeyBinding(
@@ -87,6 +95,7 @@ class KeyBindingRuntimeService(
                     batchPosition = attestedKey.batchPosition,
                     createdAt = attestedKey.createdAt,
                     state = AttestedKeyState.BOUND,
+                    walletKey = attestedKey.walletKey,
                 ),
             )
         }
@@ -109,45 +118,13 @@ class KeyBindingRuntimeService(
                 ),
             )
         }
-    }
 
-    private fun createSyntheticAttestedKey(holderId: String, keyAlias: String): AttestedKeyRecord {
-        val walletUnit = ensureWalletUnit(holderId)
-        val syntheticKa = keyAttestationRepository.save(
-            KeyAttestationRecord(
-                walletUnit = walletUnit,
-                attestationId = "synthetic-$keyAlias",
-                jwt = "synthetic",
-                keyStorage = "unknown",
-                statusListUri = "n/a",
-                statusListIndex = -1,
-                technicalExpiresAt = Instant.now().plusSeconds(365 * 24 * 60 * 60L),
-                statusMaintenanceExpiresAt = Instant.now().plusSeconds(365 * 24 * 60 * 60L),
-                issuedAt = Instant.now(),
-                state = KeyAttestationState.CONSUMED,
-                consumedAt = Instant.now(),
-            ),
-        )
-        return attestedKeyRepository.save(
-            AttestedKeyRecord(
-                keyAttestation = syntheticKa,
-                keyAlias = keyAlias,
-                keyThumbprint = "synthetic-$keyAlias",
-                batchPosition = 0,
-                state = AttestedKeyState.BOUND,
-            ),
-        )
-    }
-
-    private fun ensureWalletUnit(holderId: String): WalletUnit {
-        return walletUnitRepository.findFirstByHolderId(holderId).orElseGet {
-            walletUnitRepository.save(
-                WalletUnit(
-                    holderId = holderId,
-                    state = di.swallet.wpb.domain.WalletUnitState.OPERATIONAL,
-                    walletId = UUID.randomUUID().toString(),
-                ),
-            )
+        credential.userId.let { holderId ->
+            walletUnitRepository.findFirstByHolderId(holderId).ifPresent { walletUnit ->
+                if (walletUnit.state == di.swallet.wpb.domain.WalletUnitState.OPERATIONAL) {
+                    walletUnitLifecycleService.markValid(walletUnit)
+                }
+            }
         }
     }
 

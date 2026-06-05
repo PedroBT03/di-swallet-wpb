@@ -3,6 +3,7 @@ package di.swallet.wpb.service
 import di.swallet.wpb.config.HsmProperties
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletKeyRepository
+import di.swallet.wpb.domain.WalletUnit
 import di.swallet.wpb.format.sdjwt.KeyBindingJwtSigner
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
@@ -72,7 +73,7 @@ class HsmService(
      * Generates an EC KeyPair inside the HSM and stores its metadata.
      * The private key is linked to a self-signed certificate for HSM storage compatibility.
      */
-    fun generateKeyForUser(userId: String): WalletKey {
+    fun generateKeyForUser(userId: String, walletUnit: WalletUnit? = null): WalletKey {
         try {
             val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
             keyStore.load(null, pin.toCharArray())
@@ -93,10 +94,11 @@ class HsmService(
             // 4. Save metadata to database
             val pubKeyBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(keyPair.public.encoded)
             val walletKey = WalletKey(
-                userId = userId, 
-                keyAlias = alias, 
+                userId = userId,
+                keyAlias = alias,
                 publicKeyBase64 = pubKeyBase64,
-                revocationIndex = statusListService.getNextRevocationIndex()
+                revocationIndex = statusListService.getNextRevocationIndex(),
+                walletUnit = walletUnit,
             )
 
             logger.info("WSCA: Key created for user $userId with alias $alias")

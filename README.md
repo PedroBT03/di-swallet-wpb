@@ -627,11 +627,39 @@ WalletUnit
                  └─ Credential
 ```
 
+### What Phase 8 delivers
+
+| Capability | Status |
+|---|---|
+| Flyway baseline (`V1__baseline.sql`) + `ddl-auto=validate` in production | Implemented |
+| `WalletUnitLifecycleService` with enforced transitions (`CANDIDATE` → `OPERATIONAL` → `VALID`) | Implemented |
+| Partial FK enforcement: `WalletKey` → `WalletUnit`, `AttestedKey` → `WalletKey`, `DeviceWalletBinding` → `UserDevice` | Implemented |
+| Synthetic KA bypass removed (fail-closed credential binding) | Implemented |
+| RFC 7638 JWK thumbprints for DPoP / device bindings (`Rfc7638JwkThumbprint.fromJwkJson`) | Implemented |
+| FIDO2 bridge: `userDeviceId` on wallet init (required in prod, optional in test/demo) | Implemented |
+| Integration tests for lifecycle, thumbprints, and updated issuance E2E paths | Implemented |
+
+`CANDIDATE` maps to ARF **Installed**; activation (DPoP bind during init) moves the unit to **OPERATIONAL**; the first device-bound credential moves it to **VALID** (WIAM_07: no issuance before activation).
+
+### Configuration knobs (wallet lifecycle)
+
+```
+wpb.wallet.require-user-device-on-init=true     # production: FIDO2 UserDevice id mandatory on /wallet/init
+spring.jpa.hibernate.ddl-auto=validate            # production: schema owned by Flyway
+spring.flyway.enabled=true
+```
+
+Test profile (`application-test.properties`) disables Flyway and sets `wpb.wallet.require-user-device-on-init=false`.
+
+### Breaking changes
+
+- Wallets created directly at `OPERATIONAL` without init must be re-initialized.
+- Legacy SHA-256-of-JWK-string device thumbprints are invalid after RFC 7638 migration.
+- Credentials without a real KA binding (including former synthetic paths) fail presentation validation.
+- Existing PostgreSQL dev databases created with `ddl-auto=update` should be reset (`docker compose down -v && docker compose up -d`) before first Flyway boot.
+
 ### Non-production simplifications
 
 - Device attestation cryptographic verification pipeline is still simulated
   (no full platform attestation trust-chain validation yet).
-- DB schema evolution currently relies on `spring.jpa.hibernate.ddl-auto=update`;
-  explicit migration scripts are still pending.
-- Wallet init / bind payloads currently accept JWK material directly and use a
-  deterministic thumbprint hash as binding key in this MVP increment.
+- Legacy `/credentials/issue-sd` registers a real KA via `LegacySdJwtIssuanceSupport` for demo flows only.

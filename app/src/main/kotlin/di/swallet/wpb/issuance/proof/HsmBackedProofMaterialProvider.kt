@@ -2,6 +2,7 @@ package di.swallet.wpb.issuance.proof
 
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.service.HsmService
+import di.swallet.wpb.service.WalletUnitLifecycleService
 import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Component
 import java.security.KeyFactory
@@ -18,10 +19,12 @@ import java.util.Base64
 @Component
 class HsmBackedProofMaterialProvider(
     private val hsmService: HsmService,
+    private val walletUnitLifecycleService: WalletUnitLifecycleService,
 ) : ProofMaterialProvider {
     override fun provide(holderId: String, metadata: ResolvedIssuerMetadata?): ProofMaterial {
+        val walletUnit = walletUnitLifecycleService.requireIssuanceEligible(holderId)
         val walletKey = runCatching { hsmService.getUserKey(holderId) }
-            .getOrElse { hsmService.generateKeyForUser(holderId) }
+            .getOrElse { hsmService.generateKeyForUser(holderId, walletUnit) }
         val publicKey = decodeEcPublicKey(walletKey.publicKeyBase64)
         return ProofMaterial(
             keyId = walletKey.keyAlias,

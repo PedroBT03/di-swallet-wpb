@@ -16,11 +16,15 @@ class CredentialBindingValidationService(
         require(binding.bindingFormat == format) {
             "Credential $credentialId bound for ${binding.bindingFormat} but requested for $format"
         }
-        require(binding.attestedKey.state in setOf(AttestedKeyState.ATTESTED, AttestedKeyState.BOUND)) {
-            "Credential $credentialId key is not active"
+        require(binding.attestedKey.state in setOf(AttestedKeyState.BOUND)) {
+            "Credential $credentialId key is not bound"
         }
-        require(binding.attestedKey.keyAttestation.state in setOf(KeyAttestationState.AVAILABLE, KeyAttestationState.CONSUMED)) {
-            "Credential $credentialId key attestation is not valid"
+        val ka = binding.attestedKey.keyAttestation
+        require(ka.state == KeyAttestationState.CONSUMED) {
+            "Credential $credentialId key attestation is not consumed"
+        }
+        require(!ka.attestationId.startsWith("synthetic-") && ka.jwt != "synthetic") {
+            "Credential $credentialId uses a synthetic key attestation"
         }
     }
 }

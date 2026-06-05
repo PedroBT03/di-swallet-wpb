@@ -4,6 +4,8 @@ import di.swallet.wpb.BaseIntegrationTest
 import di.swallet.wpb.domain.CredentialBindingFormat
 import di.swallet.wpb.domain.CredentialKeyBindingRepository
 import di.swallet.wpb.domain.WalletCredential
+import di.swallet.wpb.wallet.WalletTestSupport
+import di.swallet.wpb.controller.WalletInitRequest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -23,6 +25,14 @@ class WalletCredentialTest : BaseIntegrationTest() {
     @Test
     fun `should issue SD-JWT and persist in database`() {
         val testUserId = "user-id-test-${UUID.randomUUID()}"
+
+        // Step 0: Wallet init (Phase 8 activation)
+        val initEntity = HttpEntity(
+            WalletInitRequest(holderId = testUserId, platform = "test", devicePubJwk = WalletTestSupport.ecPublicJwk()),
+            getDynamicHeaders(testUserId),
+        )
+        val initResponse = restTemplate.postForEntity("/api/v1/wallet/init", initEntity, Map::class.java)
+        assertThat(initResponse.statusCode).isEqualTo(HttpStatus.OK)
 
         // Step 1: KeyGeneration. Handshake and create hardware key
         logger.info("Step 1: KeyGeneration. Performing handshake for key creation")

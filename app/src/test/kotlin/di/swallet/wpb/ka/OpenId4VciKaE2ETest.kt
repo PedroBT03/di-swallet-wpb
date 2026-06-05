@@ -6,7 +6,10 @@ import di.swallet.wpb.issuance.domain.KaState
 import di.swallet.wpb.issuance.orchestration.IssuanceFlowOrchestrator
 import di.swallet.wpb.observability.IssuanceEventStore
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
+import di.swallet.wpb.domain.WalletUnitRepository
+import di.swallet.wpb.service.DeviceBindingService
 import di.swallet.wpb.service.HsmService
+import di.swallet.wpb.wallet.WalletTestSupport
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -25,10 +28,16 @@ class OpenId4VciKaE2ETest : BaseIntegrationTest() {
     @Autowired
     lateinit var hsmService: HsmService
 
+    @Autowired
+    lateinit var deviceBindingService: DeviceBindingService
+
+    @Autowired
+    lateinit var walletUnitRepository: WalletUnitRepository
+
     @Test
     fun `device bound issuance performs KA generation attachment and validation`() {
         val holderId = "ka-e2e-${UUID.randomUUID()}"
-        hsmService.generateKeyForUser(holderId)
+        WalletTestSupport.bootstrapHolderForIssuance(deviceBindingService, walletUnitRepository, hsmService, holderId)
 
         var ctx = orchestrator.resolveOffer(
             offerUri = """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}""",

@@ -28,5 +28,10 @@ class WalletKey(
     val revocationIndex: Int = 0,
 
     @Column(nullable = false)
-    val createdAt: LocalDateTime = LocalDateTime.now()
+    val createdAt: LocalDateTime = LocalDateTime.now(),
+
+    /** Required for new keys; legacy rows may remain unscoped. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "wallet_unit_id")
+    val walletUnit: WalletUnit? = null,
 )

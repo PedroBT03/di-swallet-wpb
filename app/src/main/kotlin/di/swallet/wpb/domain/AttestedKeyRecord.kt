@@ -48,6 +48,11 @@ class AttestedKeyRecord(
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     val state: AttestedKeyState = AttestedKeyState.ATTESTED,
+
+    /** Links attested holder key to WSCD metadata when available. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "wallet_key_id")
+    val walletKey: WalletKey? = null,
 )
 
 enum class AttestedKeyState {

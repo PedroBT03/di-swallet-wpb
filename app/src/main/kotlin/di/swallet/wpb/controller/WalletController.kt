@@ -24,6 +24,7 @@ import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.UserDevice
 import di.swallet.wpb.security.ChallengeService
 import di.swallet.wpb.service.KeyBindingRuntimeService
+import di.swallet.wpb.service.LegacySdJwtIssuanceSupport
 
 /**
  * Data Transfer Object for signing requests.
@@ -46,6 +47,7 @@ data class WalletInitRequest(
     val platform: String,
     val devicePubJwk: String,
     val pidPubJwk: String? = null,
+    val userDeviceId: Long? = null,
 )
 
 data class DpopBindRequest(
@@ -77,6 +79,7 @@ class WalletController(
     private val fido2Service: Fido2Service,
     private val deviceBindingService: DeviceBindingService,
     private val keyBindingRuntimeService: KeyBindingRuntimeService,
+    private val legacySdJwtIssuanceSupport: LegacySdJwtIssuanceSupport,
 ) {
 
     // --- SECTION 1: AUTHENTICATION & ONBOARDING ---
@@ -127,6 +130,7 @@ class WalletController(
                 platform = request.platform,
                 devicePubJwk = request.devicePubJwk,
                 pidPubJwk = request.pidPubJwk,
+                userDeviceId = request.userDeviceId,
             ),
         )
         return mapOf(
@@ -235,6 +239,7 @@ class WalletController(
     @Operation(summary = "Issue and Store SD-JWT", description = "Generates an SD-JWT and persists it in the database.")
     fun issueSdCredential(@PathVariable userId: String): WalletCredential {
         val walletKey = hsmService.getUserKey(userId)
+        legacySdJwtIssuanceSupport.ensureKaForHolderKey(userId, walletKey.keyAlias, walletKey.publicKeyBase64)
         val userData = mockIssuerService.fetchUserData(userId)
 
         val issued = sdJwtService.disclosuresFromClaimMap(userData)

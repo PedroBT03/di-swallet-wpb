@@ -45,6 +45,11 @@ class DeviceWalletBinding(
 
     @Column(nullable = true)
     val revokedAt: LocalDateTime? = null,
+
+    /** FIDO2 device that authorized this binding (required in production init). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_device_id")
+    val userDevice: UserDevice? = null,
 )
 
 enum class DeviceWalletBindingState {

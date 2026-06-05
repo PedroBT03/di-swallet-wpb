@@ -33,6 +33,27 @@ class Rfc7638JwkThumbprintTest {
     }
 
     @Test
+    fun `fromJwkJson matches fromEcPublicKey`() {
+        val keyPair = KeyPairGenerator.getInstance("EC").apply {
+            initialize(ECGenParameterSpec("secp256r1"))
+        }.generateKeyPair()
+        val publicKey = keyPair.public as java.security.interfaces.ECPublicKey
+        val encoder = Base64.getUrlEncoder().withoutPadding()
+        val fieldSize = (publicKey.params.curve.field.fieldSize + 7) / 8
+        fun coordinate(value: java.math.BigInteger): String {
+            val rawInput = value.toByteArray()
+            val raw = if (rawInput.size > fieldSize) rawInput.copyOfRange(rawInput.size - fieldSize, rawInput.size) else rawInput
+            val sized = if (raw.size == fieldSize) raw else ByteArray(fieldSize - raw.size) + raw
+            return encoder.encodeToString(sized)
+        }
+        val jwk = """{"kty":"EC","crv":"P-256","alg":"ES256","x":"${coordinate(publicKey.w.affineX)}","y":"${coordinate(publicKey.w.affineY)}"}"""
+        assertEquals(
+            Rfc7638JwkThumbprint.fromEcPublicKey(publicKey),
+            Rfc7638JwkThumbprint.fromJwkJson(jwk),
+        )
+    }
+
+    @Test
     fun `fromPublicKeyBase64 matches fromEcPublicKey`() {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))

@@ -1,5 +1,6 @@
 package di.swallet.wpb.issuance.crypto
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.interfaces.ECPublicKey
@@ -10,6 +11,19 @@ import java.util.Base64
  * RFC 7638 JWK thumbprint over the canonical members {@code crv}, {@code kty}, {@code x}, {@code y}.
  */
 object Rfc7638JwkThumbprint {
+    private val objectMapper = ObjectMapper()
+
+    fun fromJwkJson(jwkJson: String): String {
+        val jwk = objectMapper.readTree(jwkJson.trim())
+        require(jwk.path("kty").asText() == "EC") { "Only EC JWK thumbprints are supported" }
+        val crv = jwk.path("crv").asText()
+        val x = jwk.path("x").asText()
+        val y = jwk.path("y").asText()
+        val canonicalJwk = """{"crv":"$crv","kty":"EC","x":"$x","y":"$y"}"""
+        val digest = MessageDigest.getInstance("SHA-256").digest(canonicalJwk.toByteArray(Charsets.UTF_8))
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(digest)
+    }
+
     fun fromEcPublicKey(publicKey: ECPublicKey): String {
         val encoder = Base64.getUrlEncoder().withoutPadding()
         val fieldSize = (publicKey.params.curve.field.fieldSize + 7) / 8

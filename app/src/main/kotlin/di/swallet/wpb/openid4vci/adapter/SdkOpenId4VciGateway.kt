@@ -153,6 +153,7 @@ class SdkOpenId4VciGateway(
             deferredCredentialEndpoint = metadataNode["deferred_credential_endpoint"]?.asText(),
             notificationEndpoint = metadataNode["notification_endpoint"]?.asText(),
             signedMetadataPresent = metadataNode.hasNonNull("signed_metadata"),
+            signedMetadataJwt = metadataNode["signed_metadata"]?.takeIf { it.isTextual }?.asText()?.takeIf { it.isNotBlank() },
             credentialConfigurations = configurations,
             authorizationServers = authorizationMetadata,
         )

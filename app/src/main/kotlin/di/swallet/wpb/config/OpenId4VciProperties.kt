@@ -65,6 +65,9 @@ class OpenId4VciProperties {
         /** Comma-separated allow-list of issuer identifiers. Empty = depends on `demo-mode`. */
         var allowedIssuerIds: String = ""
 
+        /** Clock skew applied when validating signed issuer metadata JWT exp/nbf/iat claims. */
+        var clockSkewSeconds: Long = 60
+
         fun allowedIssuerIds(): Set<String> = allowedIssuerIds
             .split(',')
             .map { it.trim() }

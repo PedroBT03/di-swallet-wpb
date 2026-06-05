@@ -8,27 +8,23 @@ import org.springframework.stereotype.Component
 /**
  * Baseline issuer trust validator for Phase 2.
  *
- * The MVP enforces an allow-list of credential issuer identifiers; signed
- * metadata verification, X.509 trust chains and richer metadata policies
- * (federation, EUDI Trust List) are deferred to a later phase.
- *
- * When the allow-list is empty and `demo-mode=true`, all metadata is
- * accepted. When `demo-mode=false`, an empty allow-list rejects every
- * issuer (fail-closed for production-like profiles).
+ * Enforces an allow-list of credential issuer identifiers and validates
+ * `signed_metadata` according to [OpenId4VciProperties.sdk.metadataPolicy].
+ * Federation, LoTE trust anchors and richer PKIX policies are deferred to Phase 5.
  */
 @Component
 class DefaultIssuerTrustValidator(
     private val properties: OpenId4VciProperties,
+    private val signedMetadataValidator: IssuerSignedMetadataValidator,
 ) : IssuerTrustValidator {
 
     override fun validate(metadata: ResolvedIssuerMetadata): IssuanceTrustDecision {
         val allowed = properties.trust.allowedIssuerIds()
         if (allowed.isEmpty()) {
-            return if (properties.demoMode) {
-                IssuanceTrustDecision(true, "demo-mode: empty allow-list bypassed")
-            } else {
-                IssuanceTrustDecision(false, "no allowed issuer identifiers configured")
+            if (properties.demoMode) {
+                return applySignedMetadataPolicy(metadata, IssuanceTrustDecision(true, "demo-mode: empty allow-list bypassed"))
             }
+            return IssuanceTrustDecision(false, "no allowed issuer identifiers configured")
         }
 
         val issuer = metadata.credentialIssuerId
@@ -38,6 +34,19 @@ class DefaultIssuerTrustValidator(
         if (issuer !in allowed) {
             return IssuanceTrustDecision(false, "issuer '$issuer' not in allow-list")
         }
-        return IssuanceTrustDecision(true, null)
+        return applySignedMetadataPolicy(metadata, IssuanceTrustDecision(true, null))
+    }
+
+    private fun applySignedMetadataPolicy(
+        metadata: ResolvedIssuerMetadata,
+        baseDecision: IssuanceTrustDecision,
+    ): IssuanceTrustDecision {
+        if (!baseDecision.trusted) return baseDecision
+        val signed = signedMetadataValidator.validate(metadata)
+        if (!signed.acceptable) {
+            return IssuanceTrustDecision(false, signed.reason)
+        }
+        val reason = signed.reason ?: baseDecision.reason
+        return IssuanceTrustDecision(true, reason)
     }
 }

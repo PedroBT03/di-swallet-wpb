@@ -57,6 +57,8 @@ data class ResolvedIssuerMetadata(
     val deferredCredentialEndpoint: String? = null,
     val notificationEndpoint: String? = null,
     val signedMetadataPresent: Boolean = false,
+    /** Compact JWS from the issuer metadata `signed_metadata` field, when present. */
+    val signedMetadataJwt: String? = null,
     val credentialConfigurations: List<CredentialConfigurationDescriptor> = emptyList(),
     val authorizationServers: List<AuthorizationServerMetadata> = emptyList(),
 )

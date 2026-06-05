@@ -239,12 +239,15 @@ implements issuer endpoints.
 | Orchestrator-centric OID4VCI lifecycle (`/openid4vci/offer/resolve`, `/authorize/prepare`, `/authorize/code`, `/authorize/pre-authorized`, `/credential/request`, `/deferred/query`, `/notify`, `/session/{id}`, `/session/{id}/events`) | Implemented |
 | Formal state machine with runtime-enforced transitions (`OFFER_RECEIVED → OFFER_RESOLVED → AUTHORIZATION_PREPARED → AUTHORIZED → CREDENTIAL_REQUESTED → CREDENTIAL_ISSUED → NOTIFIED`, deferred branch via `DEFERRED_PENDING → DEFERRED_ISSUED`, plus `FAILED / REJECTED / EXPIRED`) | Implemented |
 | Adapter port `OpenId4VciGateway` isolates the EUDI library (only `openid4vci.adapter` may import `eu.europa.ec.eudi.openid4vci.*`) | Implemented |
-| Credential offer resolution (by-value and by-reference) producing `ResolvedOffer` + `ResolvedIssuerMetadata` | Implemented (simulated) |
-| Authorization-code grant with PKCE + automatic PAR usage when supported + DPoP probe | Implemented (simulated) |
-| Pre-authorized-code grant with optional `tx_code` | Implemented (simulated) |
-| Credential request via `credential_configuration_id` or `credential_identifier` (HAIP SD-JWT VC) | Implemented (simulated) |
-| Deferred issuance: `transaction_id` persistence, polling, resumed issuance with stable PoP key | Implemented (simulated) |
-| Wallet → Issuer notifications: `CREDENTIAL_ACCEPTED`, `CREDENTIAL_DELETED`, `CREDENTIAL_FAILURE` | Implemented (simulated) |
+| Credential offer resolution (by-value and by-reference) producing `ResolvedOffer` + `ResolvedIssuerMetadata` | Implemented (simulated default; SDK adapter when `demo-mode=false`) |
+| Authorization-code grant with PKCE + automatic PAR usage when supported + DPoP probe | Implemented (simulated default; SDK adapter when `demo-mode=false`) |
+| Pre-authorized-code grant with optional `tx_code` | Implemented (simulated default; SDK adapter when `demo-mode=false`) |
+| Credential request via `credential_configuration_id` or `credential_identifier` (HAIP SD-JWT VC) | Implemented (simulated default; SDK adapter when `demo-mode=false`) |
+| Deferred issuance: `transaction_id` persistence, polling, resumed issuance with stable PoP key | Implemented (simulated default; SDK adapter when `demo-mode=false`) |
+| Wallet → Issuer notifications: `CREDENTIAL_ACCEPTED`, `CREDENTIAL_DELETED`, `CREDENTIAL_FAILURE` | Implemented (simulated default; SDK adapter when `demo-mode=false`) |
+| SDK-backed adapter (`SdkOpenId4VciGateway`) exercised end-to-end via WireMock + Spring orchestrator test | Implemented |
+| HSM-backed proof material (`HsmBackedProofMaterialProvider` + `HsmProofJwtSigner`) as default Spring wiring | Implemented |
+| Issuer `signed_metadata` JWT validation (`preferSigned` / `requireSigned` / `ignoreSigned`) | Implemented |
 | Issued credential persistence into the existing `WalletCredentialRepository` (SD-JWT split into encoded JWT + AES-GCM-encrypted disclosures) | Implemented |
 | Issuer trust validator with configurable allow-list (`wpb.openid4vci.trust.allowed-issuer-ids`) | Implemented |
 | Issuance policy with mdoc opt-out (`wpb.openid4vci.policy.allow-mdoc=false`) | Implemented |
@@ -257,9 +260,9 @@ implements issuer endpoints.
 
 | Limitation | Why it is acceptable for Phase 2 | Where it will be addressed |
 |---|---|---|
-| **SDK-backed adapter (`SdkOpenId4VciGateway`) is scaffolded but every operation throws `UnsupportedOperationException`** when `wpb.openid4vci.demo-mode=false`. The simulated adapter (`SimulatedOpenId4VciGateway`) is the only adapter exercised end-to-end. | This increment validates the wallet-side orchestration, lifecycle, persistence and observability against a deterministic in-process issuer simulator. The library is on the classpath and the port keeps SDK isolation. | Real SDK wiring when an integration target issuer is available. |
-| **Issuer trust validation is an allow-list** of credential issuer identifiers — no signed metadata verification, no X.509 chain validation, no federation/trust-list lookup, no `metadata_policy=requireSigned` enforcement. | Phase 2 only needs to reject unknown issuers and document the boundary. | Phase 5 (trust framework). |
-| **Proof of possession uses an ephemeral EC key per holder** stored in a JVM-local `ConcurrentHashMap` (`EphemeralProofMaterialProvider`). Credential-request proofs are not yet bound to HSM-backed keys. | Decouples issuance orchestration from mandatory WSCA availability during early integration. | Key Attestation (KA) and HSM-backed credential proofs. |
+| **Default runtime and CI test profile keep `demo-mode=true`**, so the simulated adapter remains the primary local smoke path. Real issuer interop (`SdkOpenId4VciGatewayRealIssuerIT`) is opt-in via env vars. | Deterministic simulator for day-to-day development; SDK path validated against WireMock in `SdkOpenId4VciOrchestratorE2ETest`. | Scheduled/manual smoke against a live PID Provider when WIA crypto is production-ready (Phase 3). |
+| **Issuer trust is still an allow-list** plus `signed_metadata` JWT verification — no federation/LoTE trust-list lookup and no full metadata PKIX policy. | Phase 2 rejects unknown issuers and enforces `wpb.openid4vci.sdk.metadata-policy`. | Phase 5 (trust framework). |
+| **`EphemeralProofMaterialProvider` is disabled by default** (`wpb.openid4vci.proof.ephemeral-fallback=false`). Unit tests may still construct it manually. | Production wiring uses `HsmBackedProofMaterialProvider` (`@Primary`) and `HsmProofJwtSigner`. | — |
 | **mdoc issuance is deferred**: the simulator returns `unsupported_format` for `MSO_MDOC` and the policy rejects mdoc credential configurations unless `wpb.openid4vci.policy.allow-mdoc=true`. | The roadmap defers mdoc to Phase 7. | Phase 7 (ISO 18013-5). |
 | **Sessions are stored in memory** (`InMemoryIssuanceSessionRepository`) and adapter SDK state is per-instance. Optimistic locking is in place but no JPA persistence. | Single-instance prototype is enough for Phase 2 protocol validation. | Phase 10 (durable transaction log). |
 | **Deferred polling uses a counter** in the simulator (`wpb.openid4vci.simulator.deferred-polls-before-issue`) rather than real issuer-driven retry hints. | The simulator must produce deterministic deferred behaviour for tests. | Replaced by real issuer interaction in Phase 3. |
@@ -273,6 +276,8 @@ implements issuer endpoints.
 wpb.openid4vci.demo-mode=true                                # simulated adapter (default)
 wpb.openid4vci.session-ttl-seconds=1800                      # issuance session expiry
 wpb.openid4vci.trust.allowed-issuer-ids=                     # CSV allow-list (empty + demo-mode permissive)
+wpb.openid4vci.trust.clock-skew-seconds=60                  # signed_metadata JWT exp/nbf/iat tolerance
+wpb.openid4vci.proof.ephemeral-fallback=false                 # true only for isolated unit tests
 wpb.openid4vci.policy.allow-mdoc=false                       # opt-in mdoc
 wpb.openid4vci.simulator.always-defer=false                  # force deferred outcome
 wpb.openid4vci.simulator.deferred-polls-before-issue=1       # polls before simulated issuance

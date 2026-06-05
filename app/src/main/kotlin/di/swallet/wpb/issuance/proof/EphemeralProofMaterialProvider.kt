@@ -1,6 +1,7 @@
 package di.swallet.wpb.issuance.proof
 
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.security.KeyPairGenerator
 import java.security.interfaces.ECPublicKey
@@ -18,8 +19,16 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * The same `keyId` is reused per holder for the lifetime of the JVM so that
  * resumed deferred issuance keeps a stable PoP key.
+ *
+ * Disabled by default; enable only for isolated unit tests via
+ * `wpb.openid4vci.proof.ephemeral-fallback=true`.
  */
 @Component
+@ConditionalOnProperty(
+    prefix = "wpb.openid4vci.proof",
+    name = ["ephemeral-fallback"],
+    havingValue = "true",
+)
 class EphemeralProofMaterialProvider : ProofMaterialProvider {
 
     private val perHolder = ConcurrentHashMap<String, ProofMaterial>()

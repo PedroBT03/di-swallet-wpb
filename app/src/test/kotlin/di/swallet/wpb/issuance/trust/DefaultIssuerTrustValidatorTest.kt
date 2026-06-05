@@ -8,13 +8,16 @@ import org.junit.jupiter.api.Test
 
 class DefaultIssuerTrustValidatorTest {
 
+    private fun validator(props: OpenId4VciProperties) =
+        DefaultIssuerTrustValidator(props, IssuerSignedMetadataValidator(props))
+
     @Test
     fun `empty allow-list in demo-mode is permissive`() {
         val props = OpenId4VciProperties().apply {
             demoMode = true
             trust.allowedIssuerIds = ""
         }
-        val decision = DefaultIssuerTrustValidator(props).validate(
+        val decision = validator(props).validate(
             ResolvedIssuerMetadata(credentialIssuerId = "https://anything.example"),
         )
         assertTrue(decision.trusted)
@@ -26,7 +29,7 @@ class DefaultIssuerTrustValidatorTest {
             demoMode = false
             trust.allowedIssuerIds = ""
         }
-        val decision = DefaultIssuerTrustValidator(props).validate(
+        val decision = validator(props).validate(
             ResolvedIssuerMetadata(credentialIssuerId = "https://anything.example"),
         )
         assertFalse(decision.trusted)
@@ -38,7 +41,7 @@ class DefaultIssuerTrustValidatorTest {
             demoMode = false
             trust.allowedIssuerIds = "https://issuer.one,https://issuer.two"
         }
-        val decision = DefaultIssuerTrustValidator(props).validate(
+        val decision = validator(props).validate(
             ResolvedIssuerMetadata(credentialIssuerId = "https://issuer.one"),
         )
         assertTrue(decision.trusted)
@@ -50,7 +53,7 @@ class DefaultIssuerTrustValidatorTest {
             demoMode = false
             trust.allowedIssuerIds = "https://issuer.one"
         }
-        val decision = DefaultIssuerTrustValidator(props).validate(
+        val decision = validator(props).validate(
             ResolvedIssuerMetadata(credentialIssuerId = "https://unknown.example"),
         )
         assertFalse(decision.trusted)
@@ -63,9 +66,44 @@ class DefaultIssuerTrustValidatorTest {
             demoMode = false
             trust.allowedIssuerIds = "https://issuer.one"
         }
-        val decision = DefaultIssuerTrustValidator(props).validate(
+        val decision = validator(props).validate(
             ResolvedIssuerMetadata(credentialIssuerId = ""),
         )
         assertFalse(decision.trusted)
+    }
+
+    @Test
+    fun `requireSigned rejects allow-listed issuer without signed metadata`() {
+        val issuer = "https://issuer.one"
+        val props = OpenId4VciProperties().apply {
+            demoMode = false
+            trust.allowedIssuerIds = issuer
+            sdk.metadataPolicy = "requireSigned"
+        }
+        val decision = validator(props).validate(
+            ResolvedIssuerMetadata(credentialIssuerId = issuer),
+        )
+        assertFalse(decision.trusted)
+        assertTrue(decision.reason!!.contains("signed_metadata"))
+    }
+
+    @Test
+    fun `requireSigned accepts allow-listed issuer with valid signed metadata`() {
+        val issuer = "https://issuer.one"
+        val signing = SignedIssuerMetadataTestSupport.generateIssuerSigningMaterial()
+        val jwt = SignedIssuerMetadataTestSupport.signedMetadataJwt(issuer, signing)
+        val props = OpenId4VciProperties().apply {
+            demoMode = false
+            trust.allowedIssuerIds = issuer
+            sdk.metadataPolicy = "requireSigned"
+        }
+        val decision = validator(props).validate(
+            ResolvedIssuerMetadata(
+                credentialIssuerId = issuer,
+                signedMetadataPresent = true,
+                signedMetadataJwt = jwt,
+            ),
+        )
+        assertTrue(decision.trusted)
     }
 }

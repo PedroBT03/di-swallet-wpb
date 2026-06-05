@@ -10,6 +10,7 @@ import di.swallet.wpb.issuance.policy.DefaultIssuancePolicy
 import di.swallet.wpb.issuance.proof.EphemeralProofMaterialProvider
 import di.swallet.wpb.issuance.storage.IssuedCredentialStorage
 import di.swallet.wpb.issuance.trust.DefaultIssuerTrustValidator
+import di.swallet.wpb.issuance.trust.IssuerSignedMetadataValidator
 import di.swallet.wpb.observability.InMemoryIssuanceEventStore
 import di.swallet.wpb.ka.attestation.KeyAttestationProvider
 import di.swallet.wpb.ka.validation.KeyAttestationValidationException
@@ -164,7 +165,7 @@ class DefaultIssuanceFlowOrchestratorTest {
                 mdocCodec,
             ),
             repository = InMemoryIssuanceSessionRepository(),
-            trustValidator = DefaultIssuerTrustValidator(properties),
+            trustValidator = DefaultIssuerTrustValidator(properties, IssuerSignedMetadataValidator(properties)),
             policy = DefaultIssuancePolicy(properties),
             proofProvider = EphemeralProofMaterialProvider(),
             attestationProvider = StubWalletAttestationProvider(wiaStatus),

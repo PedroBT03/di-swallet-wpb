@@ -343,7 +343,9 @@ There is **no** public `POST /wia/issue` endpoint in this increment.
 | WIA transport envelope on `OpenId4VciGateway` (`WalletAttestationTransport` on PAR/token paths) | Implemented (simulated adapter) |
 | WIA validation service (technical expiry + `cnf.jkt` binding against access token) | Implemented |
 | Simplified WIA status management via existing bitstring status list (`WiaStatusManagementService`) | Implemented |
-| Persistent `cnf` key per wallet instance (derived from `WalletKey` metadata) | Implemented |
+| Persistent `cnf` key per wallet instance (RFC 7638 JWK thumbprint of `WalletKey` EC public key) | Implemented |
+| HSM-backed WIA/PoP JWT signing via `JwsSigningService` with parsed `x5c` certificate chain | Implemented |
+| Durable WIA status index mapping (`JpaWiaStatusManagementService` + `wia_status_indexes`) | Implemented |
 | Structured issuance events: `wia.attached`, `wia.binding.verified` | Implemented |
 | Retry semantics for nonce mismatch / expired WIA (configurable limits, recoverable errors) | Implemented |
 | Default reuse policy per issuer: `false` (`wpb.openid4vci.wia.reuse-per-issuer`) | Implemented |
@@ -353,12 +355,9 @@ There is **no** public `POST /wia/issue` endpoint in this increment.
 
 | Limitation | Why it is acceptable for the thesis MVP | Where it will be addressed |
 |---|---|---|
-| **WIA signing is simplified** (deterministic pseudo-signature for local runs; optional raw `signing-x5c` string, not a parsed/trusted certificate chain). | Keeps issuance+WIA testable without LoTE/trust-anchor infrastructure. | Trust framework + production signing pipeline. |
+| **No issuer-side WIA trust-anchor validation** (wallet signs with HSM + publishes `x5c`, but LoTE/PKIX federation is not enforced). | Issuer trust of Wallet Provider certificates belongs to external PID Providers and Phase 5 trust framework. | LoTE trust anchors and access-certificate validation. |
 | **No issuer-side WIA signature/trust validation** (wallet only generates and self-checks binding). | Issuer validation belongs to external PID/Attestation Providers, not the WPB. | Interop tests with real issuers. |
-| **WIA status mapping is in-memory** (holder/issuer → bitstring index); publication still uses the existing `/api/v1/wallet/status-lists/** endpoints. | Enough to demonstrate revocation chaining mechanics in the thesis prototype. | Durable WIA registry and richer status-list chunking. |
-| **KA (Key Attestation) is not implemented** in this increment. | TS3 scopes WIA and KA separately; device-bound credential proofs need KA. | Key Attestation increment. |
 | **DPoP proof headers are modeled via `cnf.jkt` binding**, not full RFC 9449 DPoP JWT construction against live AS metadata. | Phase goal is WIA transport + AT binding correctness, not full OAuth stack hardening. | SDK adapter + production OAuth profile. |
-
 ### Configuration knobs
 
 ```

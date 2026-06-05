@@ -3,31 +3,24 @@ package di.swallet.wpb.wia.attestation
 import com.nimbusds.jose.JOSEObjectType
 import com.nimbusds.jose.JWSAlgorithm
 import com.nimbusds.jose.JWSHeader
-import com.nimbusds.jose.JWSObject
-import com.nimbusds.jose.Payload
-import com.nimbusds.jose.crypto.impl.ECDSA
-import com.nimbusds.jose.util.Base64URL
+import com.nimbusds.jose.util.Base64 as NimbusBase64
 import di.swallet.wpb.config.OpenId4VciProperties
+import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletKeyRepository
+import di.swallet.wpb.issuance.crypto.JwsSigningService
+import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
 import di.swallet.wpb.issuance.domain.WalletInstanceAttestation
+import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.wia.status.WiaStatusManagementService
 import org.springframework.stereotype.Component
-import java.security.MessageDigest
 import java.time.Instant
-import java.util.Base64
 
-/**
- * MVP WIA provider.
- *
- * - Uses a persistent wallet key per wallet instance (`WalletKey.userId`)
- * - Builds a simplified JWT payload with WIA required claims.
- * - Signs attestation and PoP using deterministic pseudo-signature in demo mode
- *   to keep tests local; production signing wiring lands with real SDK+HSM chain.
- */
 @Component
 class DefaultWalletAttestationProvider(
     private val walletKeyRepository: WalletKeyRepository,
     private val statusManagementService: WiaStatusManagementService,
+    private val jwsSigningService: JwsSigningService,
+    private val hsmService: HsmService,
     private val properties: OpenId4VciProperties,
 ) : WalletAttestationProvider {
 
@@ -47,7 +40,8 @@ class DefaultWalletAttestationProvider(
             issuerId = if (properties.wia.reusePerIssuer) issuerId else null,
         )
 
-        val cnfJkt = thumbprintFromWalletKey(key.publicKeyBase64, key.keyAlias)
+        val cnfJkt = Rfc7638JwkThumbprint.fromPublicKeyBase64(key.publicKeyBase64)
+        val x5c = resolveSigningX5cChain(key)
         val payload = mapOf(
             "sub" to walletInstanceId,
             "wallet_name" to properties.wia.walletName,
@@ -68,14 +62,14 @@ class DefaultWalletAttestationProvider(
             "cnf" to mapOf("jkt" to cnfJkt),
         )
         val wiaJwt = signJwt(
+            walletKey = key,
             typ = "oauth-client-attestation+jwt",
-            kid = key.keyAlias,
             payload = payload,
-            x5c = properties.wia.signingX5c.takeIf { it.isNotBlank() },
+            x5c = x5c,
         )
         val popJwt = signJwt(
+            walletKey = key,
             typ = "oauth-client-attestation-pop+jwt",
-            kid = key.keyAlias,
             payload = mapOf(
                 "iss" to walletInstanceId,
                 "iat" to now.epochSecond,
@@ -83,7 +77,7 @@ class DefaultWalletAttestationProvider(
                 "aud" to (issuerId ?: "issuer"),
                 "cnf" to mapOf("jkt" to cnfJkt),
             ),
-            x5c = null,
+            x5c = emptyList(),
         )
 
         return WalletInstanceAttestation(
@@ -103,41 +97,22 @@ class DefaultWalletAttestationProvider(
         )
     }
 
-    private fun thumbprintFromWalletKey(publicKeyBase64: String, keyAlias: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val material = "$keyAlias:$publicKeyBase64".toByteArray()
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(digest.digest(material))
-    }
+    private fun resolveSigningX5cChain(walletKey: WalletKey): List<String> =
+        properties.wia.signingX5cChain().ifEmpty { hsmService.certificateChainBase64(walletKey) }
 
     private fun signJwt(
+        walletKey: WalletKey,
         typ: String,
-        kid: String,
         payload: Map<String, Any?>,
-        x5c: String?,
+        x5c: List<String>,
     ): String {
         val builder = JWSHeader.Builder(JWSAlgorithm.ES256)
             .type(JOSEObjectType(typ))
-            .keyID(kid)
-        if (!x5c.isNullOrBlank()) {
-            // Kept as raw string in MVP (not parsed cert chain) for lightweight transport simulation.
-            builder.customParam("x5c", listOf(x5c))
+            .keyID(walletKey.keyAlias)
+        if (x5c.isNotEmpty()) {
+            builder.x509CertChain(x5c.map(::NimbusBase64))
         }
         val header = builder.build()
-        val jwsObject = JWSObject(header, Payload(payload))
-        val pseudoSignature = pseudoSign(jwsObject.signingInput)
-        val b64Sig = Base64URL.encode(pseudoSignature)
-        return "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$b64Sig"
-    }
-
-    private fun pseudoSign(input: ByteArray): ByteArray {
-        // Deterministic pseudo-signature for local/tests. Real HSM signing is wired
-        // in the dedicated SDK adapter increment.
-        val digest = MessageDigest.getInstance("SHA-256").digest(input)
-        return ECDSA.transcodeSignatureToConcat(
-            byteArrayOf(0x30, 0x44, 0x02, 0x20) + digest.copyOfRange(0, 32) +
-                byteArrayOf(0x02, 0x20) + digest.copyOfRange(0, 32),
-            64,
-        )
+        return jwsSigningService.signJws(walletKey, header, payload)
     }
 }
-

@@ -1,6 +1,7 @@
 package di.swallet.wpb.ka.validation
 
 import di.swallet.wpb.config.OpenId4VciProperties
+import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
 import di.swallet.wpb.issuance.domain.KaStatusReference
 import di.swallet.wpb.issuance.domain.KeyAttestation
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
@@ -13,7 +14,6 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import java.security.KeyPairGenerator
-import java.security.MessageDigest
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
 import java.time.Instant
@@ -38,21 +38,6 @@ class DefaultKeyAttestationValidationServiceTest {
         )
     }
 
-    private fun computeProofJkt(proof: ProofMaterial): String {
-        val encoder = Base64.getUrlEncoder().withoutPadding()
-        val x = encoder.encodeToString(publicKeyCoordinate(proof.publicKey.w.affineX, 32))
-        val y = encoder.encodeToString(publicKeyCoordinate(proof.publicKey.w.affineY, 32))
-        val canonicalJwk = """{"alg":"ES256","crv":"P-256","kid":"${proof.keyId}","kty":"EC","x":"$x","y":"$y"}"""
-        return encoder.encodeToString(MessageDigest.getInstance("SHA-256").digest(canonicalJwk.toByteArray()))
-    }
-
-    private fun publicKeyCoordinate(value: java.math.BigInteger, size: Int): ByteArray {
-        val rawInput = value.toByteArray()
-        val raw = if (rawInput.size > size) rawInput.copyOfRange(rawInput.size - size, rawInput.size) else rawInput
-        if (raw.size == size) return raw
-        return ByteArray(size - raw.size) + raw
-    }
-
     private fun attestation(proof: ProofMaterial, expired: Boolean = false): KeyAttestation {
         val now = Instant.now()
         return KeyAttestation(
@@ -60,7 +45,7 @@ class DefaultKeyAttestationValidationServiceTest {
             keyId = proof.keyId,
             keyStorage = "iso_18045_high",
             certification = "test-cert",
-            attestedJkt = computeProofJkt(proof),
+            attestedJkt = Rfc7638JwkThumbprint.fromEcPublicKey(proof.publicKey),
             status = KaStatusReference(
                 listId = "PRIMARY_LIST",
                 index = 1,

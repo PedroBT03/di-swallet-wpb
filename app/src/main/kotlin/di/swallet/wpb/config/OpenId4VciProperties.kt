@@ -110,12 +110,29 @@ class OpenId4VciProperties {
         var walletLink: String = ""
         var walletSolutionCertificationInformation: String = "thesis-mvp-not-certified"
 
-        /** Simplified x5c transport value for MVP demo mode. */
+        /** Optional x5c chain in WIA header (comma-separated DER base64 or PEM blocks). */
         var signingX5c: String = ""
 
         /** Retry semantics for nonce mismatch / expired WIA. */
         var maxNonceMismatchRetries: Int = 1
         var maxExpiredRetries: Int = 1
+
+        fun signingX5cChain(): List<String> {
+            val raw = signingX5c.trim()
+            if (raw.isBlank()) return emptyList()
+            if (raw.contains("-----BEGIN CERTIFICATE-----")) {
+                val pemRegex = Regex("-----BEGIN CERTIFICATE-----([\\s\\S]*?)-----END CERTIFICATE-----")
+                return pemRegex.findAll(raw)
+                    .map { it.groupValues[1] }
+                    .map { it.replace("\\s".toRegex(), "") }
+                    .filter { it.isNotBlank() }
+                    .toList()
+            }
+            return raw
+                .split(',')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+        }
     }
 
     class KaProperties {

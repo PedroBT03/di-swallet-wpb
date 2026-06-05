@@ -3,6 +3,7 @@ package di.swallet.wpb.ka.validation
 import com.nimbusds.jose.crypto.ECDSAVerifier
 import com.nimbusds.jwt.SignedJWT
 import di.swallet.wpb.config.OpenId4VciProperties
+import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
 import di.swallet.wpb.issuance.domain.KeyAttestation
 import di.swallet.wpb.issuance.proof.ProofMaterial
 import di.swallet.wpb.ka.trust.CertificateChainValidator
@@ -10,7 +11,6 @@ import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.service.StatusListService
 import org.springframework.stereotype.Component
-import java.security.MessageDigest
 import java.time.Instant
 import java.util.Base64
 
@@ -113,7 +113,7 @@ class DefaultKeyAttestationValidationService(
     }
 
     override fun validateBinding(attestation: KeyAttestation, proof: ProofMaterial) {
-        val proofJkt = computeProofJkt(proof)
+        val proofJkt = Rfc7638JwkThumbprint.fromEcPublicKey(proof.publicKey)
         if (attestation.attestedJkt.isBlank() || proofJkt.isBlank()) {
             throw KeyAttestationValidationException("ka_binding_missing", "attested/proof jkt is missing")
         }
@@ -122,19 +122,4 @@ class DefaultKeyAttestationValidationService(
         }
     }
 
-    private fun computeProofJkt(proof: ProofMaterial): String {
-        val encoder = Base64.getUrlEncoder().withoutPadding()
-        val x = encoder.encodeToString(publicKeyCoordinate(proof.publicKey.w.affineX, 32))
-        val y = encoder.encodeToString(publicKeyCoordinate(proof.publicKey.w.affineY, 32))
-        val canonicalJwk = """{"alg":"ES256","crv":"P-256","kid":"${proof.keyId}","kty":"EC","x":"$x","y":"$y"}"""
-        val digest = MessageDigest.getInstance("SHA-256").digest(canonicalJwk.toByteArray())
-        return encoder.encodeToString(digest)
-    }
-
-    private fun publicKeyCoordinate(value: java.math.BigInteger, size: Int): ByteArray {
-        val rawInput = value.toByteArray()
-        val raw = if (rawInput.size > size) rawInput.copyOfRange(rawInput.size - size, rawInput.size) else rawInput
-        if (raw.size == size) return raw
-        return ByteArray(size - raw.size) + raw
-    }
 }

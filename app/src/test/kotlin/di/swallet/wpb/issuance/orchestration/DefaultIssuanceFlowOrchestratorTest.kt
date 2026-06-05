@@ -6,6 +6,7 @@ import di.swallet.wpb.issuance.domain.IssuanceState
 import di.swallet.wpb.issuance.domain.KeyAttestation
 import di.swallet.wpb.issuance.domain.KaStatusReference
 import di.swallet.wpb.issuance.persistence.InMemoryIssuanceSessionRepository
+import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
 import di.swallet.wpb.issuance.policy.DefaultIssuancePolicy
 import di.swallet.wpb.issuance.proof.EphemeralProofMaterialProvider
 import di.swallet.wpb.issuance.storage.IssuedCredentialStorage
@@ -105,13 +106,7 @@ class DefaultIssuanceFlowOrchestratorTest {
             proofKeyId: String,
         ): KeyAttestation {
             val now = java.time.Instant.now()
-            val encoder = java.util.Base64.getUrlEncoder().withoutPadding()
-            val x = encoder.encodeToString(publicKeyCoordinate(proofPublicKey.w.affineX, 32))
-            val y = encoder.encodeToString(publicKeyCoordinate(proofPublicKey.w.affineY, 32))
-            val jwk = """{"alg":"ES256","crv":"P-256","kid":"$proofKeyId","kty":"EC","x":"$x","y":"$y"}"""
-            val attestedJkt = encoder.encodeToString(
-                java.security.MessageDigest.getInstance("SHA-256").digest(jwk.toByteArray()),
-            )
+            val attestedJkt = Rfc7638JwkThumbprint.fromEcPublicKey(proofPublicKey)
             return KeyAttestation(
                 jwt = "eyJhbGciOiJFUzI1NiIsInR5cCI6ImtleWF0dGVzdGF0aW9uK2p3dCJ9.eyJpc3MiOiJkaWQ6d2ViOnRlc3Qud3BiIiwic3ViIjoiaG9sZGVyIiwiYXVkIjoiaXNzdWVyIiwiaWF0IjoxNzc5OTg0OTM4LCJleHAiOjQwNzA5MDg4MDB9.c2ln",
                 keyId = proofKeyId,
@@ -128,13 +123,6 @@ class DefaultIssuanceFlowOrchestratorTest {
                 issuedAt = now,
                 issuerScope = issuerId,
             )
-        }
-
-        private fun publicKeyCoordinate(value: java.math.BigInteger, size: Int): ByteArray {
-            val raw = value.toByteArray()
-            if (raw.size == size) return raw
-            if (raw.size > size) return raw.copyOfRange(raw.size - size, raw.size)
-            return ByteArray(size - raw.size) + raw
         }
     }
 

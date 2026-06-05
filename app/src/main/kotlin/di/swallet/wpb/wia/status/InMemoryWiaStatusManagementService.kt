@@ -2,16 +2,13 @@ package di.swallet.wpb.wia.status
 
 import di.swallet.wpb.issuance.domain.WiaStatusReference
 import di.swallet.wpb.service.StatusListService
-import org.springframework.stereotype.Service
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Phase 3 MVP status management for WIA.
+ * In-memory WIA status mapping for isolated unit tests.
  *
- * Uses the existing global bitstring status list infrastructure and keeps an
- * in-memory mapping from holder(+issuer when reuse is enabled) to list index.
+ * Production wiring uses [JpaWiaStatusManagementService].
  */
-@Service
 class InMemoryWiaStatusManagementService(
     private val statusListService: StatusListService,
 ) : WiaStatusManagementService {

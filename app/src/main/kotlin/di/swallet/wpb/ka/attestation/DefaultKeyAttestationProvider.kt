@@ -7,6 +7,7 @@ import com.nimbusds.jose.util.Base64 as NimbusBase64
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.issuance.crypto.JwsSigningService
+import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
 import di.swallet.wpb.issuance.domain.KeyAttestation
 import di.swallet.wpb.ka.status.KaStatusManagementService
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
@@ -39,7 +40,7 @@ class DefaultKeyAttestationProvider(
         val statusExp = now.plusSeconds(properties.ka.minStatusMaintenanceDays * 24 * 60 * 60)
         val walletKey = walletKeyRepository.findByUserId(holderId)
             .orElseThrow { IllegalStateException("wallet key not found for holder '$holderId'") }
-        val attestedJkt = proofJkt(proofPublicKey, proofKeyId)
+        val attestedJkt = Rfc7638JwkThumbprint.fromEcPublicKey(proofPublicKey)
         val issuerScope = if (properties.ka.reusePerIssuer) issuerId else null
         val attestationFingerprint = fingerprint(holderId, issuerScope, configuration.id, attestedJkt)
         val status = statusManagementService.getOrAllocateStatus(holderId, issuerScope, attestationFingerprint)
@@ -109,15 +110,6 @@ class DefaultKeyAttestationProvider(
             .x509CertChain(x5c.map(::NimbusBase64))
         val header = builder.build()
         return jwsSigningService.signJws(walletKey, header, payload)
-    }
-
-    private fun proofJkt(publicKey: ECPublicKey, keyId: String): String {
-        val encoder = Base64.getUrlEncoder().withoutPadding()
-        val x = encoder.encodeToString(publicKeyCoordinate(publicKey.w.affineX, 32))
-        val y = encoder.encodeToString(publicKeyCoordinate(publicKey.w.affineY, 32))
-        val canonicalJwk = """{"alg":"ES256","crv":"P-256","kid":"$keyId","kty":"EC","x":"$x","y":"$y"}"""
-        val digest = MessageDigest.getInstance("SHA-256").digest(canonicalJwk.toByteArray())
-        return encoder.encodeToString(digest)
     }
 
     private fun fingerprint(holderId: String, issuerId: String?, configurationId: String, attestedJkt: String): String {

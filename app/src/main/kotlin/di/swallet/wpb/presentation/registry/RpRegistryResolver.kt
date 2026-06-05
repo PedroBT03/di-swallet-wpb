@@ -133,7 +133,7 @@ class RpRegistryResolver(
                     client.checkIntendedUse(
                         rpIdentifier = rpIdentifier,
                         intendedUseIdentifier = record.intendedUses.firstOrNull()?.intendedUseIdentifier,
-                        credentialFormat = toTs5Format(query.format),
+                        credentialFormat = RegistryIntendedUseMatcher.toTs5Format(query.format),
                         claimPath = claimPath.takeIf { it.isNotBlank() },
                     )
                 }.getOrElse { ex ->
@@ -168,20 +168,8 @@ class RpRegistryResolver(
         return RegistryResolution.Accepted(record, "/wrp/check-intended-use", intendedUseChecked = true)
     }
 
-    private fun localIntendedUseCheck(record: RpRegistryRecord, credentialQueries: List<CredentialQuery>): Boolean {
-        if (record.intendedUses.isEmpty()) return false
-        return credentialQueries.all { query ->
-            record.intendedUses.any { intendedUse ->
-                intendedUse.credentials.any { descriptor ->
-                    val formatMatches = descriptor.format?.equals(toTs5Format(query.format), ignoreCase = true) == true ||
-                        descriptor.format.isNullOrBlank()
-                    val claimMatches = query.requestedClaims.isEmpty() ||
-                        query.requestedClaims.all { claim -> claim in descriptor.claimPaths }
-                    formatMatches && claimMatches
-                }
-            }
-        }
-    }
+    private fun localIntendedUseCheck(record: RpRegistryRecord, credentialQueries: List<CredentialQuery>): Boolean =
+        RegistryIntendedUseMatcher.coversQueries(record, credentialQueries)
 
     private fun runLookup(response: RegistryHttpResponse?): RegistryLookupOutcome? {
         response ?: return RegistryLookupOutcome.Unavailable
@@ -304,11 +292,6 @@ class RpRegistryResolver(
             )
         }
         else -> emptyList()
-    }
-
-    private fun toTs5Format(format: CredentialFormat): String = when (format) {
-        CredentialFormat.SD_JWT -> "dc+sd-jwt"
-        CredentialFormat.MDOC -> "mso_mdoc"
     }
 
     private fun isExpired(cachedAt: Instant): Boolean {

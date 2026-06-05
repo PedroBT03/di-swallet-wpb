@@ -153,7 +153,7 @@ class Ts5RegistryOpenId4VpE2ETest {
                 repository = InMemoryPresentationSessionRepository(),
                 trustValidator = trustValidator,
                 registryValidator = registryValidator,
-                policyEngine = DefaultPolicyEngine(demoMode = false),
+                policyEngine = DefaultPolicyEngine(props),
                 credentialMatcher = PresentationTestSupport.credentialMatcher(
                     repository,
                     mdocCodec,

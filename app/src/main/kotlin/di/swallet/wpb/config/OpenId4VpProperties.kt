@@ -116,6 +116,9 @@ class OpenId4VpProperties {
         /** Prefer TS5 check-intended-use endpoint over local inference when reachable. */
         var preferCheckIntendedUseEndpoint: Boolean = true
 
+        /** Require at least one privacy policy URI on the registry intended-use record. */
+        var requirePrivacyPolicyUri: Boolean = false
+
         fun remoteAllowedHosts(): Set<String> = remoteAllowedHosts
             .split(',')
             .map { it.trim().lowercase() }

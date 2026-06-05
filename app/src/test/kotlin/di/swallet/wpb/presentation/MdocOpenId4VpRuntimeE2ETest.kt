@@ -1,6 +1,7 @@
 package di.swallet.wpb.presentation
 
 import di.swallet.wpb.config.OpenId4VciProperties
+import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
@@ -181,7 +182,7 @@ class MdocOpenId4VpRuntimeE2ETest {
                         ),
                     )
             },
-            policyEngine = DefaultPolicyEngine(demoMode = false),
+            policyEngine = DefaultPolicyEngine(OpenId4VpProperties().apply { demoMode = false }),
             credentialMatcher = matcher,
             vpTokenBuilder = vpBuilder,
             eventStore = InMemorySessionEventStore(),

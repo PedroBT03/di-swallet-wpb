@@ -129,7 +129,7 @@ class SignedOid4VpTrustChainE2ETest {
                 repository = InMemoryPresentationSessionRepository(),
                 trustValidator = trustValidator,
                 registryValidator = registryValidator,
-                policyEngine = DefaultPolicyEngine(demoMode = false),
+                policyEngine = DefaultPolicyEngine(props),
                 credentialMatcher = PresentationTestSupport.credentialMatcher(
                     repository,
                     mdocCodec,

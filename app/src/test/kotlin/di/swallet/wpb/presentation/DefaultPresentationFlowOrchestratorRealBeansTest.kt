@@ -157,7 +157,7 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
                 certificateValidationService = certValidator,
             ),
             registryValidator = registryValidator,
-            policyEngine = DefaultPolicyEngine(demoMode = demoMode),
+            policyEngine = DefaultPolicyEngine(trustProperties),
             credentialMatcher = PresentationTestSupport.credentialMatcher(
                 repository,
                 MdocCredentialCodec(MdocIsoRuntimeService()),

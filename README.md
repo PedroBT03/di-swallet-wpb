@@ -481,6 +481,57 @@ wpb.openid4vp.trust.allowed-client-ids=                         # optional secon
 - **Legacy dev JSON**: top-level `verifiers[]` or `entities[]` with explicit binding fields
   (`clientId`, `certSha256`, `sanDns`, …). Used by `demo-lote.json` and local emulator fixtures.
 
+## OpenID4VP / Phase 6 (RP registration lookup)
+
+Phase 6 closes the RP registry gaps from the architecture audit: registry data is
+now enforced in presentation policy decisions, and HTTPS/host policy for registry
+fetches is covered by automated tests plus an opt-in real-registry smoke path.
+
+### What Phase 6 delivers
+
+| Capability | Status |
+|---|---|
+| `Ts5RpRegistryHttpClient` — TS5 read endpoints (`/wrp/{id}`, `/wrp?identifier=`, `/wrp/check-intended-use`) | Implemented |
+| `RpRegistryResolver` — signed JWT verification, cache, intended-use check (remote + local fallback) | Implemented |
+| `DefaultRegistryValidator` — orchestrator gate before matching/policy | Implemented |
+| `DefaultPolicyEngine` — enforces registry acceptance, record presence, intended-use coverage, optional privacy-policy URI | Implemented |
+| `RegistryIntendedUseMatcher` — shared TS5/TS6 claim/format matching for resolver + policy | Implemented |
+| HTTPS + host allow-list enforcement for production registry fetches | Implemented |
+| E2E: signed TS5 registry drives pass/fail (`Ts5RegistryOpenId4VpE2ETest`) | Implemented |
+| HTTPS policy unit tests (`Ts5RpRegistryHttpClientHttpsPolicyTest`) | Implemented |
+| Opt-in real EU/national registry smoke (`Ts5RpRegistryRealRegistryIT`) | Implemented |
+
+### Explicit limitations (still non-production)
+
+| Limitation | Why acceptable now | Planned hardening |
+|---|---|---|
+| Registry disabled by default (`wpb.openid4vp.registry.enabled=false`). | Keeps local emulator flows working without a national registry endpoint. | Enable with HTTPS base URL + verification keys in production deployments. |
+| Attribute-minimisation UX and consent copy remain Phase 16 scope. | Phase 6 enforces registered intended-use data, not holder-facing UX. | Phase 16 privacy controls. |
+| Real registry smoke test is env-gated and not part of default CI. | Avoids coupling CI to external federation availability. | Expand into repeatable interop suite when a stable registry sandbox is available. |
+
+### Configuration knobs (RP registry)
+
+```
+wpb.openid4vp.registry.enabled=false
+wpb.openid4vp.registry.base-url=                              # HTTPS in production
+wpb.openid4vp.registry.remote-allowed-hosts=                  # required when demo-mode=false
+wpb.openid4vp.registry.verification-key-pem-paths=            # TS5 response JWS verification keys
+wpb.openid4vp.registry.require-signed-responses=true
+wpb.openid4vp.registry.require-signed-envelope-fields=true
+wpb.openid4vp.registry.prefer-check-intended-use-endpoint=true
+wpb.openid4vp.registry.require-privacy-policy-uri=false       # set true for stricter TS6 policy
+```
+
+### Optional real-registry smoke
+
+```bash
+WPB_REAL_REGISTRY_ENABLED=true \
+WPB_REAL_REGISTRY_BASE_URL='https://<national-registry>/api' \
+WPB_REAL_REGISTRY_RP_IDENTIFIER='<rp-id>' \
+WPB_REAL_REGISTRY_VERIFICATION_KEY_PEM_PATHS='/path/to/registry-key.pem' \
+./gradlew :app:test --tests "di.swallet.wpb.presentation.registry.Ts5RpRegistryRealRegistryIT"
+```
+
 ## Phase 8 - Device binding and key management runtime
 
 This section captures the implemented runtime model for device binding and key

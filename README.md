@@ -403,6 +403,7 @@ generates and validates KA just before `requestCredential`, then attaches it as
 | Real-issuer interoperability validation is provided as an opt-in smoke test and depends on external issuer availability/configuration. | Avoids coupling CI stability to external systems while still enabling real environment validation. | Expand into repeatable interop suite when a stable issuer sandbox is available. |
 
 | KA `attested_keys.jwk` uses RFC 7638 member set (`crv`, `kty`, `x`, `y`) and `attestedJkt` matches proof key thumbprint | Implemented |
+| Durable KA status index mapping (`JpaKaStatusManagementService` + `ka_status_indexes`) | Implemented |
 | `KaSigningCertificateResolver` requires configured `ka.signing-x5c` outside demo-mode | Implemented |
 | `require-x5c`, `allowed-x5c-fingerprints`, and effective `strict` trust outside demo-mode are enforced in validation | Implemented |
 

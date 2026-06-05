@@ -2,13 +2,13 @@ package di.swallet.wpb.ka.status
 
 import di.swallet.wpb.issuance.domain.KaStatusReference
 import di.swallet.wpb.service.StatusListService
-import org.springframework.stereotype.Service
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * status index is allocated per attestation fingerprint.
+ * In-memory KA status mapping for isolated unit tests.
+ *
+ * Production wiring uses [JpaKaStatusManagementService].
  */
-@Service
 class InMemoryKaStatusManagementService(
     private val statusListService: StatusListService,
 ) : KaStatusManagementService {

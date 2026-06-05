@@ -28,6 +28,35 @@ import com.sun.net.httpserver.HttpServer
 class TrustSnapshotServiceTest {
 
     @Test
+    fun `empty local trust document without anchors is unavailable`() {
+        val emptyJson = writeTempFile("{}")
+        val props = OpenId4VpProperties().apply {
+            trust.sourceMode = "file"
+            trust.localVerifiersPath = emptyJson
+        }
+        val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        val availability = service.refresh()
+        assertTrue(availability is TrustSnapshotAvailability.Unavailable)
+        assertTrue(
+            (availability as TrustSnapshotAvailability.Unavailable).reason
+                .contains("empty", ignoreCase = true),
+        )
+    }
+
+    @Test
+    fun `hybrid mode with no configured sources is unavailable`() {
+        val props = OpenId4VpProperties().apply {
+            trust.sourceMode = "hybrid"
+            trust.localVerifiersPath = ""
+            trust.localTrustAnchorPemPaths = ""
+            trust.remoteTrustUrl = ""
+        }
+        val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        val availability = service.refresh()
+        assertTrue(availability is TrustSnapshotAvailability.Unavailable)
+    }
+
+    @Test
     fun `loads trust snapshot from local files in file mode`() {
         val cert = selfSignedCert()
         val anchorPem = writeTempFile(

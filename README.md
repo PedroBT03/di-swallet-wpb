@@ -433,6 +433,54 @@ WPB_REAL_ISSUER_OFFER_URI='openid-credential-offer://...' \
 ./gradlew :app:test --tests "di.swallet.wpb.openid4vci.adapter.SdkOpenId4VciGatewayRealIssuerIT"
 ```
 
+## OpenID4VP / Phase 5 (LoTE trust framework)
+
+Phase 5 closes the presentation trust gaps identified in the architecture audit:
+hybrid trust loading, fail-open demo bypass, LoTE schema alignment, and the
+signed-request certificate extraction → PKIX validation path.
+
+### What Phase 5 delivers
+
+| Capability | Status |
+|---|---|
+| `TrustSnapshotService` loads local / remote / hybrid LoTE material via `LoteTrustParser` | Implemented |
+| TS 119602 `TrustedEntitiesList` parsing (active `granted` services, `ServiceDigitalIdentity` X509 bindings) | Implemented |
+| Legacy `entities` / `verifiers` JSON adapter (development fixtures) | Implemented (backward-compatible) |
+| `DefaultVerifierCertificateExtractor` (`x5c`, nested `access_certificate`, PEM bundles) | Implemented |
+| `PkixAccessCertificateValidationService` (anchors, client_id, cert_sha256, SAN/CN bindings) | Implemented |
+| Empty trust snapshots treated as **unavailable** (fail-closed) | Implemented |
+| Bundled dev LoTE fixture (`classpath:trust/demo-lote.json`) for hybrid local source | Implemented |
+| `allow-fail-open-in-demo-mode=false` by default (explicit opt-in only) | Implemented |
+| E2E: signed JWT `request_uri` → extractor → PKIX → trust validator | Implemented (`SignedOid4VpTrustChainE2ETest`) |
+| E2E: remote TS119602 LoTE drives pass/fail trust (`RemoteLoteTrustOpenId4VpE2ETest`) | Implemented |
+
+### Explicit limitations (still non-production)
+
+| Limitation | Why acceptable now | Planned hardening |
+|---|---|---|
+| Bundled `demo-lote.json` uses a self-signed development anchor, not EC-published LoTE. | Enables local hybrid trust without external federation endpoints. | Replace with EC LoTE URL + host allow-list in production. |
+| Demo-mode fallback resolver decodes signed JWT payloads without full SDK signature policy. | Required for local emulator interoperability while SDK strict path is exercised separately. | Remove fallback when a production signed verifier is integrated (Phase 17). |
+| KA / WIA validation still uses WPB-local trust anchors, not presentation LoTE federation. | Presentation and issuance trust domains are intentionally separated in this prototype. | Unified federation policy when EC trust lists are operational. |
+
+### Configuration knobs (presentation trust)
+
+```
+wpb.openid4vp.trust.source-mode=hybrid
+wpb.openid4vp.trust.local-verifiers-path=classpath:trust/demo-lote.json
+wpb.openid4vp.trust.local-trust-anchor-pem-paths=classpath:trust/demo-anchor.pem
+wpb.openid4vp.trust.remote-trust-url=                          # EC LoTE HTTPS endpoint
+wpb.openid4vp.trust.remote-allowed-hosts=                       # required when demo-mode=false
+wpb.openid4vp.trust.allow-fail-open-in-demo-mode=false          # set true only for emulator-only local runs
+wpb.openid4vp.trust.allowed-client-ids=                         # optional secondary allow-list
+```
+
+### LoTE format notes
+
+- **EC / TS 119602**: top-level `ListAndSchemeInformation` + `TrustedEntitiesList[]` with
+  `TrustedEntityServices[].ServiceInformation.ServiceDigitalIdentity.X509Certificates`.
+- **Legacy dev JSON**: top-level `verifiers[]` or `entities[]` with explicit binding fields
+  (`clientId`, `certSha256`, `sanDns`, …). Used by `demo-lote.json` and local emulator fixtures.
+
 ## Phase 8 - Device binding and key management runtime
 
 This section captures the implemented runtime model for device binding and key

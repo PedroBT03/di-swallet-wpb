@@ -50,8 +50,8 @@ class OpenId4VpProperties {
         /** Maximum accepted trust snapshot age in seconds. */
         var maxSnapshotAgeSeconds: Long = 24 * 60 * 60
 
-        /** Allow fail-open when trust is unavailable only if demo-mode is true. */
-        var allowFailOpenInDemoMode: Boolean = true
+        /** Allow fail-open when trust is unavailable only if demo-mode is true (off by default). */
+        var allowFailOpenInDemoMode: Boolean = false
 
         fun localTrustAnchorPemPaths(): List<String> = localTrustAnchorPemPaths
             .split(',')

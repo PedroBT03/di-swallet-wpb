@@ -1,0 +1,40 @@
+{
+  "ListAndSchemeInformation": {
+    "LoTESequenceNumber": 42,
+    "ListIssueDateTime": "2026-06-01T00:00:00Z",
+    "NextUpdate": { "dateTime": "2026-07-01T00:00:00Z" },
+    "LoTEType": "http://uri.etsi.org/19602/LoTEType/EU/AccessCA",
+    "StatusDeterminationApproach": "http://uri.etsi.org/19602/StatusDetn/EU"
+  },
+  "TrustedEntitiesList": [
+    {
+      "TrustedEntityInformation": {
+        "TEIdentifier": "te-ec-access-ca-001"
+      },
+      "clientId": "verifier-demo-client",
+      "TrustedEntityServices": [
+        {
+          "ServiceInformation": {
+            "ServiceTypeIdentifier": "urn:etsi:19602:service:access",
+            "ServiceStatus": "http://uri.etsi.org/19602/Status/granted",
+            "ServiceIdentifier": "svc-access-ec-1",
+            "ServiceInformationURI": [
+              { "uriValue": "https://verifier.example/.well-known/openid-credential-verifier" }
+            ],
+            "ServiceDigitalIdentity": {
+              "X509Certificates": [
+                {
+                  "encoding": "base64",
+                  "val": "__LEAF_CERT_BASE64__"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "trustAnchorsPem": [
+    "__ROOT_CERT_PEM__"
+  ]
+}

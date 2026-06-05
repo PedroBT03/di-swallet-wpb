@@ -63,13 +63,29 @@ class TrustSnapshotService(
             runCatching { loadSnapshot() }
                 .fold(
                     onSuccess = { snapshot ->
-                        if (snapshot == null) {
-                            TrustSnapshotAvailability.Unavailable("no trust data configured for source mode '${properties.trust.sourceModeNormalized()}'")
-                        } else {
-                            cacheRef.set(snapshot)
-                            val eventName = if (hadCached) "trust.snapshot.refreshed" else "trust.snapshot.loaded"
-                            logger.info("event={} source={} entities={} anchors={}", eventName, snapshot.source, snapshot.entities.size, snapshot.trustAnchors.size)
-                            TrustSnapshotAvailability.Available(snapshot)
+                        when {
+                            snapshot == null -> {
+                                TrustSnapshotAvailability.Unavailable(
+                                    "no trust data configured for source mode '${properties.trust.sourceModeNormalized()}'",
+                                )
+                            }
+                            isEffectivelyEmpty(snapshot) -> {
+                                TrustSnapshotAvailability.Unavailable(
+                                    "trust snapshot is empty (no entities and no anchors)",
+                                )
+                            }
+                            else -> {
+                                cacheRef.set(snapshot)
+                                val eventName = if (hadCached) "trust.snapshot.refreshed" else "trust.snapshot.loaded"
+                                logger.info(
+                                    "event={} source={} entities={} anchors={}",
+                                    eventName,
+                                    snapshot.source,
+                                    snapshot.entities.size,
+                                    snapshot.trustAnchors.size,
+                                )
+                                TrustSnapshotAvailability.Available(snapshot)
+                            }
                         }
                     },
                     onFailure = { ex ->
@@ -212,6 +228,9 @@ class TrustSnapshotService(
         val validUntil = snapshot.validUntil ?: return false
         return validUntil.isBefore(Instant.now())
     }
+
+    private fun isEffectivelyEmpty(snapshot: TrustSnapshot): Boolean =
+        snapshot.entities.isEmpty() && snapshot.trustAnchors.isEmpty()
 
     private fun dedupeAnchors(certs: List<X509Certificate>): List<X509Certificate> {
         val unique = LinkedHashMap<String, X509Certificate>()

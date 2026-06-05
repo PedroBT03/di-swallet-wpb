@@ -1,0 +1,16 @@
+{
+  "sequenceNumber": "1",
+  "issueDate": "2026-06-01T00:00:00Z",
+  "validUntil": "2027-06-01T00:00:00Z",
+  "listType": "http://uri.etsi.org/19602/LoTEType/EU/AccessCA",
+  "schemeType": "http://uri.etsi.org/19602/StatusDetn/EU",
+  "verifiers": [
+    {
+      "clientId": "verifier-demo-client",
+      "certSha256": ["CC9F7DB5CCE4EAF0B0B0544BA75AB062575A3AB6127E769089AE9B8D3CB36D02"]
+    }
+  ],
+  "trustAnchorsPem": [
+    "-----BEGIN CERTIFICATE-----\nMIIBjTCCATOgAwIBAgIUYmg4SfJLvZ80b1frZwkp4NN8UcMwCgYIKoZIzj0EAwIw\nHDEaMBgGA1UEAwwRV1BCIERlbW8gVHJ1c3QgQ0EwHhcNMjYwNjA1MTEwNjUyWhcN\nMzYwNjAyMTEwNjUyWjAcMRowGAYDVQQDDBFXUEIgRGVtbyBUcnVzdCBDQTBZMBMG\nByqGSM49AgEGCCqGSM49AwEHA0IABNBwHab2QJXraILxgxNayYsbnyrK9HkwZv96\nRNLzK62g0doTaiojapo6EOnC6tIuNjUUmBbHLZ2qNuXcQaTO1gijUzBRMB0GA1Ud\nDgQWBBRFKBgUIW1DX/Ag3bQU+UGrvdtxkzAfBgNVHSMEGDAWgBRFKBgUIW1DX/Ag\n3bQU+UGrvdtxkzAPBgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0gAMEUCIHEl\nP6wmSwj0K3lxXFAOg5rjRleHBesv/yvbvmJLuoZFAiEAv/TeU3NQoYJG+3EHFaSH\nqMdy4WkIFV9simAh/cUfVhk=\n-----END CERTIFICATE-----\n"
+  ]
+}

@@ -7,12 +7,14 @@ import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
 import di.swallet.wpb.issuance.domain.KeyAttestation
 import di.swallet.wpb.issuance.proof.ProofMaterial
 import di.swallet.wpb.ka.trust.CertificateChainValidator
+import di.swallet.wpb.ka.trust.KaCertificateFingerprint
+import di.swallet.wpb.ka.trust.KaTrustMode
+import di.swallet.wpb.ka.trust.KaTrustPolicy
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.service.StatusListService
 import org.springframework.stereotype.Component
 import java.time.Instant
-import java.util.Base64
 
 class KeyAttestationValidationException(
     val code: String,
@@ -88,10 +90,10 @@ class DefaultKeyAttestationValidationService(
             }
         }
 
-        val header = parsed.header
-        val x5c = header.x509CertChain?.map { it.toString() }
-            ?: (header.customParams["x5c"] as? List<*>)?.mapNotNull { it?.toString() }
-            ?: attestation.x5c
+        val x5c = resolveX5c(parsed, attestation)
+        if (properties.ka.requireX5c && x5c.isEmpty()) {
+            throw KeyAttestationValidationException("ka_x5c_missing", "x5c is required by trust policy")
+        }
         if (x5c.isEmpty()) {
             throw KeyAttestationValidationException("ka_x5c_missing", "x5c is required by trust policy")
         }
@@ -99,16 +101,27 @@ class DefaultKeyAttestationValidationService(
             throw KeyAttestationValidationException("ka_x5c_invalid", "unable to parse x5c certificate chain")
         }
         val leaf = certChain.first()
+        enforceFingerprintAllowList(leaf)
         val verified = runCatching { parsed.verify(ECDSAVerifier(leaf.publicKey as java.security.interfaces.ECPublicKey)) }.getOrDefault(false)
         if (!verified) {
             throw KeyAttestationValidationException("ka_signature_invalid", "key attestation JWS signature is invalid")
         }
 
-        if (properties.ka.trustMode.equals("strict", ignoreCase = true)) {
-            runCatching { certificateChainValidator.validatePkix(certChain, properties.ka.trustAnchorPemPaths()) }
-                .getOrElse {
-                    throw KeyAttestationValidationException("ka_pkix_untrusted", "x5c chain failed PKIX validation")
+        when (KaTrustPolicy.effectiveMode(properties)) {
+            KaTrustMode.STRICT -> {
+                val anchors = properties.ka.trustAnchorPemPaths()
+                if (anchors.isEmpty()) {
+                    throw KeyAttestationValidationException(
+                        "ka_pkix_untrusted",
+                        "strict trust mode requires configured trust anchors",
+                    )
                 }
+                runCatching { certificateChainValidator.validatePkix(certChain, anchors) }
+                    .getOrElse {
+                        throw KeyAttestationValidationException("ka_pkix_untrusted", "x5c chain failed PKIX validation")
+                    }
+            }
+            KaTrustMode.RELAXED -> Unit
         }
     }
 
@@ -122,4 +135,27 @@ class DefaultKeyAttestationValidationService(
         }
     }
 
+    private fun resolveX5c(parsed: SignedJWT, attestation: KeyAttestation): List<String> {
+        val header = parsed.header
+        return header.x509CertChain?.map { it.toString() }
+            ?: (header.customParams["x5c"] as? List<*>)?.mapNotNull { it?.toString() }
+            ?: attestation.x5c
+    }
+
+    private fun enforceFingerprintAllowList(leaf: java.security.cert.X509Certificate) {
+        val allowed = properties.ka.allowedX5cFingerprints()
+            .map { it.trim().uppercase() }
+            .filter { it.isNotBlank() }
+            .toSet()
+        if (allowed.isEmpty()) {
+            return
+        }
+        val fingerprint = KaCertificateFingerprint.sha256Hex(leaf)
+        if (fingerprint !in allowed) {
+            throw KeyAttestationValidationException(
+                "ka_x5c_untrusted",
+                "x5c leaf certificate fingerprint is not in allow-list",
+            )
+        }
+    }
 }

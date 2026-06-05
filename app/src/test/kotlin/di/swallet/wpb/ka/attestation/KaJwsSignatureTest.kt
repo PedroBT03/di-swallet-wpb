@@ -3,10 +3,12 @@ package di.swallet.wpb.ka.attestation
 import com.nimbusds.jose.crypto.ECDSAVerifier
 import com.nimbusds.jwt.SignedJWT
 import di.swallet.wpb.BaseIntegrationTest
+import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.service.HsmService
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -54,6 +56,7 @@ class KaJwsSignatureTest : BaseIntegrationTest() {
         val cert = parseCertificate(leafCertB64)
 
         assertTrue(parsed.verify(ECDSAVerifier(cert.publicKey as ECPublicKey)))
+        assertEquals(Rfc7638JwkThumbprint.fromEcPublicKey(proofPublic), attestation.attestedJkt)
 
         val jwtParts = attestation.jwt.split('.').toMutableList()
         val payloadBytes = Base64.getUrlDecoder().decode(jwtParts[1])

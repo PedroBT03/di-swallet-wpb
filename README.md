@@ -398,9 +398,25 @@ generates and validates KA just before `requestCredential`, then attaches it as
 
 | Limitation | Why acceptable now | Planned hardening |
 |---|---|---|
-| Trust validation policy is allow-list/config based (`require-x5c`, `allowed-x5c-fingerprints`) and not LoTE-grade chain validation. | Sufficient for thesis phase isolation and deterministic tests. | LoTE and trust-anchor validation hardening in trust phases. |
+| LoTE-grade Wallet Provider trust anchors are not wired into KA validation yet. | Phase 4 enforces leaf signature verification, optional fingerprint allow-list, and PKIX in `strict` mode; demo-mode may use the HSM self-signed chain. | Phase 5 trust framework integration. |
 | Strict SDK resolution requires SDK-compatible issuer endpoints (typically HTTPS); local `http://` offer/metadata testing requires explicitly disabling strict mode. | Keeps production path strict while preserving local mock-based integration tests. | Keep strict mode enabled by default and use test-only overrides when needed. |
 | Real-issuer interoperability validation is provided as an opt-in smoke test and depends on external issuer availability/configuration. | Avoids coupling CI stability to external systems while still enabling real environment validation. | Expand into repeatable interop suite when a stable issuer sandbox is available. |
+
+| KA `attested_keys.jwk` uses RFC 7638 member set (`crv`, `kty`, `x`, `y`) and `attestedJkt` matches proof key thumbprint | Implemented |
+| `KaSigningCertificateResolver` requires configured `ka.signing-x5c` outside demo-mode | Implemented |
+| `require-x5c`, `allowed-x5c-fingerprints`, and effective `strict` trust outside demo-mode are enforced in validation | Implemented |
+
+### Configuration knobs (KA trust)
+
+```
+wpb.openid4vci.ka.signing-x5c=                              # PEM/DER Wallet Provider chain (required when require-configured-signing-chain=true)
+wpb.openid4vci.ka.require-configured-signing-chain=false    # set true in production deployments
+wpb.openid4vci.ka.enforce-production-trust-policy=false    # set true in production deployments
+wpb.openid4vci.ka.require-x5c=false
+wpb.openid4vci.ka.allowed-x5c-fingerprints=                 # SHA-256 hex fingerprints (uppercase)
+wpb.openid4vci.ka.trust-mode=relaxed                        # relaxed | strict
+wpb.openid4vci.ka.trust-anchor-pem-paths=                 # required for strict PKIX validation
+```
 
 ### Important notes
 

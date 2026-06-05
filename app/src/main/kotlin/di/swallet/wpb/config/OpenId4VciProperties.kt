@@ -161,6 +161,18 @@ class OpenId4VciProperties {
         /** Optional x5c chain in KA header (comma-separated DER base64 or PEM blocks). */
         var signingX5c: String = ""
 
+        /**
+         * When true, issuance fails unless `signing-x5c` is configured.
+         * Recommended for production deployments (`demo-mode=false`).
+         */
+        var requireConfiguredSigningChain: Boolean = false
+
+        /**
+         * When true outside demo-mode, relaxed trust is upgraded to strict unless
+         * fingerprint or trust-anchor mitigations are configured.
+         */
+        var enforceProductionTrustPolicy: Boolean = false
+
         /** Trust policy for attestation certificates (MVP allow-list model). */
         var requireX5c: Boolean = false
         var allowedX5cFingerprints: String = ""

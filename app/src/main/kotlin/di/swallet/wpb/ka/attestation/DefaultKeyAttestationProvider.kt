@@ -10,9 +10,9 @@ import di.swallet.wpb.issuance.crypto.JwsSigningService
 import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
 import di.swallet.wpb.issuance.domain.KeyAttestation
 import di.swallet.wpb.ka.status.KaStatusManagementService
+import di.swallet.wpb.ka.trust.KaSigningCertificateResolver
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
-import di.swallet.wpb.service.HsmService
 import org.springframework.stereotype.Component
 import java.security.MessageDigest
 import java.security.interfaces.ECPublicKey
@@ -24,7 +24,7 @@ class DefaultKeyAttestationProvider(
     private val walletKeyRepository: WalletKeyRepository,
     private val statusManagementService: KaStatusManagementService,
     private val jwsSigningService: JwsSigningService,
-    private val hsmService: HsmService,
+    private val signingCertificateResolver: KaSigningCertificateResolver,
     private val properties: OpenId4VciProperties,
 ) : KeyAttestationProvider {
     override fun issue(
@@ -69,14 +69,16 @@ class DefaultKeyAttestationProvider(
             ),
             "attested_keys" to listOf(
                 mapOf(
-                    "jwk" to ecPublicJwk(proofPublicKey, proofKeyId),
+                    "jwk" to rfc7638PublicJwk(proofPublicKey),
                     "proof_type" to "jwt",
                 ),
             ),
             "credential_configuration_id" to configuration.id,
         )
-        val x5c = properties.ka.signingX5cChain().ifEmpty { hsmService.certificateChainBase64(walletKey) }
-        require(x5c.isNotEmpty()) { "key attestation requires a non-empty x5c chain" }
+        val x5c = signingCertificateResolver.resolveSigningChain(walletKey)
+        if (properties.ka.requireX5c && x5c.isEmpty()) {
+            throw IllegalStateException("key attestation requires x5c but no certificate chain is available")
+        }
         val jwt = signJwt(
             walletKey = walletKey,
             typ = "keyattestation+jwt",
@@ -118,18 +120,14 @@ class DefaultKeyAttestationProvider(
         return Base64.getUrlEncoder().withoutPadding().encodeToString(digest.digest(material.toByteArray()))
     }
 
-    private fun ecPublicJwk(publicKey: ECPublicKey, keyId: String): Map<String, String> {
+    private fun rfc7638PublicJwk(publicKey: ECPublicKey): Map<String, String> {
         val fieldSize = (publicKey.params.curve.field.fieldSize + 7) / 8
-        val x = publicKeyCoordinate(publicKey.w.affineX, fieldSize)
-        val y = publicKeyCoordinate(publicKey.w.affineY, fieldSize)
         val encoder = Base64.getUrlEncoder().withoutPadding()
         return mapOf(
             "kty" to "EC",
             "crv" to "P-256",
-            "kid" to keyId,
-            "x" to encoder.encodeToString(x),
-            "y" to encoder.encodeToString(y),
-            "alg" to "ES256",
+            "x" to encoder.encodeToString(publicKeyCoordinate(publicKey.w.affineX, fieldSize)),
+            "y" to encoder.encodeToString(publicKeyCoordinate(publicKey.w.affineY, fieldSize)),
         )
     }
 

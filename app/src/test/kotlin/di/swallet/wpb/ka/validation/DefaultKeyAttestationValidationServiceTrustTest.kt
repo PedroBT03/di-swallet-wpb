@@ -12,6 +12,7 @@ import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.issuance.domain.KaStatusReference
 import di.swallet.wpb.issuance.domain.KeyAttestation
 import di.swallet.wpb.ka.trust.CertificateChainValidator
+import di.swallet.wpb.ka.trust.KaCertificateFingerprint
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.service.StatusListService
@@ -248,6 +249,58 @@ class DefaultKeyAttestationValidationServiceTrustTest {
     }
 
     @Test
+    fun `fingerprint allow-list accepts matching leaf certificate`() {
+        val kp = keyPair()
+        val certB64 = certBase64(kp)
+        val cert = parseCertificate(certB64)
+        val props = properties(mode = "relaxed").apply {
+            ka.allowedX5cFingerprints = KaCertificateFingerprint.sha256Hex(cert)
+        }
+        val service = service(props)
+        val att = attestation(jwt = signedJwt(kp, certB64, props, "pid_jwt", "https://issuer.example"), x5c = listOf(certB64))
+        val config = CredentialConfigurationDescriptor("pid_jwt", IssuanceCredentialFormat.SD_JWT_VC)
+        val metadata = ResolvedIssuerMetadata("https://issuer.example")
+        assertDoesNotThrow { service.validateTrust(att, config, metadata) }
+    }
+
+    @Test
+    fun `fingerprint allow-list rejects unknown leaf certificate`() {
+        val kp = keyPair()
+        val certB64 = certBase64(kp)
+        val props = properties(mode = "relaxed").apply {
+            ka.allowedX5cFingerprints = "DEADBEEF"
+        }
+        val service = service(props)
+        val att = attestation(jwt = signedJwt(kp, certB64, props, "pid_jwt", "https://issuer.example"), x5c = listOf(certB64))
+        val config = CredentialConfigurationDescriptor("pid_jwt", IssuanceCredentialFormat.SD_JWT_VC)
+        val metadata = ResolvedIssuerMetadata("https://issuer.example")
+        val ex = assertThrows(KeyAttestationValidationException::class.java) {
+            service.validateTrust(att, config, metadata)
+        }
+        assertTrue(ex.code == "ka_x5c_untrusted")
+    }
+
+    @Test
+    fun `production profile upgrades relaxed trust to strict without anchors`() {
+        val kp = keyPair()
+        val certB64 = certBase64(kp)
+        val props = OpenId4VciProperties().apply {
+            demoMode = false
+            ka.issuer = "did:web:test.wpb"
+            ka.trustMode = "relaxed"
+            ka.enforceProductionTrustPolicy = true
+        }
+        val service = service(props)
+        val att = attestation(jwt = signedJwt(kp, certB64, props, "pid_jwt", "https://issuer.example"), x5c = listOf(certB64))
+        val config = CredentialConfigurationDescriptor("pid_jwt", IssuanceCredentialFormat.SD_JWT_VC)
+        val metadata = ResolvedIssuerMetadata("https://issuer.example")
+        val ex = assertThrows(KeyAttestationValidationException::class.java) {
+            service.validateTrust(att, config, metadata)
+        }
+        assertTrue(ex.code == "ka_pkix_untrusted")
+    }
+
+    @Test
     fun `trust validation fails on invalid x5c encoding`() {
         val kp = keyPair()
         val props = properties(mode = "relaxed")
@@ -336,6 +389,13 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
         }.generateKeyPair()
+
+    private fun parseCertificate(base64Der: String): java.security.cert.X509Certificate {
+        val certFactory = java.security.cert.CertificateFactory.getInstance("X.509")
+        return certFactory.generateCertificate(
+            java.io.ByteArrayInputStream(java.util.Base64.getDecoder().decode(base64Der)),
+        ) as java.security.cert.X509Certificate
+    }
 
     private fun certBase64(keyPair: KeyPair): String {
         val subject = X500Name("CN=KA-Test")

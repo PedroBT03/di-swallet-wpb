@@ -3,6 +3,7 @@ package di.swallet.wpb.ka.attestation
 import com.nimbusds.jose.crypto.ECDSAVerifier
 import com.nimbusds.jwt.SignedJWT
 import di.swallet.wpb.BaseIntegrationTest
+import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
@@ -62,7 +63,9 @@ class DefaultKeyAttestationProviderTest : BaseIntegrationTest() {
         val attestedKeys = jwt.jwtClaimsSet.getClaim("attested_keys") as List<*>
         val firstKey = attestedKeys.first() as Map<*, *>
         val jwk = firstKey["jwk"] as Map<*, *>
-        assertEquals("proof-key-1", jwk["kid"])
+        assertEquals("EC", jwk["kty"])
+        assertEquals("P-256", jwk["crv"])
+        assertEquals(Rfc7638JwkThumbprint.fromEcPublicKey(proof), attestation.attestedJkt)
     }
 
     private fun proofKey(): ECPublicKey {

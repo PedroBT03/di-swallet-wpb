@@ -6,7 +6,8 @@ import org.junit.jupiter.api.Test
 
 class MdocCredentialCodecTest {
 
-    private val codec = MdocCredentialCodec(MdocIsoRuntimeService())
+    private val binding = MdocTestSupport.holderBinding()
+    private val codec = MdocTestSupport.stack(holderBindings = listOf(binding)).codec
 
     @Test
     fun `encodes and decodes PID vector`() {
@@ -22,7 +23,7 @@ class MdocCredentialCodecTest {
             issuer = "https://issuer.example",
             issuedAtEpochSeconds = 1_780_410_000,
         )
-        val encoded = codec.encode(doc)
+        val encoded = codec.encode(doc, binding.deviceCoseKey)
         assertTrue(codec.validateIssuerSigned(encoded))
         val decoded = codec.decode(encoded)!!
         assertEquals("unknown", decoded.docType)
@@ -44,7 +45,7 @@ class MdocCredentialCodecTest {
             issuer = "https://issuer.example",
             issuedAtEpochSeconds = 1_780_410_001,
         )
-        val encoded = codec.encode(doc)
+        val encoded = codec.encode(doc, binding.deviceCoseKey)
         val decoded = codec.decode(encoded)!!
         assertEquals("unknown", decoded.docType)
         assertEquals("org.iso.18013.5.1", decoded.namespace)

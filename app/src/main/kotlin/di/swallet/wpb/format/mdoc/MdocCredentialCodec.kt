@@ -1,21 +1,21 @@
 package di.swallet.wpb.format.mdoc
 
+import com.authlete.cose.COSEEC2Key
 import org.springframework.stereotype.Component
 
 /**
  * Codec facade over ISO/IEC 18013-5 CBOR artifacts.
- *
- * Runtime encoding now emits real mdoc structures (IssuerSigned / DeviceResponse)
- * serialized as base64url(CBOR) without proprietary wrappers.
  */
 @Component
 class MdocCredentialCodec(
     private val isoRuntime: MdocIsoRuntimeService,
 ) {
-    fun encode(document: MdocCredentialDocument): String {
-        val namespace = document.namespace
-        val claimsByNamespace = mapOf(namespace to document.claims)
-        return isoRuntime.issueIssuerSigned(document.docType, claimsByNamespace)
+    fun encode(
+        document: MdocCredentialDocument,
+        devicePublicCoseKey: COSEEC2Key,
+    ): String {
+        val claimsByNamespace = mapOf(document.namespace to document.claims)
+        return isoRuntime.issueIssuerSigned(document.docType, claimsByNamespace, devicePublicCoseKey)
     }
 
     fun decode(raw: String): MdocCredentialDocument? = isoRuntime.decode(raw)
@@ -31,16 +31,14 @@ class MdocCredentialCodec(
         docType: String,
         namespaceClaims: Map<String, Map<String, Any?>>,
         requestedClaims: List<String>,
-        audience: String,
-        nonce: String,
+        handover: MdocOpenId4VpHandover,
         holderKeyAlias: String? = null,
     ): String = isoRuntime.buildDeviceResponse(
         originalIssuedPayload = originalIssuedPayload,
         docType = docType,
         namespaceClaims = namespaceClaims,
         requestedClaims = requestedClaims,
-        audience = audience,
-        nonce = nonce,
+        handover = handover,
         holderKeyAlias = holderKeyAlias,
     )
 }

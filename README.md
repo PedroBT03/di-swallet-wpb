@@ -532,6 +532,47 @@ WPB_REAL_REGISTRY_VERIFICATION_KEY_PEM_PATHS='/path/to/registry-key.pem' \
 ./gradlew :app:test --tests "di.swallet.wpb.presentation.registry.Ts5RpRegistryRealRegistryIT"
 ```
 
+## ISO mdoc / Phase 7 (issuer stability, HSM presentation, session transcript)
+
+Phase 7 closes the critical mdoc runtime gaps from the architecture audit: ephemeral
+issuer/device keys, unused holder aliases, simplified session transcripts, and
+in-memory issuer verification that broke across restarts.
+
+### What Phase 7 delivers
+
+| Capability | Status |
+|---|---|
+| Stable simulator issuer key via PEM (`wpb.mdoc.issuer-key-pem-path`) | Implemented |
+| Device key bound at issuance from OID4VCI proof (`deviceKey` in MSO) | Implemented |
+| Device authentication signed with holder HSM alias (`HsmMdocDeviceAuthSigner`) | Implemented |
+| Artifact-based issuer/device verification (`MdocCredentialVerifier`, restart-safe) | Implemented |
+| Hybrid session transcript modes (`legacy-aud-nonce`, `openid4vp`, `hybrid`) | Implemented |
+| Tests: restart resilience, transcript modes, cross-verifier interop, E2E VP | Implemented |
+
+### Breaking change (incompatible reset)
+
+Credentials issued **before** Phase 7 used ephemeral JVM keys and are **invalid**
+after upgrade. Re-issue test fixtures and purge stale wallet DB rows in local dev.
+
+### Configuration knobs (mdoc)
+
+```
+wpb.mdoc.issuer-key-pem-path=classpath:mdoc/dev-issuer-key.pem
+wpb.mdoc.auto-generate-issuer-key-if-missing=false          # dev file paths only
+wpb.mdoc.session-transcript-mode=legacy-aud-nonce           # CI default
+# wpb.mdoc.session-transcript-mode=openid4vp                # new HAIP-oriented E2E
+# wpb.mdoc.session-transcript-mode=hybrid                   # openid4vp when response_uri present
+wpb.mdoc.require-holder-key-alias=true
+```
+
+### Explicit limitations (still non-production)
+
+| Limitation | Why acceptable now | Planned hardening |
+|---|---|---|
+| Simulator issuer key is PEM/dev-only — not an HSM-backed PID Provider. | Thesis MVP uses a fake issuer; real PID Providers supply `issuerAuth`. | Phase 17 interop with national issuers. |
+| `legacy-aud-nonce` transcript is not HAIP-complete. | Avoids breaking half the suite before verifier is HAIP-ready. | Switch profiles/tests to `openid4vp` incrementally. |
+| Demo mdoc VP fallback still mints ephemeral device keys. | Synthetic candidates without `credentialId` only. | Remove once demo-mode mdoc path is retired. |
+
 ## Phase 8 - Device binding and key management runtime
 
 This section captures the implemented runtime model for device binding and key

@@ -4,6 +4,7 @@ import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.issuance.domain.DeferredIssuanceHandle
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.issuance.proof.ProofMaterial
+import di.swallet.wpb.format.mdoc.MdocCoseKeyMaterial
 import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
@@ -243,6 +244,7 @@ class SimulatedOpenId4VciGateway(
                     configurationId = configurationId,
                     docTypeHint = configDescriptor?.docType,
                     vctHint = configDescriptor?.vct,
+                    proof = proof,
                 )
             IssuanceCredentialFormat.UNKNOWN ->
                 buildFakeSdJwtVc(configurationId, configDescriptor?.vct ?: configurationId, proof)
@@ -282,6 +284,7 @@ class SimulatedOpenId4VciGateway(
                     configurationId = configurationId,
                     docTypeHint = descriptor?.docType,
                     vctHint = descriptor?.vct,
+                    proof = proof,
                 )
             IssuanceCredentialFormat.UNKNOWN ->
                 buildFakeSdJwtVc(configurationId, descriptor?.vct ?: configurationId, proof)
@@ -449,6 +452,7 @@ class SimulatedOpenId4VciGateway(
         configurationId: String,
         docTypeHint: String?,
         vctHint: String?,
+        proof: ProofMaterial,
     ): String {
         val definition = mdocDocTypeRegistry.infer(configurationId, docTypeHint, vctHint)
             ?: mdocDocTypeRegistry.all().first()
@@ -467,6 +471,7 @@ class SimulatedOpenId4VciGateway(
             )
             else -> mapOf("given_name" to "Alice")
         }
+        val deviceKey = MdocCoseKeyMaterial.toCoseEc2PublicKey(proof.publicKey)
         return mdocCredentialCodec.encode(
             MdocCredentialDocument(
                 docType = definition.docType,
@@ -475,6 +480,7 @@ class SimulatedOpenId4VciGateway(
                 issuer = "https://issuer.example.org",
                 issuedAtEpochSeconds = Instant.now().epochSecond,
             ),
+            deviceKey,
         )
     }
 

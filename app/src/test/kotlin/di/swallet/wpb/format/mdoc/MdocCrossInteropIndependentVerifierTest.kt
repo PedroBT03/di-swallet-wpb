@@ -5,8 +5,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class MdocCrossInteropIndependentVerifierTest {
-    private val runtime = MdocIsoRuntimeService()
-    private val codec = MdocCredentialCodec(runtime)
+    private val binding = MdocTestSupport.holderBinding()
+    private val stack = MdocTestSupport.stack(holderBindings = listOf(binding))
+    private val codec = stack.codec
     private val independent = IndependentMdocVerifier()
 
     @Test
@@ -21,6 +22,7 @@ class MdocCrossInteropIndependentVerifierTest {
                     "birth_date" to "1990-01-01",
                 ),
             ),
+            binding.deviceCoseKey,
         )
 
         assertTrue(independent.verifyIssuerAuth(issued), independent.debugIssuerAuth(issued))
@@ -46,6 +48,7 @@ class MdocCrossInteropIndependentVerifierTest {
                     "driving_privileges" to listOf("B"),
                 ),
             ),
+            binding.deviceCoseKey,
         )
         val presented = codec.buildDeviceResponse(
             originalIssuedPayload = issued,
@@ -57,8 +60,8 @@ class MdocCrossInteropIndependentVerifierTest {
                 ),
             ),
             requestedClaims = listOf("given_name", "driving_privileges"),
-            audience = "verifier-demo-client",
-            nonce = "nonce-123",
+            handover = MdocTestSupport.handover(),
+            holderKeyAlias = binding.alias,
         )
 
         assertTrue(independent.verifyDeviceResponse(presented))

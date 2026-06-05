@@ -5,12 +5,9 @@ import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
-import di.swallet.wpb.domain.WalletKeyRepository
-import di.swallet.wpb.issuance.proof.ProofMaterial
 import di.swallet.wpb.issuance.storage.JpaIssuedCredentialStorage
-import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
-import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
+import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.observability.InMemorySessionEventStore
 import di.swallet.wpb.openid4vci.adapter.SimulatedOpenId4VciGateway
 import di.swallet.wpb.openid4vci.protocol.IssuanceOutcome
@@ -50,17 +47,16 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
-import java.security.KeyPairGenerator
-import java.security.interfaces.ECPublicKey
-import java.security.spec.ECGenParameterSpec
 import java.time.Instant
 import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
 class MdocOpenId4VpRuntimeE2ETest {
+    private val holder = MdocTestSupport.holderBinding()
+    private val stack = MdocTestSupport.stack(holderBindings = listOf(holder))
     private val mdocRegistry = MdocDocTypeRegistry()
-    private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
+    private val mdocCodec = stack.codec
 
     @Test
     fun `mdoc runtime supports PID and mDL positive and negative`() = runBlocking {
@@ -68,7 +64,7 @@ class MdocOpenId4VpRuntimeE2ETest {
         val credentialRepository = inMemoryRepository(storedCredentials)
         val storage = JpaIssuedCredentialStorage(
             repository = credentialRepository,
-            walletKeyRepository = mock(WalletKeyRepository::class.java),
+            walletKeyRepository = stack.walletKeyRepository,
             disclosureCipher = DisclosureCipherService(WalletProperties()),
             mdocCredentialCodec = mdocCodec,
             mdocDocTypeRegistry = mdocRegistry,
@@ -233,17 +229,17 @@ class MdocOpenId4VpRuntimeE2ETest {
             """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["$configurationId"]}""",
         )
         val sessionId = UUID.randomUUID().toString()
-        val prepared = gateway.prepareAuthorization(sessionId, offer, metadata, proof(), walletAttestation())
+        val prepared = gateway.prepareAuthorization(sessionId, offer, metadata, holder.proof, walletAttestation())
         gateway.authorizeWithCode(sessionId, "code-$configurationId", prepared.state, walletAttestation())
         val outcome = gateway.requestCredential(
             adapterSessionId = sessionId,
             request = IssuanceRequest(credentialConfigurationId = configurationId),
-            proof = proof(),
+            proof = holder.proof,
             keyAttestation = keyAttestation,
         )
         assertTrue(outcome is IssuanceOutcome.Issued)
         val issued = (outcome as IssuanceOutcome.Issued).credentials.single()
-        storage.store(holderId = holderId, issued = issued)
+        storage.store(holderId = holderId, issued = issued, walletKey = holder.walletKey)
     }
 
     private fun inMemoryRepository(state: MutableList<WalletCredential>): WalletCredentialRepository {
@@ -269,17 +265,6 @@ class MdocOpenId4VpRuntimeE2ETest {
             Optional.ofNullable(state.firstOrNull { it.id == id })
         }
         return repository
-    }
-
-    private fun proof(): ProofMaterial {
-        val keyPair = KeyPairGenerator.getInstance("EC").apply {
-            initialize(ECGenParameterSpec("secp256r1"))
-        }.generateKeyPair()
-        return ProofMaterial(
-            keyId = "proof-${UUID.randomUUID()}",
-            publicKey = keyPair.public as ECPublicKey,
-            algorithm = "ES256",
-        )
     }
 
     private fun walletAttestation(): WalletAttestationTransport = WalletAttestationTransport(

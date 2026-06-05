@@ -5,9 +5,8 @@ import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.ka.trust.CertificateChainValidator
-import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
-import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
+import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.observability.InMemorySessionEventStore
 import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
@@ -56,7 +55,7 @@ import java.util.Base64
 import java.util.Date
 
 class RemoteLoteTrustOpenId4VpE2ETest {
-    private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
+    private val mdocCodec = MdocTestSupport.stack().codec
 
     @Test
     fun `remote TS119602 drives runtime trust decision pass and fail`() = runBlocking {

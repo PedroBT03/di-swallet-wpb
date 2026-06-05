@@ -1,6 +1,7 @@
 package di.swallet.wpb
 
 import di.swallet.wpb.config.HsmProperties
+import di.swallet.wpb.config.MdocProperties
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.config.OpenId4VpProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -12,6 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @EnableScheduling
 @EnableConfigurationProperties(
     HsmProperties::class,
+    MdocProperties::class,
     OpenId4VpProperties::class,
     OpenId4VciProperties::class,
 )

@@ -9,9 +9,8 @@ import com.nimbusds.jwt.SignedJWT
 import com.sun.net.httpserver.HttpServer
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.domain.WalletCredentialRepository
-import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
-import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
+import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.ka.trust.CertificateChainValidator
 import di.swallet.wpb.observability.InMemorySessionEventStore
 import di.swallet.wpb.openid4vp.adapter.SdkOpenId4VpGateway
@@ -71,7 +70,7 @@ import com.nimbusds.jose.JWEAlgorithm
  * DefaultTrustValidator.
  */
 class SignedOid4VpTrustChainE2ETest {
-    private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
+    private val mdocCodec = MdocTestSupport.stack().codec
 
     @Test
     fun `signed authorization request drives extractor to pkix trust validation`() = runBlocking {

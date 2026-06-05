@@ -10,9 +10,7 @@ import com.authlete.cbor.CBORString
 import com.authlete.cose.COSEEC2Key
 import com.authlete.cose.COSEProtectedHeader
 import com.authlete.cose.COSESign1
-import com.authlete.cose.COSESigner
 import com.authlete.cose.COSEUnprotectedHeader
-import com.authlete.cose.COSEVerifier
 import com.authlete.cose.SigStructure
 import com.authlete.cose.constants.COSEAlgorithms
 import com.authlete.mdoc.DeviceAuth
@@ -25,46 +23,28 @@ import com.authlete.mdoc.DeviceSignedItemsEntry
 import com.authlete.mdoc.IssuerSigned
 import com.authlete.mdoc.IssuerSignedBuilder
 import com.authlete.mdoc.ValidityInfo
-import org.bouncycastle.asn1.x500.X500Name
-import org.bouncycastle.cert.X509CertificateHolder
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
-import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.bouncycastle.operator.ContentSigner
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
+import di.swallet.wpb.config.MdocProperties
+import di.swallet.wpb.domain.WalletKeyRepository
 import org.springframework.stereotype.Component
-import java.math.BigInteger
-import java.security.KeyPair
-import java.security.KeyPairGenerator
-import java.security.Security
-import java.security.cert.X509Certificate
-import java.security.interfaces.ECPrivateKey
-import java.security.interfaces.ECPublicKey
-import java.security.spec.ECGenParameterSpec
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.util.Base64
-import java.util.Date
-import java.util.concurrent.atomic.AtomicBoolean
 
 @Component
-class MdocIsoRuntimeService {
-    private val initProvider = AtomicBoolean(false)
-    private val issuerKeyPair: KeyPair = ecKeyPair()
-    private val deviceKeyPair: KeyPair = ecKeyPair()
-    private val issuerCertificate: X509Certificate = selfSignedCertificate(issuerKeyPair, "CN=WPB mdoc issuer")
-    private val issuerCoseKey: COSEEC2Key = toCoseEc2Key(
-        privateKey = issuerKeyPair.private as ECPrivateKey,
-        publicKey = issuerKeyPair.public as ECPublicKey,
-    )
-    private val issuerPublicKey = issuerKeyPair.public
-    private val devicePrivateKey = deviceKeyPair.private
-    private val devicePublicCoseKey: COSEEC2Key = toCoseEc2PublicKey(deviceKeyPair.public as ECPublicKey)
-
+class MdocIsoRuntimeService(
+    private val properties: MdocProperties,
+    private val issuerKeyStore: MdocIssuerKeyStore,
+    private val credentialVerifier: MdocCredentialVerifier,
+    private val deviceAuthSigner: MdocDeviceAuthSigner,
+    private val sessionTranscriptBuilder: MdocSessionTranscriptBuilder,
+    private val walletKeyRepository: WalletKeyRepository,
+) {
     fun issueIssuerSigned(
         docType: String,
         namespaceClaims: Map<String, Map<String, Any?>>,
+        devicePublicCoseKey: COSEEC2Key,
     ): String {
+        val issuer = issuerKeyStore.material()
         val now = ZonedDateTime.now(ZoneOffset.UTC).withNano(0)
         val validityInfo = ValidityInfo(now, now, now.plusYears(1))
         val claims = namespaceClaims.mapValues { it.value as Any }.toMap()
@@ -73,8 +53,8 @@ class MdocIsoRuntimeService {
             .setClaims(claims)
             .setValidityInfo(validityInfo)
             .setDeviceKey(devicePublicCoseKey)
-            .setIssuerKey(issuerCoseKey)
-            .setIssuerCertChain(listOf(issuerCertificate))
+            .setIssuerKey(issuer.coseKey)
+            .setIssuerCertChain(listOf(issuer.certificate))
             .build()
         return Base64.getUrlEncoder().withoutPadding().encodeToString(issuerSigned.encode())
     }
@@ -84,17 +64,32 @@ class MdocIsoRuntimeService {
         docType: String,
         namespaceClaims: Map<String, Map<String, Any?>>,
         requestedClaims: List<String>,
-        audience: String,
-        nonce: String,
+        handover: MdocOpenId4VpHandover,
         holderKeyAlias: String? = null,
     ): String {
+        val alias = holderKeyAlias?.trim().orEmpty()
+        if (properties.requireHolderKeyAlias && alias.isBlank()) {
+            throw IllegalStateException("mdoc presentation requires a holder HSM key alias")
+        }
+        if (alias.isNotBlank()) {
+            assertDeviceKeyBinding(originalIssuedPayload, alias)
+        }
+
         val issuerSignedItem = when {
             !originalIssuedPayload.isNullOrBlank() ->
                 extractIssuerSignedItem(originalIssuedPayload)
                     ?: throw IllegalArgumentException("Invalid previously issued mdoc artifact for DeviceResponse build.")
-            else -> decodeCborItem(issueIssuerSigned(docType, namespaceClaims))
-                ?: throw IllegalStateException("Unable to decode freshly issued IssuerSigned artifact.")
+            else -> {
+                val fresh = issueIssuerSigned(
+                    docType = docType,
+                    namespaceClaims = namespaceClaims,
+                    devicePublicCoseKey = requireDeviceKeyForAlias(alias),
+                )
+                decodeCborItem(fresh)
+                    ?: throw IllegalStateException("Unable to decode freshly issued IssuerSigned artifact.")
+            }
         }
+
         val filtered = if (requestedClaims.isEmpty()) {
             namespaceClaims
         } else {
@@ -115,10 +110,10 @@ class MdocIsoRuntimeService {
             },
         )
         val deviceNameSpacesBytes = DeviceNameSpacesBytes(deviceNameSpaces)
+        val sessionTranscript = sessionTranscriptBuilder.buildSessionTranscript(handover)
         val deviceAuthenticationBytes = buildDeviceAuthenticationPayload(
             docType = docType,
-            audience = audience,
-            nonce = nonce,
+            sessionTranscript = sessionTranscript,
             deviceNameSpacesBytes = deviceNameSpacesBytes,
         )
         val protectedHeader = COSEProtectedHeader.build(mapOf(1 to COSEAlgorithms.ES256))
@@ -127,7 +122,11 @@ class MdocIsoRuntimeService {
             CBORByteArray(ByteArray(0)),
             CBORByteArray(deviceAuthenticationBytes),
         )
-        val signature = COSESigner(devicePrivateKey).sign(sigStructure, COSEAlgorithms.ES256)
+        val signature = if (alias.isNotBlank()) {
+            deviceAuthSigner.signEs256(alias, sigStructure.encode())
+        } else {
+            throw IllegalStateException("mdoc presentation requires holder HSM key alias for device authentication")
+        }
         val coseSign1 = COSESign1(
             protectedHeader,
             COSEUnprotectedHeader.build(emptyMap()),
@@ -161,33 +160,38 @@ class MdocIsoRuntimeService {
 
     fun isEncodedMdoc(raw: String): Boolean = decode(raw) != null
 
-    fun validateIssuerSigned(raw: String): Boolean {
-        val cborItem = decodeCborItem(raw) ?: return false
-        val issuerAuthItem = readPairValue(cborItem, "issuerAuth") ?: return false
-        val cose = runCatching { COSESign1.build(issuerAuthItem) }.getOrNull() ?: return false
-        return runCatching { COSEVerifier(issuerPublicKey).verify(cose) }.getOrDefault(false)
+    fun validateIssuerSigned(raw: String): Boolean = credentialVerifier.validateIssuerSigned(raw)
+
+    fun validateDeviceResponse(raw: String): Boolean = credentialVerifier.validateDeviceResponse(raw)
+
+    private fun assertDeviceKeyBinding(originalIssuedPayload: String?, holderKeyAlias: String) {
+        val payload = originalIssuedPayload?.trim().orEmpty()
+        if (payload.isBlank()) return
+        val expected = credentialVerifier.extractDeviceCosePublicKey(payload)
+            ?: throw IllegalStateException("mdoc artifact does not contain a device public key")
+        val walletKey = walletKeyRepository.findByKeyAlias(holderKeyAlias).orElse(null)
+            ?: throw IllegalStateException("holder key alias '$holderKeyAlias' not found")
+        val holderCose = MdocCoseKeyMaterial.toCoseEc2PublicKey(
+            MdocCoseKeyMaterial.decodeEcPublicKey(walletKey.publicKeyBase64),
+        )
+        if (!cosePublicKeysMatch(expected, holderCose)) {
+            throw IllegalStateException("holder key alias '$holderKeyAlias' does not match MSO device key binding")
+        }
     }
 
-    fun validateDeviceResponse(raw: String): Boolean {
-        val item = decodeCborItem(raw) ?: return false
-        val docsItem = readPairValue(item, "documents") ?: return false
-        val docs = docsItem as? com.authlete.cbor.CBORItemList ?: return false
-        val firstDoc = docs.items.firstOrNull() as? com.authlete.cbor.CBORPairList ?: return false
-        val issuerSignedItem = readPairValue(firstDoc, "issuerSigned") as? com.authlete.cbor.CBORPairList ?: return false
-        val issuerAuth = readPairValue(issuerSignedItem, "issuerAuth") ?: return false
-        val issuerOk = runCatching {
-            val issuerCose = COSESign1.build(issuerAuth)
-            COSEVerifier(issuerPublicKey).verify(issuerCose)
-        }.getOrDefault(false)
-        val deviceSignedItem = readPairValue(firstDoc, "deviceSigned") as? com.authlete.cbor.CBORPairList ?: return false
-        val deviceAuthItem = readPairValue(deviceSignedItem, "deviceAuth") as? com.authlete.cbor.CBORPairList ?: return false
-        val deviceSignatureItem = readPairValue(deviceAuthItem, "deviceSignature") ?: return false
-        val deviceOk = runCatching {
-            val deviceCose = COSESign1.build(deviceSignatureItem)
-            COSEVerifier(deviceKeyPair.public).verify(deviceCose)
-        }.getOrDefault(false)
-        return issuerOk && deviceOk
+    private fun requireDeviceKeyForAlias(alias: String): COSEEC2Key {
+        if (alias.isBlank()) {
+            throw IllegalStateException("mdoc issuance requires holder device public key")
+        }
+        val walletKey = walletKeyRepository.findByKeyAlias(alias).orElse(null)
+            ?: throw IllegalStateException("holder key alias '$alias' not found for mdoc issuance")
+        return MdocCoseKeyMaterial.toCoseEc2PublicKey(
+            MdocCoseKeyMaterial.decodeEcPublicKey(walletKey.publicKeyBase64),
+        )
     }
+
+    private fun cosePublicKeysMatch(left: COSEEC2Key, right: COSEEC2Key): Boolean =
+        left.encode().contentEquals(right.encode())
 
     private fun decodeDeviceResponseMap(parsedMap: Map<*, *>): MdocCredentialDocument? {
         val documents = parsedMap["documents"] as? List<*> ?: return null
@@ -235,21 +239,14 @@ class MdocIsoRuntimeService {
 
     private fun buildDeviceAuthenticationPayload(
         docType: String,
-        audience: String,
-        nonce: String,
+        sessionTranscript: CBORItem,
         deviceNameSpacesBytes: DeviceNameSpacesBytes,
-    ): ByteArray {
-        val sessionTranscript = CBORPairList(
-            CBORPair(CBORString("aud"), CBORString(audience)),
-            CBORPair(CBORString("nonce"), CBORString(nonce)),
-        )
-        return CBORItemList(
-            CBORString("DeviceAuthentication"),
-            sessionTranscript,
-            CBORString(docType),
-            deviceNameSpacesBytes,
-        ).encode()
-    }
+    ): ByteArray = CBORItemList(
+        CBORString("DeviceAuthentication"),
+        sessionTranscript,
+        CBORString(docType),
+        deviceNameSpacesBytes,
+    ).encode()
 
     private fun extractIssuerSignedItem(raw: String): CBORItem? {
         val root = decodeCborItem(raw) ?: return null
@@ -268,12 +265,11 @@ class MdocIsoRuntimeService {
         return runCatching { CBORDecoder(bytes).next() }.getOrNull()
     }
 
-    private fun decodeCbor(bytes: ByteArray): Any? {
-        return runCatching {
+    private fun decodeCbor(bytes: ByteArray): Any? =
+        runCatching {
             val item = CBORDecoder(bytes).next()
             item.parse()
         }.getOrNull()
-    }
 
     private fun decodeBase64Url(value: String): ByteArray? {
         val clean = value.trim()
@@ -287,63 +283,5 @@ class MdocIsoRuntimeService {
         return pairList.pairs.firstOrNull { pair ->
             (pair.key as? CBORString)?.value == key
         }?.value
-    }
-
-    private fun selfSignedCertificate(keyPair: KeyPair, subject: String): X509Certificate {
-        if (initProvider.compareAndSet(false, true)) {
-            Security.addProvider(BouncyCastleProvider())
-        }
-        val now = Date()
-        val notAfter = Date(now.time + 365L * 24L * 60L * 60L * 1000L)
-        val subjectName = X500Name(subject)
-        val builder = JcaX509v3CertificateBuilder(
-            subjectName,
-            BigInteger.valueOf(System.currentTimeMillis()),
-            now,
-            notAfter,
-            subjectName,
-            keyPair.public,
-        )
-        val signer: ContentSigner = JcaContentSignerBuilder("SHA256withECDSA")
-            .setProvider("BC")
-            .build(keyPair.private)
-        val holder: X509CertificateHolder = builder.build(signer)
-        return JcaX509CertificateConverter().setProvider("BC").getCertificate(holder)
-    }
-
-    private fun ecKeyPair(): KeyPair {
-        val kpg = KeyPairGenerator.getInstance("EC")
-        kpg.initialize(ECGenParameterSpec("secp256r1"))
-        return kpg.generateKeyPair()
-    }
-
-    private fun toCoseEc2Key(privateKey: ECPrivateKey, publicKey: ECPublicKey): COSEEC2Key {
-        val x = toFixed(publicKey.w.affineX.toByteArray(), 32)
-        val y = toFixed(publicKey.w.affineY.toByteArray(), 32)
-        val d = toFixed(privateKey.s.toByteArray(), 32)
-        return com.authlete.cose.COSEKeyBuilder()
-            .ktyEC2()
-            .ec2CrvP256()
-            .ec2X(x)
-            .ec2Y(y)
-            .ec2D(d)
-            .buildEC2Key()
-    }
-
-    private fun toCoseEc2PublicKey(publicKey: ECPublicKey): COSEEC2Key {
-        val x = toFixed(publicKey.w.affineX.toByteArray(), 32)
-        val y = toFixed(publicKey.w.affineY.toByteArray(), 32)
-        return com.authlete.cose.COSEKeyBuilder()
-            .ktyEC2()
-            .ec2CrvP256()
-            .ec2X(x)
-            .ec2Y(y)
-            .buildEC2Key()
-    }
-
-    private fun toFixed(raw: ByteArray, size: Int): ByteArray {
-        if (raw.size == size) return raw
-        if (raw.size > size) return raw.copyOfRange(raw.size - size, raw.size)
-        return ByteArray(size - raw.size) + raw
     }
 }

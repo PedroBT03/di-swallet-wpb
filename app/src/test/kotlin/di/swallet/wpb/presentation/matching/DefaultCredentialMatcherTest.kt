@@ -2,10 +2,9 @@ package di.swallet.wpb.presentation.matching
 
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
-import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
-import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
+import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.format.sdjwt.SdJwtDisclosureSelector
 import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.config.WalletProperties
@@ -31,7 +30,8 @@ import java.util.UUID
 class DefaultCredentialMatcherTest {
 
     private lateinit var repository: WalletCredentialRepository
-    private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
+    private val binding = MdocTestSupport.holderBinding()
+    private val mdocCodec = MdocTestSupport.stack(holderBindings = listOf(binding)).codec
     private val mdocRegistry = MdocDocTypeRegistry()
     private val objectMapper = ObjectMapper()
     private val sdJwtService = SdJwtService(objectMapper)
@@ -177,6 +177,7 @@ class DefaultCredentialMatcherTest {
                     namespace = "org.iso.18013.5.1",
                     claims = mapOf("given_name" to "Alice"),
                 ),
+                binding.deviceCoseKey,
             ),
             encryptedDisclosures = "",
         )

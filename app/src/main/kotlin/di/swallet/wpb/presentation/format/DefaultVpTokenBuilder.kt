@@ -1,5 +1,6 @@
 package di.swallet.wpb.presentation.format
 
+import di.swallet.wpb.format.mdoc.MdocOpenId4VpHandover
 import di.swallet.wpb.format.sdjwt.SdJwtVpBuilder
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.PresentationContext
@@ -33,7 +34,7 @@ class DefaultVpTokenBuilder(
         val perQueryPresentations: Map<String, List<String>> = selected
             .groupBy { it.queryId }
             .mapValues { (_, items) ->
-                items.map { buildSingle(it, request.clientId, request.nonce) }
+                items.map { buildSingle(it, request) }
             }
 
         val format = selected.firstOrNull()?.format ?: CredentialFormat.SD_JWT
@@ -49,10 +50,17 @@ class DefaultVpTokenBuilder(
 
     private fun buildSingle(
         selected: SelectedCredential,
-        verifierAudience: String,
-        verifierNonce: String,
+        request: di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest,
     ): String = when (selected.format) {
-        CredentialFormat.SD_JWT -> sdJwtVpBuilder.build(selected, verifierAudience, verifierNonce).presentation
-        CredentialFormat.MDOC -> mdocVpBuilder.build(selected, verifierAudience, verifierNonce).presentation
+        CredentialFormat.SD_JWT -> sdJwtVpBuilder.build(selected, request.clientId, request.nonce).presentation
+        CredentialFormat.MDOC -> mdocVpBuilder.build(
+            selected,
+            MdocOpenId4VpHandover(
+                clientId = request.clientId,
+                nonce = request.nonce,
+                audience = request.clientId,
+                responseUri = request.responseUri,
+            ),
+        ).presentation
     }
 }

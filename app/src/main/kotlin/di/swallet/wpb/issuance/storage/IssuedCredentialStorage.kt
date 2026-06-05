@@ -6,7 +6,6 @@ import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.format.mdoc.MdocCredentialCodec
-import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.service.format.DisclosureCipherService

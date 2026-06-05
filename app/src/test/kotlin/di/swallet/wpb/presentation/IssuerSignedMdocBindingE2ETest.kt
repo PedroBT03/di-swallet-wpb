@@ -3,14 +3,12 @@ package di.swallet.wpb.presentation
 import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
-import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.issuance.storage.JpaIssuedCredentialStorage
 import di.swallet.wpb.format.mdoc.IndependentMdocVerifier
-import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
-import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
+import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.SelectedCredential
@@ -28,8 +26,9 @@ import java.util.Optional
 import java.util.concurrent.atomic.AtomicLong
 
 class IssuerSignedMdocBindingE2ETest {
-    private val runtime = MdocIsoRuntimeService()
-    private val codec = MdocCredentialCodec(runtime)
+    private val binding = MdocTestSupport.holderBinding()
+    private val stack = MdocTestSupport.stack(holderBindings = listOf(binding))
+    private val codec = stack.codec
     private val registry = MdocDocTypeRegistry()
     private val independent = IndependentMdocVerifier()
 
@@ -66,11 +65,12 @@ class IssuerSignedMdocBindingE2ETest {
                     "family_name" to "Doe",
                 ),
             ),
+            binding.deviceCoseKey,
         )
 
         val storage = JpaIssuedCredentialStorage(
             repository = repository,
-            walletKeyRepository = mock(WalletKeyRepository::class.java),
+            walletKeyRepository = stack.walletKeyRepository,
             disclosureCipher = DisclosureCipherService(WalletProperties()),
             mdocCredentialCodec = codec,
             mdocDocTypeRegistry = registry,
@@ -83,6 +83,7 @@ class IssuerSignedMdocBindingE2ETest {
                 format = IssuanceCredentialFormat.MSO_MDOC,
                 rawPayload = issuedPayload,
             ),
+            walletKey = binding.walletKey,
         )
 
         val vpBuilder = MdocVpBuilder(
@@ -100,8 +101,7 @@ class IssuerSignedMdocBindingE2ETest {
                 format = CredentialFormat.MDOC,
                 requestedClaimPaths = listOf(di.swallet.wpb.presentation.domain.ClaimPath.key("given_name")),
             ),
-            verifierAudience = "verifier-demo-client",
-            verifierNonce = "nonce-123",
+            handover = MdocTestSupport.handover(),
         )
 
         val storedPayload = state.single().encodedData

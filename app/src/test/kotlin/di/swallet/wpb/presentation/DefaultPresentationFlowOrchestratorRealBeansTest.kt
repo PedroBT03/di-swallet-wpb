@@ -9,9 +9,8 @@ import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
 import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
 import di.swallet.wpb.config.OpenId4VpProperties
-import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
-import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
+import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
@@ -160,7 +159,7 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
             policyEngine = DefaultPolicyEngine(trustProperties),
             credentialMatcher = PresentationTestSupport.credentialMatcher(
                 repository,
-                MdocCredentialCodec(MdocIsoRuntimeService()),
+                MdocTestSupport.stack().codec,
                 MdocDocTypeRegistry(),
                 demoMode = demoMode,
             ),

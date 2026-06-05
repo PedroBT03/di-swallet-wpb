@@ -16,9 +16,8 @@ import di.swallet.wpb.observability.InMemoryIssuanceEventStore
 import di.swallet.wpb.ka.attestation.KeyAttestationProvider
 import di.swallet.wpb.ka.validation.KeyAttestationValidationException
 import di.swallet.wpb.ka.validation.KeyAttestationValidationService
-import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
-import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
+import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.openid4vci.adapter.SimulatedOpenId4VciGateway
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
@@ -40,7 +39,7 @@ import di.swallet.wpb.service.KeyBindingRuntimeService
 import org.mockito.Mockito.mock
 
 class DefaultIssuanceFlowOrchestratorTest {
-    private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
+    private val mdocCodec = MdocTestSupport.stack().codec
 
     /**
      * In-memory storage stub avoids JPA/H2 wiring for the unit tests.

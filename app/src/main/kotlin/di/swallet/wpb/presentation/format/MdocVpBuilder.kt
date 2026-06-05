@@ -4,6 +4,8 @@ import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocOpenId4VpHandover
+import di.swallet.wpb.format.mdoc.MdocCoseKeyMaterial
 import di.swallet.wpb.presentation.domain.SelectedCredential
 import di.swallet.wpb.service.CredentialBindingValidationService
 import di.swallet.wpb.domain.CredentialBindingFormat
@@ -21,11 +23,10 @@ class MdocVpBuilder(
 
     fun build(
         selected: SelectedCredential,
-        verifierAudience: String,
-        verifierNonce: String,
+        handover: MdocOpenId4VpHandover,
     ): MdocVpResult {
         val credentialId = selected.credentialId
-            ?: return demoFallback(selected, verifierAudience, verifierNonce)
+            ?: return demoFallback(selected, handover)
         val credential = walletCredentialRepository.findById(credentialId)
             .orElseThrow { IllegalStateException("Selected credential $credentialId not found") }
         credentialBindingValidationService?.requireBinding(credentialId, CredentialBindingFormat.MDOC)
@@ -42,8 +43,7 @@ class MdocVpBuilder(
             docType = effectiveDocType,
             namespaceClaims = namespaceClaims,
             requestedClaims = selected.requestedClaims,
-            audience = verifierAudience,
-            nonce = verifierNonce,
+            handover = handover,
             holderKeyAlias = runCatching { credential.walletKey?.keyAlias }.getOrNull(),
         )
 
@@ -52,7 +52,7 @@ class MdocVpBuilder(
             credentialId,
             effectiveDocType,
             filteredClaims.size,
-            verifierAudience,
+            handover.audience,
         )
         return MdocVpResult(
             presentation = encodedPresentation,
@@ -89,19 +89,23 @@ class MdocVpBuilder(
 
     private fun demoFallback(
         selected: SelectedCredential,
-        verifierAudience: String,
-        verifierNonce: String,
+        handover: MdocOpenId4VpHandover,
     ): MdocVpResult {
+        val ephemeral = java.security.KeyPairGenerator.getInstance("EC").apply {
+            initialize(java.security.spec.ECGenParameterSpec("secp256r1"))
+        }.generateKeyPair()
+        val deviceKey = MdocCoseKeyMaterial.toCoseEc2PublicKey(ephemeral.public as java.security.interfaces.ECPublicKey)
         val payload = mdocCredentialCodec.encode(
             MdocCredentialDocument(
                 docType = "demo.mdoc",
                 namespace = "demo.mdoc",
                 claims = mapOf(
                     "candidate" to selected.candidateId,
-                    "aud" to verifierAudience,
-                    "nonce" to verifierNonce,
+                    "aud" to handover.audience,
+                    "nonce" to handover.nonce,
                 ),
             ),
+            deviceKey,
         )
         logger.warn("mdoc.vp.built using demo fallback for synthetic candidate {}", selected.candidateId)
         return MdocVpResult(presentation = payload, disclosedClaims = 0, isDemo = true)

@@ -5,10 +5,9 @@ import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
-import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
-import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
+import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.service.format.DisclosureCipherService
 import di.swallet.wpb.service.KeyBindingRuntimeService
@@ -25,7 +24,8 @@ import org.mockito.Mockito.`when`
 class JpaIssuedCredentialStorageTest {
 
     private fun cipher() = DisclosureCipherService(WalletProperties())
-    private val mdocCodec = MdocCredentialCodec(MdocIsoRuntimeService())
+    private val binding = MdocTestSupport.holderBinding()
+    private val mdocCodec = MdocTestSupport.stack(holderBindings = listOf(binding)).codec
     private val mdocRegistry = MdocDocTypeRegistry()
 
     @Test
@@ -104,6 +104,7 @@ class JpaIssuedCredentialStorageTest {
                     "driving_privileges" to listOf("B"),
                 ),
             ),
+            binding.deviceCoseKey,
         )
         val issued = IssuedCredential(
             credentialConfigurationId = "org.iso.18013.5.1.mDL",

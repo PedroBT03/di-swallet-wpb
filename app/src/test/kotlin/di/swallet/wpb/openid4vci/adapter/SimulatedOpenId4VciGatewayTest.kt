@@ -4,9 +4,8 @@ import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.issuance.domain.DeferredIssuanceHandle
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.issuance.proof.ProofMaterial
-import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
-import di.swallet.wpb.format.mdoc.MdocIsoRuntimeService
+import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.openid4vci.protocol.AuthorizationFlowKind
 import di.swallet.wpb.openid4vci.protocol.DeferredQueryOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceOutcome
@@ -25,8 +24,7 @@ import java.security.spec.ECGenParameterSpec
 import java.util.UUID
 
 class SimulatedOpenId4VciGatewayTest {
-    private val isoRuntime = MdocIsoRuntimeService()
-    private val codec = MdocCredentialCodec(isoRuntime)
+    private val codec = MdocTestSupport.stack().codec
 
     private fun gateway(properties: OpenId4VciProperties = OpenId4VciProperties()) = SimulatedOpenId4VciGateway(
         properties,

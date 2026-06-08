@@ -703,6 +703,23 @@
       "sourceType": "di.swallet.wpb.config.TransactionLogProperties",
       "description": "Cron expression for transaction log retention job.",
       "defaultValue": "0 30 2 * * *"
+    },
+    {
+      "name": "wpb.data-deletion",
+      "type": "di.swallet.wpb.config.DataDeletionRequestProperties",
+      "description": "GDPR Art. 17 data deletion request templates and notices (TS7 / DATA_DLT)."
+    },
+    {
+      "name": "wpb.data-deletion.mail-subject",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.DataDeletionRequestProperties",
+      "description": "Subject line for mailto deletion request actions (DATA_DLT_08)."
+    },
+    {
+      "name": "wpb.data-deletion.registry-lookup-notice",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.DataDeletionRequestProperties",
+      "description": "User notice when registry fallback supplies deletion contacts (DATA_DLT_02a)."
     }
   ],
   "hints": []

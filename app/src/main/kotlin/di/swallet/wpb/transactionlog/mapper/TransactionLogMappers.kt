@@ -1,5 +1,6 @@
 package di.swallet.wpb.transactionlog.mapper
 
+import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.issuance.domain.IssuanceContext
 import di.swallet.wpb.issuance.domain.IssuanceState
@@ -30,7 +31,9 @@ import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 @Component
-class PresentationTransactionMapper {
+class PresentationTransactionMapper(
+    private val contactBuilder: Ts10InteractingPartyContactBuilder,
+) {
     private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC)
 
     fun fromContext(context: PresentationContext, now: Instant = Instant.now()): Ts10Transaction? {
@@ -65,7 +68,7 @@ class PresentationTransactionMapper {
             },
             dpaName = dpa?.name,
             dpaCountry = dpa?.country,
-            dpaContact = dpa?.email.orEmpty() + dpa?.phone.orEmpty() + dpa?.formUri.orEmpty(),
+            dpaContact = buildDpaContact(dpa),
             listOfClaimsRequested = requested,
             listOfClaimsPresented = presented,
             reasonOfNoncompletion = if (completed) null else context.error?.message ?: context.consentDecision?.reason,
@@ -165,7 +168,12 @@ class PresentationTransactionMapper {
 
     private fun buildContact(registry: RpRegistryRecord?): List<String> {
         if (registry == null) return emptyList()
-        return registry.supportUris
+        return contactBuilder.fromRegistry(registry)
+    }
+
+    private fun buildDpaContact(dpa: di.swallet.wpb.presentation.domain.SupervisoryAuthorityContact?): List<String> {
+        if (dpa == null) return emptyList()
+        return dpa.email + dpa.phone + dpa.formUri
     }
 }
 

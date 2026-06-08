@@ -77,6 +77,13 @@ data class Ts10SigningSealing(
 )
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
+data class Ts10DataDeletionRequest(
+    val interactingPartyIdentifier: Ts10Identifier? = null,
+    val interactingPartyName: String? = null,
+    val listOfClaims: List<Ts10ClaimInfo> = emptyList(),
+)
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class Ts10OtherTransaction(
     val description: String,
 )
@@ -86,6 +93,7 @@ enum class Ts10TransactionType {
     CredentialIssuance,
     CredentialDeletion,
     SigningSealing,
+    DataDeletionRequest,
     OtherTransaction,
 }
 
@@ -104,6 +112,7 @@ data class Ts10Transaction(
     val credentialIssuance: Ts10CredentialIssuance? = null,
     val credentialDeletion: Ts10CredentialDeletion? = null,
     val signingSealing: Ts10SigningSealing? = null,
+    val dataDeletionRequest: Ts10DataDeletionRequest? = null,
     val otherTransaction: Ts10OtherTransaction? = null,
 )
 

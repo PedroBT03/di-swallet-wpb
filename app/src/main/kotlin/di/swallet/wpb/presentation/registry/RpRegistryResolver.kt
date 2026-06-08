@@ -44,6 +44,8 @@ class RpRegistryResolver(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val cache = ConcurrentHashMap<String, CachedRegistryRecord>()
 
+    fun lookupByIdentifier(rpIdentifier: String): RegistryResolution = resolveRecord(rpIdentifier)
+
     fun resolveAndValidate(
         rpIdentifier: String,
         credentialQueries: List<CredentialQuery>,

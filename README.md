@@ -729,7 +729,7 @@ Indices are chosen uniformly in `[0, capacity)` among unallocated slots. `capaci
 | `device_bound` flag on `WalletCredential` for migration classification | Implemented |
 | Retention job with warning `OtherTransaction` (DASH_02a) | Implemented |
 
-**Out of scope (deferred):** Migration import (Mig_06–07b), W2W / pseudonym / DPA / data-deletion transaction types, dashboard UI.
+**Out of scope (deferred):** Migration import (Mig_06–07b), W2W / pseudonym / DPA transaction types, dashboard UI.
 
 **WIAM_12a note:** In this server-side MVP the WPB stores encrypted logs with per-holder DEKs on the server. Export JWE uses a user-provided password (TS10 §5). Full “WP cannot read log contents” requires a client-side or user-held key model and is documented as a known architectural limit.
 
@@ -757,3 +757,33 @@ wpb.transaction-log.retention-cron=0 30 2 * * *
 | `DELETE` | `/api/v1/wallet/credentials/{id}` | Delete credential + log `CredentialDeletion` |
 
 All endpoints under `/api/v1/wallet/**` require FIDO2 authorization. Export additionally requires a user password in the request body for JWE encryption.
+
+## Phase 11 - Data deletion requests (TS7 / DATA_DLT)
+
+### What Phase 11 delivers
+
+| Capability | Status |
+|---|---|
+| TS10 `DataDeletionRequest` transaction type (DATA_DLT_05/06) | Implemented |
+| Classified `interactingPartyContact` in presentation logs (DASH_03g) | Implemented |
+| Eligible completed presentations API (DATA_DLT_01) | Implemented |
+| Actionable URIs: `https://`, `mailto:`, `tel:` (WEB → EMAIL → PHONE) | Implemented |
+| Presentation log snapshot as primary contact source (DATA_DLT_02) | Implemented |
+| TS5 registry fallback when `consentRegistryLookup=true` (DATA_DLT_02a) | Implemented |
+| GDPR mailto templates (DATA_DLT_08/09) | Implemented |
+| Explicit claim subset or `deleteAllPresented=true` | Implemented |
+
+**Distinct from Phase 10:** `CredentialDeletion` removes a credential from the wallet. `DataDeletionRequest` logs the user's GDPR erasure request to a Relying Party and returns channels for the client to act on.
+
+**Out of scope (Phase 11b+):** WRPRC parsing, OID4VP signed deletion, RP authentication (DATA_DLT_07), dashboard UI.
+
+### API endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/wallet/deletion-requests/eligible?holderId=` | List eligible completed presentations |
+| `POST` | `/api/v1/wallet/deletion-requests` | Initiate deletion request; returns `availableActions[]` |
+
+`POST` body: `{ holderId, presentationTransactionId, claimsToDelete?, deleteAllPresented, consentRegistryLookup }`.
+
+Response includes `transactionId` (new log entry), `sourcePresentationTransactionId` (API only, not in TS10 export), `availableActions[{channel, uri}]`, and optional `userNotice` when registry fallback was used.

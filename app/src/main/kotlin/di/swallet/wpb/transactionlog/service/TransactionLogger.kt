@@ -5,6 +5,7 @@ import di.swallet.wpb.issuance.domain.IssuanceContext
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.PresentationState
+import di.swallet.wpb.transactionlog.domain.Ts10Transaction
 import di.swallet.wpb.transactionlog.mapper.CredentialDeletionTransactionMapper
 import di.swallet.wpb.transactionlog.mapper.IssuanceTransactionMapper
 import di.swallet.wpb.transactionlog.mapper.PresentationTransactionMapper
@@ -80,6 +81,11 @@ class TransactionLogger(
         val transaction = signingMapper.fromSignOperation(payload, algorithm, completed, reason)
         runCatching { transactionLogRecorder.record(holderId, transaction) }
             .onFailure { logger.warn("Failed to persist signing transaction for holder {}", holderId, it) }
+    }
+
+    fun logDataDeletionRequest(holderId: String, transaction: Ts10Transaction) {
+        runCatching { transactionLogRecorder.record(holderId, transaction) }
+            .onFailure { logger.warn("Failed to persist data deletion request transaction for holder {}", holderId, it) }
     }
 
     companion object {

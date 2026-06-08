@@ -10,6 +10,11 @@ import di.swallet.wpb.presentation.domain.PresentationRequirements
 import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.domain.SelectedCredential
 import di.swallet.wpb.presentation.domain.SessionMetadata
+import di.swallet.wpb.datadeletion.SupportUriClassifier
+import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
+import di.swallet.wpb.presentation.domain.RegistryIntendedUse
+import di.swallet.wpb.presentation.domain.RpRegistryRecord
+import di.swallet.wpb.presentation.domain.SupervisoryAuthorityContact
 import di.swallet.wpb.transactionlog.mapper.PresentationTransactionMapper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -18,7 +23,7 @@ import java.time.Instant
 import java.util.UUID
 
 class PresentationTransactionMapperTest {
-    private val mapper = PresentationTransactionMapper()
+    private val mapper = PresentationTransactionMapper(Ts10InteractingPartyContactBuilder(SupportUriClassifier()))
 
     @Test
     fun `maps claim paths only without attribute values`() {
@@ -74,5 +79,54 @@ class PresentationTransactionMapperTest {
         val serialized = tx.toString()
         assertFalse(serialized.contains("Pedro"))
         assertEquals(listOf("given_name"), tx.presentation?.listOfClaimsPresented?.first()?.claims)
+    }
+
+    @Test
+    fun `classifies interacting party contact and dpa contact`() {
+        val now = Instant.parse("2025-07-29T09:11:20Z")
+        val registry = RpRegistryRecord(
+            identifier = "rp-1",
+            tradeName = "Demo RP",
+            registryUri = "https://registry.example/rp-1",
+            supportUris = listOf(
+                "mailto:privacy@example.com",
+                "tel:+48123456789",
+                "https://example.com/privacy",
+            ),
+            supervisoryAuthority = SupervisoryAuthorityContact(
+                name = "DPA",
+                country = "PL",
+                email = listOf("dpa@example.com"),
+                phone = listOf("+48987654321"),
+                formUri = listOf("https://dpa.example/form"),
+            ),
+            intendedUses = listOf(RegistryIntendedUse(purpose = listOf("Age verification"))),
+            rawSignedJwt = "jwt",
+            rawJwtPayloadJson = "{}",
+            rawDataJson = "{}",
+        )
+        val context = PresentationContext(
+            sessionMeta = SessionMetadata(
+                sessionId = UUID.randomUUID(),
+                holderId = "holder-1",
+                correlationId = "corr-2",
+                createdAt = now,
+                updatedAt = now,
+                expiresAt = now.plusSeconds(600),
+            ),
+            state = PresentationState.DISPATCHED,
+            registryRecord = registry,
+            consentDecision = di.swallet.wpb.presentation.domain.ConsentDecision(granted = true),
+        )
+
+        val tx = mapper.fromContext(context, now)!!
+        assertEquals(
+            listOf("PL", "privacy@example.com", "+48123456789", "https://example.com/privacy"),
+            tx.presentation?.interactingPartyContact,
+        )
+        assertEquals(
+            listOf("dpa@example.com", "+48987654321", "https://dpa.example/form"),
+            tx.presentation?.dpaContact,
+        )
     }
 }

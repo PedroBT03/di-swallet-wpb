@@ -729,7 +729,7 @@ Indices are chosen uniformly in `[0, capacity)` among unallocated slots. `capaci
 | `device_bound` flag on `WalletCredential` for migration classification | Implemented |
 | Retention job with warning `OtherTransaction` (DASH_02a) | Implemented |
 
-**Out of scope (deferred):** Migration import (Mig_06–07b), W2W / pseudonym / DPA transaction types, dashboard UI.
+**Out of scope (deferred):** Migration import (Mig_06–07b), W2W / pseudonym transaction types, dashboard UI.
 
 **WIAM_12a note:** In this server-side MVP the WPB stores encrypted logs with per-holder DEKs on the server. Export JWE uses a user-provided password (TS10 §5). Full “WP cannot read log contents” requires a client-side or user-held key model and is documented as a known architectural limit.
 
@@ -787,3 +787,34 @@ All endpoints under `/api/v1/wallet/**` require FIDO2 authorization. Export addi
 `POST` body: `{ holderId, presentationTransactionId, claimsToDelete?, deleteAllPresented, consentRegistryLookup }`.
 
 Response includes `transactionId` (new log entry), `sourcePresentationTransactionId` (API only, not in TS10 export), `availableActions[{channel, uri}]`, and optional `userNotice` when registry fallback was used.
+
+## Phase 12 - DPA reporting (TS8 / RPT_DPA)
+
+### What Phase 12 delivers
+
+| Capability | Status |
+|---|---|
+| TS10 `DPAReport` transaction type (RPT_DPA_05) with `reportChannel`/`reportContact` extension (RPT_DPA_05a) | Implemented |
+| Classified `dpaContact` in presentation logs | Implemented |
+| Eligible presentations API — Completed and NotCompleted (ARF §6.6.3.13) | Implemented |
+| Actionable URIs: WEB → EMAIL → PHONE with TS8 mail templates (RPT_DPA_07–09) | Implemented |
+| Presentation log snapshot as primary DPA contact source | Implemented |
+| TS5 registry fallback when `consentRegistryLookup=true` | Implemented |
+| Configurable WP provider-region DPA fallback (RPT_DPA_01) — no hardcoded defaults | Implemented |
+| `substantiationDocument` as full `Ts10Transaction` (RPT_DPA_04) | Implemented |
+| `dnsNameSource` chain: certificate SAN → identifier → name | Implemented |
+
+**Distinct from Phase 11:** `DataDeletionRequest` contacts the Relying Party for GDPR erasure. `DPAReport` contacts the supervisory DPA about a suspicious request.
+
+**Production note:** configure `wpb.dpa-reporting.provider-fallback-dpa.*` when log/registry lack DPA contacts (required for RPT_DPA_01 in production).
+
+**Out of scope (Phase 12b+):** WRPRC/WRPAC DPA extraction, EDPB DPA picker, dashboard UI.
+
+### API endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/wallet/dpa-reports/eligible?holderId=` | List reportable presentations |
+| `POST` | `/api/v1/wallet/dpa-reports` | Initiate DPA report; returns `availableActions[]` + `substantiationDocument` |
+
+`POST` body: `{ holderId, presentationTransactionId, consentRegistryLookup }`.

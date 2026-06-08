@@ -43,6 +43,8 @@ data class Ts10Presentation(
     val dpaName: String? = null,
     val dpaCountry: String? = null,
     val dpaContact: List<String> = emptyList(),
+    /** WPB extension: dNSName from WRPAC when available (RPT_DPA_08 substantiation). */
+    val rpDnsName: String? = null,
     val listOfClaimsRequested: List<Ts10ClaimInfo> = emptyList(),
     val listOfClaimsPresented: List<Ts10ClaimInfo> = emptyList(),
     val reasonOfNoncompletion: String? = null,
@@ -77,6 +79,16 @@ data class Ts10SigningSealing(
 )
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
+data class Ts10DpaReport(
+    val dpaName: String? = null,
+    val dpaCountry: String? = null,
+    /** WPB extension for RPT_DPA_05a (channel used to initiate the report). */
+    val reportChannel: String? = null,
+    /** WPB extension for RPT_DPA_05a (contact URI/value used). */
+    val reportContact: String? = null,
+)
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class Ts10DataDeletionRequest(
     val interactingPartyIdentifier: Ts10Identifier? = null,
     val interactingPartyName: String? = null,
@@ -94,6 +106,7 @@ enum class Ts10TransactionType {
     CredentialDeletion,
     SigningSealing,
     DataDeletionRequest,
+    DPAReport,
     OtherTransaction,
 }
 
@@ -113,6 +126,7 @@ data class Ts10Transaction(
     val credentialDeletion: Ts10CredentialDeletion? = null,
     val signingSealing: Ts10SigningSealing? = null,
     val dataDeletionRequest: Ts10DataDeletionRequest? = null,
+    val dpaReport: Ts10DpaReport? = null,
     val otherTransaction: Ts10OtherTransaction? = null,
 )
 

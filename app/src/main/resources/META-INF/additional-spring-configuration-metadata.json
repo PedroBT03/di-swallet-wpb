@@ -720,6 +720,35 @@
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.DataDeletionRequestProperties",
       "description": "User notice when registry fallback supplies deletion contacts (DATA_DLT_02a)."
+    },
+    {
+      "name": "wpb.dpa-reporting",
+      "type": "di.swallet.wpb.config.DpaReportProperties",
+      "description": "DPA reporting templates, notices and provider-region fallback (TS8 / RPT_DPA)."
+    },
+    {
+      "name": "wpb.dpa-reporting.provider-fallback-dpa.name",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.DpaReportProperties",
+      "description": "Name of the Wallet Provider region DPA used when supervising DPA is unavailable (RPT_DPA_01)."
+    },
+    {
+      "name": "wpb.dpa-reporting.provider-fallback-dpa.country",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.DpaReportProperties",
+      "description": "Country of the Wallet Provider region fallback DPA."
+    },
+    {
+      "name": "wpb.dpa-reporting.provider-fallback-dpa.email",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.DpaReportProperties",
+      "description": "Email of the Wallet Provider region fallback DPA."
+    },
+    {
+      "name": "wpb.dpa-reporting.no-contact-notice",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.DpaReportProperties",
+      "description": "User notice when no DPA contact channel is available."
     }
   ],
   "hints": []

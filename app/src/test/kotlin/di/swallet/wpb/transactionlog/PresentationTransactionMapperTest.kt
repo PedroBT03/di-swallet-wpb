@@ -12,6 +12,9 @@ import di.swallet.wpb.presentation.domain.SelectedCredential
 import di.swallet.wpb.presentation.domain.SessionMetadata
 import di.swallet.wpb.datadeletion.SupportUriClassifier
 import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
+import di.swallet.wpb.dpareport.RpDnsNameResolver
+import di.swallet.wpb.dpareport.Ts10DpaContactBuilder
+import di.swallet.wpb.presentation.trust.DefaultVerifierCertificateExtractor
 import di.swallet.wpb.presentation.domain.RegistryIntendedUse
 import di.swallet.wpb.presentation.domain.RpRegistryRecord
 import di.swallet.wpb.presentation.domain.SupervisoryAuthorityContact
@@ -23,7 +26,12 @@ import java.time.Instant
 import java.util.UUID
 
 class PresentationTransactionMapperTest {
-    private val mapper = PresentationTransactionMapper(Ts10InteractingPartyContactBuilder(SupportUriClassifier()))
+    private val classifier = SupportUriClassifier()
+    private val mapper = PresentationTransactionMapper(
+        Ts10InteractingPartyContactBuilder(classifier),
+        Ts10DpaContactBuilder(classifier),
+        RpDnsNameResolver(DefaultVerifierCertificateExtractor()),
+    )
 
     @Test
     fun `maps claim paths only without attribute values`() {

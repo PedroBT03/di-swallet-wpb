@@ -1,6 +1,8 @@
 package di.swallet.wpb.transactionlog.mapper
 
 import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
+import di.swallet.wpb.dpareport.RpDnsNameResolver
+import di.swallet.wpb.dpareport.Ts10DpaContactBuilder
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.issuance.domain.IssuanceContext
 import di.swallet.wpb.issuance.domain.IssuanceState
@@ -33,6 +35,8 @@ import java.util.UUID
 @Component
 class PresentationTransactionMapper(
     private val contactBuilder: Ts10InteractingPartyContactBuilder,
+    private val dpaContactBuilder: Ts10DpaContactBuilder,
+    private val rpDnsNameResolver: RpDnsNameResolver,
 ) {
     private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC)
 
@@ -69,6 +73,7 @@ class PresentationTransactionMapper(
             dpaName = dpa?.name,
             dpaCountry = dpa?.country,
             dpaContact = buildDpaContact(dpa),
+            rpDnsName = rpDnsNameResolver.fromContext(context),
             listOfClaimsRequested = requested,
             listOfClaimsPresented = presented,
             reasonOfNoncompletion = if (completed) null else context.error?.message ?: context.consentDecision?.reason,
@@ -173,7 +178,7 @@ class PresentationTransactionMapper(
 
     private fun buildDpaContact(dpa: di.swallet.wpb.presentation.domain.SupervisoryAuthorityContact?): List<String> {
         if (dpa == null) return emptyList()
-        return dpa.email + dpa.phone + dpa.formUri
+        return dpaContactBuilder.fromSupervisoryAuthority(dpa)
     }
 }
 

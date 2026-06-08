@@ -88,6 +88,11 @@ class TransactionLogger(
             .onFailure { logger.warn("Failed to persist data deletion request transaction for holder {}", holderId, it) }
     }
 
+    fun logDpaReport(holderId: String, transaction: Ts10Transaction) {
+        runCatching { transactionLogRecorder.record(holderId, transaction) }
+            .onFailure { logger.warn("Failed to persist DPA report transaction for holder {}", holderId, it) }
+    }
+
     companion object {
         private val TERMINAL_STATES = setOf(
             PresentationState.DISPATCHED,

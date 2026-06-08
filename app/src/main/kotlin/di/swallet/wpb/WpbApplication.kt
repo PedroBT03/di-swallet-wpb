@@ -1,6 +1,7 @@
 package di.swallet.wpb
 
 import di.swallet.wpb.config.DataDeletionRequestProperties
+import di.swallet.wpb.config.DpaReportProperties
 import di.swallet.wpb.config.HsmProperties
 import di.swallet.wpb.config.MdocProperties
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -24,6 +25,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
     StatusListProperties::class,
     TransactionLogProperties::class,
     DataDeletionRequestProperties::class,
+    DpaReportProperties::class,
 )
 class WpbApplication
 

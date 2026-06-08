@@ -53,6 +53,9 @@ class WalletUnitLifecycleService(
         }
     }
 
+    fun revoke(walletUnit: WalletUnit): WalletUnit =
+        transition(walletUnit, WalletUnitState.REVOKED)
+
     private fun transition(walletUnit: WalletUnit, target: WalletUnitState): WalletUnit {
         if (!isAllowed(walletUnit.state, target)) {
             throw ResponseStatusException(

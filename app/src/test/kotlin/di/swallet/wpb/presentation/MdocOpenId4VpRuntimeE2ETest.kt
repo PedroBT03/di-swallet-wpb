@@ -69,6 +69,7 @@ class MdocOpenId4VpRuntimeE2ETest {
             mdocCredentialCodec = mdocCodec,
             mdocDocTypeRegistry = mdocRegistry,
             keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),
+            credentialStatusParser = di.swallet.wpb.revocation.RevocationTestSupport.credentialStatusParser(),
         )
 
         val issuanceGateway = SimulatedOpenId4VciGateway(

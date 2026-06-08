@@ -1,13 +1,19 @@
 package di.swallet.wpb.controller
 
+import di.swallet.wpb.config.StatusListProperties
+import di.swallet.wpb.revocation.StatusListJwtEncoder
 import di.swallet.wpb.service.StatusListService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
@@ -22,50 +28,63 @@ import java.time.Instant
 @RequestMapping("/api/v1/wallet/status-lists")
 @Tag(name = "Status List Publication", description = "Public revocation status list endpoints")
 class StatusListController(
-    private val statusListService: StatusListService
+    private val statusListService: StatusListService,
+    private val statusListJwtEncoder: StatusListJwtEncoder,
+    private val properties: StatusListProperties,
 ) {
 
     @GetMapping("/{listId}")
     @Operation(
         summary = "Get published revocation list",
-        description = "Returns an interoperable bitstring status list payload for external verifiers"
+        description = "Returns a Token Status List JWT (default) or legacy JSON bitstring payload",
     )
     fun getPublishedStatusList(
         @PathVariable listId: String,
-        request: HttpServletRequest
-    ): Map<String, Any> {
+        @RequestParam(required = false, defaultValue = "jwt") format: String,
+        request: HttpServletRequest,
+    ): ResponseEntity<Any> {
         val canonicalId = statusListService.getListId()
         if (listId != canonicalId) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown status list id: $listId")
         }
 
-        val baseUrl = request.requestURL.toString()
+        if (format.equals("json", ignoreCase = true)) {
+            val baseUrl = request.requestURL.toString()
+            return ResponseEntity.ok(
+                mapOf(
+                    "id" to baseUrl,
+                    "type" to "BitstringStatusList",
+                    "statusPurpose" to "revocation",
+                    "encodedList" to statusListService.getEncodedStatusList(),
+                    "capacity" to statusListService.getCapacity(),
+                    "allocated" to statusListService.getAllocatedCount(),
+                    "issuedAt" to Instant.now().toString(),
+                ),
+            )
+        }
 
-        return mapOf(
-            "id" to baseUrl,
-            "type" to "BitstringStatusList",
-            "statusPurpose" to "revocation",
-            "encodedList" to statusListService.getEncodedStatusList(),
-            "nextIndex" to statusListService.getCurrentNextIndex(),
-            "issuedAt" to Instant.now().toString()
-        )
+        val jwt = statusListJwtEncoder.encode()
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CACHE_CONTROL, "public, max-age=${properties.jwtTtlSeconds}")
+            .contentType(MediaType.parseMediaType("application/statuslist+jwt"))
+            .body(jwt)
     }
 
     @GetMapping("/{listId}/entries/{index}")
     @Operation(
         summary = "Check revocation entry",
-        description = "Returns the current status (ACTIVE/REVOKED) of one status list bit index"
+        description = "Returns the current status (ACTIVE/REVOKED) of one status list bit index",
     )
     fun getStatusEntry(
         @PathVariable listId: String,
-        @PathVariable index: Int
+        @PathVariable index: Int,
     ): Map<String, Any> {
         val canonicalId = statusListService.getListId()
         if (listId != canonicalId) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown status list id: $listId")
         }
-        if (index < 0) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Index must be non-negative")
+        if (index < 0 || index >= statusListService.getCapacity()) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Index out of range")
         }
 
         val revoked = statusListService.isRevoked(index)
@@ -75,7 +94,7 @@ class StatusListController(
             "index" to index,
             "statusPurpose" to "revocation",
             "status" to if (revoked) "REVOKED" else "ACTIVE",
-            "revoked" to revoked
+            "revoked" to revoked,
         )
     }
 }

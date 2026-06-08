@@ -75,6 +75,7 @@ class IssuerSignedMdocBindingE2ETest {
             mdocCredentialCodec = codec,
             mdocDocTypeRegistry = registry,
             keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),
+            credentialStatusParser = di.swallet.wpb.revocation.RevocationTestSupport.credentialStatusParser(),
         )
         val credentialId = storage.store(
             holderId = "holder-1",

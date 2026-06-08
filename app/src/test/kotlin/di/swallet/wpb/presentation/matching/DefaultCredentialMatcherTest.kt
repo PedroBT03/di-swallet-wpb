@@ -18,6 +18,7 @@ import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.PresentationRequirements
 import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.domain.SessionMetadata
+import di.swallet.wpb.revocation.RevocationTestSupport
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -50,6 +51,7 @@ class DefaultCredentialMatcherTest {
         disclosureCipher,
         disclosureSelector,
         demoMode = demoMode,
+        credentialRevocationGuard = RevocationTestSupport.noopGuard(),
     )
 
     private fun context(dcqlJson: String, holderId: String = "holder-1"): PresentationContext {

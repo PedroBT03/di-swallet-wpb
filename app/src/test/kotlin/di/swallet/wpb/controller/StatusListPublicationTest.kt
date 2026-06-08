@@ -13,14 +13,15 @@ class StatusListPublicationTest : BaseIntegrationTest() {
     @Test
     fun `should publish revocation status list without authentication`() {
         val response = restTemplate.getForEntity(
-            "/api/v1/wallet/status-lists/PRIMARY_LIST",
-            Map::class.java
+            "/api/v1/wallet/status-lists/PRIMARY_LIST?format=json",
+            Map::class.java,
         )
 
         assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(response.body?.get("type")).isEqualTo("BitstringStatusList")
         assertThat(response.body?.get("statusPurpose")).isEqualTo("revocation")
         assertThat(response.body?.get("encodedList")).isNotNull
+        assertThat(response.body?.get("capacity")).isNotNull
     }
 
     @Test

@@ -2,20 +2,31 @@ package di.swallet.wpb.wia.validation
 
 import di.swallet.wpb.issuance.domain.WalletInstanceAttestation
 import di.swallet.wpb.issuance.domain.WiaStatusReference
+import di.swallet.wpb.service.StatusListService
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
+import org.mockito.Mockito.`when`
 import java.time.Instant
 
 class DefaultWiaValidationServiceTest {
 
-    private val service = DefaultWiaValidationService()
+    private val statusListService = mock(StatusListService::class.java)
+    private lateinit var service: DefaultWiaValidationService
+
+    @BeforeEach
+    fun setup() {
+        service = DefaultWiaValidationService(statusListService)
+    }
 
     private fun attestation(
         tokenExpOffsetSeconds: Long = 3600,
         statusExpOffsetSeconds: Long = 31L * 24 * 3600,
         cnfJkt: String = "jkt-1",
+        statusIndex: Int = 42,
     ): WalletInstanceAttestation {
         val now = Instant.now()
         return WalletInstanceAttestation(
@@ -26,7 +37,7 @@ class DefaultWiaValidationServiceTest {
             walletVersion = "1",
             walletSolutionCertificationInformation = "cert",
             cnfJkt = cnfJkt,
-            clientStatus = WiaStatusReference("PRIMARY_LIST", 42, "/api/v1/wallet/status-lists/PRIMARY_LIST"),
+            clientStatus = WiaStatusReference("PRIMARY_LIST", statusIndex, "/api/v1/wallet/status-lists/PRIMARY_LIST"),
             tokenExpiresAt = now.plusSeconds(tokenExpOffsetSeconds),
             clientStatusExpiresAt = now.plusSeconds(statusExpOffsetSeconds),
             issuedAt = now,
@@ -35,11 +46,22 @@ class DefaultWiaValidationServiceTest {
 
     @Test
     fun `valid attestation passes technical validation`() {
+        `when`(statusListService.isRevoked(42)).thenReturn(false)
         assertDoesNotThrow { service.validateTechnical(attestation()) }
     }
 
     @Test
+    fun `revoked client status fails validation`() {
+        `when`(statusListService.isRevoked(42)).thenReturn(true)
+        val ex = assertThrows(WiaValidationException::class.java) {
+            service.validateTechnical(attestation())
+        }
+        assertEquals("wia_revoked", ex.code)
+    }
+
+    @Test
     fun `expired WIA token fails validation`() {
+        `when`(statusListService.isRevoked(42)).thenReturn(false)
         val ex = assertThrows(WiaValidationException::class.java) {
             service.validateTechnical(attestation(tokenExpOffsetSeconds = -1))
         }
@@ -48,6 +70,7 @@ class DefaultWiaValidationServiceTest {
 
     @Test
     fun `expired client status fails validation`() {
+        `when`(statusListService.isRevoked(42)).thenReturn(false)
         val ex = assertThrows(WiaValidationException::class.java) {
             service.validateTechnical(attestation(statusExpOffsetSeconds = -1))
         }
@@ -67,4 +90,3 @@ class DefaultWiaValidationServiceTest {
         assertEquals("wia_binding_mismatch", ex.code)
     }
 }
-

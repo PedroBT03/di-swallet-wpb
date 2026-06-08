@@ -10,6 +10,7 @@ import di.swallet.wpb.presentation.domain.CredentialCandidate
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.CredentialQuery
 import di.swallet.wpb.presentation.domain.PresentationContext
+import di.swallet.wpb.revocation.CredentialRevocationGuard
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 
@@ -30,6 +31,7 @@ class DefaultCredentialMatcher(
     private val disclosureCipherService: DisclosureCipherService,
     private val sdJwtDisclosureSelector: SdJwtDisclosureSelector,
     @param:Value("\${wpb.openid4vp.demo-mode:false}") private val demoMode: Boolean,
+    private val credentialRevocationGuard: CredentialRevocationGuard,
 ) : CredentialMatcher {
 
     override fun match(context: PresentationContext): PresentationContext {
@@ -77,6 +79,7 @@ class DefaultCredentialMatcher(
                 query.credentialTypeHints.any { hint -> hint.equals(credential.credentialType, ignoreCase = true) }
         }
         return wallet.asSequence()
+            .filter { !credentialRevocationGuard.isRevoked(it) }
             .filter(typeFilter)
             .filter { credential -> sdJwtCredentialSatisfiesQuery(credential, query) }
             .mapNotNull { credential ->
@@ -116,6 +119,7 @@ class DefaultCredentialMatcher(
         wallet: List<di.swallet.wpb.domain.WalletCredential>,
     ): List<CredentialCandidate> {
         return wallet.asSequence()
+            .filter { !credentialRevocationGuard.isRevoked(it) }
             .mapNotNull { credential ->
                 val credentialPk = credential.id ?: return@mapNotNull null
                 val decoded = mdocCredentialCodec.decode(credential.encodedData) ?: return@mapNotNull null

@@ -4,13 +4,16 @@ import di.swallet.wpb.domain.AttestedKeyState
 import di.swallet.wpb.domain.CredentialBindingFormat
 import di.swallet.wpb.domain.CredentialKeyBindingRepository
 import di.swallet.wpb.domain.KeyAttestationState
+import di.swallet.wpb.revocation.CredentialRevocationGuard
 import org.springframework.stereotype.Service
 
 @Service
 class CredentialBindingValidationService(
     private val credentialKeyBindingRepository: CredentialKeyBindingRepository,
+    private val credentialRevocationGuard: CredentialRevocationGuard,
 ) {
     fun requireBinding(credentialId: Long, format: CredentialBindingFormat) {
+        credentialRevocationGuard.requirePresentable(credentialId)
         val binding = credentialKeyBindingRepository.findByCredentialId(credentialId)
             .orElseThrow { IllegalStateException("Credential $credentialId has no key binding") }
         require(binding.bindingFormat == format) {

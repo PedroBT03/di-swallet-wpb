@@ -25,6 +25,9 @@ import di.swallet.wpb.domain.UserDevice
 import di.swallet.wpb.security.ChallengeService
 import di.swallet.wpb.service.KeyBindingRuntimeService
 import di.swallet.wpb.service.LegacySdJwtIssuanceSupport
+import di.swallet.wpb.revocation.CredentialRevocationGuard
+import di.swallet.wpb.revocation.WalletRevocationService
+import di.swallet.wpb.revocation.WpCredentialStatusAllocator
 
 /**
  * Data Transfer Object for signing requests.
@@ -80,6 +83,9 @@ class WalletController(
     private val deviceBindingService: DeviceBindingService,
     private val keyBindingRuntimeService: KeyBindingRuntimeService,
     private val legacySdJwtIssuanceSupport: LegacySdJwtIssuanceSupport,
+    private val wpCredentialStatusAllocator: WpCredentialStatusAllocator,
+    private val credentialRevocationGuard: CredentialRevocationGuard,
+    private val walletRevocationService: WalletRevocationService,
 ) {
 
     // --- SECTION 1: AUTHENTICATION & ONBOARDING ---
@@ -243,13 +249,15 @@ class WalletController(
         val userData = mockIssuerService.fetchUserData(userId)
 
         val issued = sdJwtService.disclosuresFromClaimMap(userData)
+        val statusAllocation = wpCredentialStatusAllocator.allocate()
 
-        val sdPayload = mapOf(
+        val sdPayload = mutableMapOf<String, Any>(
             "iss" to "https://pt-mock-issuer.gov.pt",
             "sub" to userId,
             "iat" to System.currentTimeMillis() / 1000,
             "_sd" to issued.digests,
-            "_sd_alg" to "sha-256"
+            "_sd_alg" to "sha-256",
+            "credentialStatus" to wpCredentialStatusAllocator.buildCredentialStatusClaim(statusAllocation),
         )
 
         val signedJwt = hsmService.signSdJwt(userId, sdPayload)
@@ -260,7 +268,9 @@ class WalletController(
             credentialType = "PID",
             encodedData = signedJwt,
             encryptedDisclosures = encryptedDisclosures,
-            walletKey = walletKey
+            walletKey = walletKey,
+            statusListId = statusAllocation.listId,
+            statusListIndex = statusAllocation.index,
         )
 
         val saved = credentialRepository.save(credential)
@@ -271,6 +281,20 @@ class WalletController(
             format = CredentialBindingFormat.SD_JWT,
         )
         return saved
+    }
+
+    @PostMapping("/credentials/{credentialId}/revoke")
+    @Operation(summary = "Revoke WP-managed credential", description = "Sets the credential status bit and marks it REVOKED.")
+    fun revokeCredential(@PathVariable credentialId: Long): Map<String, Any> {
+        walletRevocationService.revokeCredential(credentialId)
+        return mapOf("credentialId" to credentialId, "status" to "REVOKED")
+    }
+
+    @PostMapping("/units/{walletId}/revoke")
+    @Operation(summary = "Revoke wallet unit", description = "Revokes WIA/KA indexes, wallet keys, and WP-managed credentials.")
+    fun revokeWalletUnit(@PathVariable walletId: String): Map<String, Any> {
+        walletRevocationService.revokeWalletUnit(walletId)
+        return mapOf("walletId" to walletId, "status" to "REVOKED")
     }
 
     // --- SECTION 4: CREDENTIAL USAGE & SIGNING ---
@@ -287,9 +311,7 @@ class WalletController(
         val credential = credentialRepository.findById(credentialId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Credential not found") }
 
-        // Check revocation status before presentation
-        val walletKey = credential.walletKey ?: throw RuntimeException("No key associated with credential")
-        hsmService.validateKeyStatus(walletKey)
+        credentialRevocationGuard.requirePresentable(credential)
 
         // Backward-compatible support for legacy records that still contain inline disclosures.
         val fullSdJwt = if (credential.encodedData.contains("~")) {

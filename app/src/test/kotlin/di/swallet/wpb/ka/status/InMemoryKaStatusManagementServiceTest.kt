@@ -1,5 +1,6 @@
 package di.swallet.wpb.ka.status
 
+import di.swallet.wpb.revocation.RevocationTestSupport
 import di.swallet.wpb.service.StatusListService
 import di.swallet.wpb.domain.StatusList
 import di.swallet.wpb.domain.StatusListRepository
@@ -18,8 +19,14 @@ class InMemoryKaStatusManagementServiceTest {
 
     @BeforeEach
     fun setup() {
-        statusListService = StatusListService(repository)
-        val mockList = StatusList(id = "PRIMARY_LIST", bitstring = ByteArray(10), nextIndex = 0)
+        statusListService = StatusListService(repository, RevocationTestSupport.statusListProperties())
+        val mockList = StatusList(
+            id = "PRIMARY_LIST",
+            bitstring = ByteArray(10),
+            nextIndex = 0,
+            capacity = 1024,
+            allocatedBitstring = ByteArray(0),
+        )
         `when`(repository.findById("PRIMARY_LIST")).thenReturn(Optional.of(mockList))
         statusListService.init()
         service = InMemoryKaStatusManagementService(statusListService)

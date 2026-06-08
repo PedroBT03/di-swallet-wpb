@@ -1,6 +1,7 @@
 package di.swallet.wpb.wia.validation
 
 import di.swallet.wpb.issuance.domain.WalletInstanceAttestation
+import di.swallet.wpb.service.StatusListService
 import org.springframework.stereotype.Component
 import java.time.Instant
 
@@ -15,13 +16,18 @@ interface WiaValidationService {
 }
 
 @Component
-class DefaultWiaValidationService : WiaValidationService {
+class DefaultWiaValidationService(
+    private val statusListService: StatusListService,
+) : WiaValidationService {
     override fun validateTechnical(attestation: WalletInstanceAttestation) {
         if (attestation.tokenExpiresAt.isBefore(Instant.now())) {
             throw WiaValidationException("wia_expired", "WIA token has expired")
         }
         if (attestation.clientStatusExpiresAt.isBefore(Instant.now())) {
             throw WiaValidationException("wia_status_expired", "WIA client_status has expired")
+        }
+        if (statusListService.isRevoked(attestation.clientStatus.index)) {
+            throw WiaValidationException("wia_revoked", "WIA client_status index is revoked")
         }
     }
 

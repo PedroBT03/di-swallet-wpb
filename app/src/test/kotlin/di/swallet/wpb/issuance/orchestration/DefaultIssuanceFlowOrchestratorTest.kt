@@ -156,7 +156,11 @@ class DefaultIssuanceFlowOrchestratorTest {
             policy = DefaultIssuancePolicy(properties),
             proofProvider = EphemeralProofMaterialProvider(),
             attestationProvider = StubWalletAttestationProvider(wiaStatus),
-            wiaValidationService = DefaultWiaValidationService(),
+            wiaValidationService = DefaultWiaValidationService(
+                org.mockito.Mockito.mock(di.swallet.wpb.service.StatusListService::class.java).also {
+                    org.mockito.Mockito.`when`(it.isRevoked(org.mockito.ArgumentMatchers.anyInt())).thenReturn(false)
+                },
+            ),
             keyAttestationProvider = StubKeyAttestationProvider(),
             keyAttestationValidationService = validationService,
             credentialStorage = StubIssuedCredentialStorage(),

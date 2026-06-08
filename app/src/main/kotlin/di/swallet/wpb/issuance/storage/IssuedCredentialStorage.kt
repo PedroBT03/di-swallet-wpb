@@ -9,6 +9,7 @@ import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.service.format.DisclosureCipherService
+import di.swallet.wpb.revocation.CredentialStatusParser
 import di.swallet.wpb.service.KeyBindingRuntimeService
 import di.swallet.wpb.domain.CredentialBindingFormat
 import org.springframework.stereotype.Component
@@ -44,6 +45,7 @@ class JpaIssuedCredentialStorage(
     private val mdocCredentialCodec: MdocCredentialCodec,
     private val mdocDocTypeRegistry: MdocDocTypeRegistry,
     private val keyBindingRuntimeService: KeyBindingRuntimeService,
+    private val credentialStatusParser: CredentialStatusParser,
 ) : IssuedCredentialStorage {
     override fun store(
         holderId: String,
@@ -62,12 +64,19 @@ class JpaIssuedCredentialStorage(
         val resolvedKey = walletKey
             ?: keyAliasHint?.let { walletKeyRepository.findByKeyAlias(it).orElse(null) }
 
+        val issuerStatus = when (issued.format) {
+            IssuanceCredentialFormat.SD_JWT_VC -> credentialStatusParser.parseFromSdJwt(issued.rawPayload)
+            else -> null
+        }
+
         val entity = WalletCredential(
             userId = holderId,
             credentialType = credentialType,
             encodedData = encoded,
             encryptedDisclosures = encryptedDisclosures,
             walletKey = resolvedKey,
+            issuerStatusUri = issuerStatus?.listUri,
+            issuerStatusIndex = issuerStatus?.listIndex,
         )
         val savedId = repository.save(entity).id ?: error("WalletCredential persisted without id")
         resolvedKey?.let {

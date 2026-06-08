@@ -8,6 +8,7 @@ import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.format.sdjwt.SdJwtDisclosureSelector
 import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
+import di.swallet.wpb.revocation.RevocationTestSupport
 import di.swallet.wpb.service.format.DisclosureCipherService
 
 object PresentationTestSupport {
@@ -28,6 +29,7 @@ object PresentationTestSupport {
         disclosureCipher,
         disclosureSelector,
         demoMode = demoMode,
+        credentialRevocationGuard = RevocationTestSupport.noopGuard(),
     )
 
     fun sdJwtCredential(

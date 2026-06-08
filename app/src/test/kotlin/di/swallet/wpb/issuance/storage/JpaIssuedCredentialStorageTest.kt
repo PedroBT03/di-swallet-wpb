@@ -10,6 +10,7 @@ import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.service.format.DisclosureCipherService
+import di.swallet.wpb.revocation.RevocationTestSupport
 import di.swallet.wpb.service.KeyBindingRuntimeService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -49,6 +50,7 @@ class JpaIssuedCredentialStorageTest {
             mdocCodec,
             mdocRegistry,
             mock(KeyBindingRuntimeService::class.java),
+            RevocationTestSupport.credentialStatusParser(),
         )
         val issued = IssuedCredential(
             credentialConfigurationId = "pid_jwt",
@@ -94,6 +96,7 @@ class JpaIssuedCredentialStorageTest {
             mdocCodec,
             mdocRegistry,
             mock(KeyBindingRuntimeService::class.java),
+            RevocationTestSupport.credentialStatusParser(),
         )
         val issuedPayload = mdocCodec.encode(
             MdocCredentialDocument(
@@ -137,6 +140,7 @@ class JpaIssuedCredentialStorageTest {
             mdocCodec,
             mdocRegistry,
             mock(KeyBindingRuntimeService::class.java),
+            RevocationTestSupport.credentialStatusParser(),
         )
         val issued = IssuedCredential(
             credentialConfigurationId = "org.iso.18013.5.1.mDL",

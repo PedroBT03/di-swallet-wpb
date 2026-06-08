@@ -664,3 +664,47 @@ Test profile (`application-test.properties`) disables Flyway and sets `wpb.walle
 - Device attestation cryptographic verification pipeline is still simulated
   (no full platform attestation trust-chain validation yet).
 - Legacy `/credentials/issue-sd` registers a real KA via `LegacySdJwtIssuanceSupport` for demo flows only.
+
+## Phase 9 - Revocation and status lists
+
+### What Phase 9 delivers
+
+| Capability | Status |
+|---|---|
+| Fixed-capacity bitstring with **random index allocation** (VCR_17) | Implemented |
+| WP-managed credential status (`statusListId` + `statusListIndex` on `WalletCredential`) | Implemented |
+| `credentialStatus` claim embedded in legacy SD-JWT issuance | Implemented |
+| External OID4VCI credentials: issuer status reference parsed and persisted | Implemented |
+| `POST /credentials/{id}/revoke` (WP-managed only) | Implemented |
+| `POST /units/{walletId}/revoke` — cascades WIA/KA/keys/WP-managed credentials | Implemented |
+| Token Status List JWT publication (`application/statuslist+jwt`) with dedicated signing key | Implemented |
+| `CredentialRevocationGuard` — real-time checks on all presentation paths | Implemented |
+| WIA revocation enforcement (`wia_revoked`) | Implemented |
+| Background sync job (VCR_19 denormalized state; presentation always real-time) | Implemented |
+| Flyway `V3__credential_status_and_status_list_capacity.sql` | Implemented |
+
+**Scope limit:** VCR_07c (PID Provider revokes PID when Wallet Unit revoked) is **issuer responsibility**. The WP only revokes artefacts it controls (WIA, KA, wallet keys, WP-managed credentials on `PRIMARY_LIST`).
+
+### Configuration knobs (status lists)
+
+```
+wpb.status-list.capacity=131072
+wpb.status-list.signing-key-pem-path=classpath:status-list/dev-signing-key.pem
+wpb.status-list.jwt-ttl-seconds=86400
+wpb.status-list.sync-cron=0 0 * * * *
+wpb.status-list.public-base-url=http://localhost:8080/api/v1/wallet/status-lists
+```
+
+### Status list publication
+
+- Default: `GET /api/v1/wallet/status-lists/PRIMARY_LIST` → signed JWT (`application/statuslist+jwt`)
+- Legacy JSON: `GET /api/v1/wallet/status-lists/PRIMARY_LIST?format=json`
+- Per-entry lookup: `GET /api/v1/wallet/status-lists/PRIMARY_LIST/entries/{index}`
+
+### Pre-Phase 9 credentials
+
+Credentials issued before Phase 9 have no `statusListIndex`. They remain presentable unless the bound **wallet key** is revoked (key-level check still applies). Re-issue to obtain WP-managed revocation references.
+
+### Random index policy
+
+Indices are chosen uniformly in `[0, capacity)` among unallocated slots. `capacity` defaults to **131072** (TS3 recommends ≥10000 for herd privacy). Allocation does **not** use sequential `nextIndex` as the upper bound, to avoid correlating list size with issuance volume.

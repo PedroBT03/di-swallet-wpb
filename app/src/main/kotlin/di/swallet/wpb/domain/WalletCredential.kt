@@ -33,5 +33,23 @@ class WalletCredential(
     val walletKey: WalletKey? = null,
 
     @Column(nullable = false)
-    val issuedAt: LocalDateTime = LocalDateTime.now()
+    val issuedAt: LocalDateTime = LocalDateTime.now(),
+
+    /** WP-managed status list entry (mock/self-issued credentials). */
+    @Column(nullable = true)
+    val statusListId: String? = null,
+
+    @Column(nullable = true)
+    val statusListIndex: Int? = null,
+
+    /** External issuer status reference (OID4VCI credentials from third parties). */
+    @Column(nullable = true)
+    val issuerStatusUri: String? = null,
+
+    @Column(nullable = true)
+    val issuerStatusIndex: Int? = null,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "revocation_state", nullable = false)
+    var revocationState: CredentialRevocationState = CredentialRevocationState.ACTIVE,
 )

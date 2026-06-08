@@ -1,6 +1,7 @@
 package di.swallet.wpb.security
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import di.swallet.wpb.config.TrustMarkProperties
 import di.swallet.wpb.service.Fido2Service
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -16,7 +17,8 @@ import java.util.Base64
 class AuthorizationInterceptor(
     private val challengeService: ChallengeService,
     private val fido2Service: Fido2Service,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val trustMarkProperties: TrustMarkProperties,
 ) : HandlerInterceptor {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -36,6 +38,18 @@ class AuthorizationInterceptor(
             request.requestURI.contains("/auth/challenge") ||
             request.requestURI.contains("/auth/register") ||
             request.requestURI.endsWith("/wallet/init")
+        ) {
+            return true
+        }
+
+        // TS1 Trust Mark metadata is wallet-solution level and contains no holder data.
+        if (request.method == "GET" && request.requestURI.endsWith("/wallet/trust-mark")) {
+            return true
+        }
+        if (
+            request.method == "POST" &&
+            request.requestURI.endsWith("/wallet/trust-mark/refresh") &&
+            trustMarkProperties.allowAdminRefresh
         ) {
             return true
         }

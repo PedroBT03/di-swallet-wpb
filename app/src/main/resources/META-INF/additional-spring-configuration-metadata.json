@@ -749,6 +749,50 @@
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.DpaReportProperties",
       "description": "User notice when no DPA contact channel is available."
+    },
+    {
+      "name": "wpb.trust-mark",
+      "type": "di.swallet.wpb.config.TrustMarkProperties",
+      "description": "EUDI Wallet Trust Mark configuration (TS1 / DASH_09)."
+    },
+    {
+      "name": "wpb.trust-mark.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
+      "description": "Enable Trust Mark view when TS1 URLs are configured.",
+      "defaultValue": false
+    },
+    {
+      "name": "wpb.trust-mark.trust-mark-resource-url",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
+      "description": "URL of EC-hosted TrustMarkResource JSON (TS1 TrustMarkResourceURL)."
+    },
+    {
+      "name": "wpb.trust-mark.list-of-certified-wallets-url",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
+      "description": "URL of the public list of certified EUDI wallets (TS1)."
+    },
+    {
+      "name": "wpb.trust-mark.wallet-solution-info-page-url",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
+      "description": "URL of this wallet solution page on the eIDAS dashboard (TS1)."
+    },
+    {
+      "name": "wpb.trust-mark.cache-ttl-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
+      "description": "Fallback cache TTL for TrustMarkResource fetch.",
+      "defaultValue": 3600
+    },
+    {
+      "name": "wpb.trust-mark.allow-admin-refresh",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
+      "description": "Allow POST /trust-mark/refresh to invalidate cache (dev/ops).",
+      "defaultValue": false
     }
   ],
   "hints": []

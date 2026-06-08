@@ -818,3 +818,40 @@ Response includes `transactionId` (new log entry), `sourcePresentationTransactio
 | `POST` | `/api/v1/wallet/dpa-reports` | Initiate DPA report; returns `availableActions[]` + `substantiationDocument` |
 
 `POST` body: `{ holderId, presentationTransactionId, consentRegistryLookup }`.
+
+## Trust Mark (TS1 / DASH_09)
+
+### What it delivers
+
+| Capability | Status |
+|---|---|
+| `GET /api/v1/wallet/trust-mark` — public wallet-solution certification view | Implemented |
+| `WalletTrustMarkInformation` from configuration (TS1 Table 1) | Implemented |
+| Fetch + cache `TrustMarkResource` (ETag / Last-Modified / Cache-Control + TTL fallback) | Implemented |
+| Localized logo text + HTTPS action links (certified list, solution info page) | Implemented |
+| Soft validation with `warnings[]` (tolerant to minor EC JSON differences) | Implemented |
+| Optional `POST /trust-mark/refresh` when `allow-admin-refresh=true` | Implemented |
+
+**Server-side model:** WPB returns metadata for the WPI client to render (no dashboard UI). Call `GET /trust-mark` during onboarding to satisfy WIAM_10a. Trust Mark is **not** coupled to `POST /wallet/init` or WIA claims.
+
+**Production note:** set `wpb.trust-mark.enabled=true` and provide EC-hosted TS1 URLs. Defaults keep the feature disabled in dev.
+
+### API
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/wallet/trust-mark?lang=` | Public | Trust Mark view |
+| `POST` | `/api/v1/wallet/trust-mark/refresh` | Dev flag or FIDO2 | Invalidate resource cache |
+
+### Configuration
+
+```
+wpb.trust-mark.enabled=false
+wpb.trust-mark.trust-mark-resource-url=
+wpb.trust-mark.list-of-certified-wallets-url=
+wpb.trust-mark.wallet-solution-info-page-url=
+wpb.trust-mark.wallet-solution-id=
+wpb.trust-mark.cache-ttl-seconds=3600
+wpb.trust-mark.default-language=en
+wpb.trust-mark.allow-admin-refresh=false
+```

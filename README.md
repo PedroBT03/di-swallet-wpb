@@ -729,7 +729,7 @@ Indices are chosen uniformly in `[0, capacity)` among unallocated slots. `capaci
 | `device_bound` flag on `WalletCredential` for migration classification | Implemented |
 | Retention job with warning `OtherTransaction` (DASH_02a) | Implemented |
 
-**Out of scope (deferred):** Migration import (Mig_06–07b), W2W / pseudonym transaction types, dashboard UI.
+**Out of scope (deferred):** Migration import (Mig_06–07b), W2W transaction types, dashboard UI.
 
 **WIAM_12a note:** In this server-side MVP the WPB stores encrypted logs with per-holder DEKs on the server. Export JWE uses a user-provided password (TS10 §5). Full “WP cannot read log contents” requires a client-side or user-held key model and is documented as a known architectural limit.
 
@@ -855,3 +855,51 @@ wpb.trust-mark.cache-ttl-seconds=3600
 wpb.trust-mark.default-language=en
 wpb.trust-mark.allow-admin-refresh=false
 ```
+
+## Pseudonyms (Topic 11 / WebAuthn Use Case A)
+
+### What it delivers
+
+| Capability | Status |
+|---|---|
+| Per-RP WebAuthn passkeys with HSM-backed dedicated keys (PA_14) | Implemented |
+| Multiple pseudonyms per RP with user aliases (PA_04/05/06) | Implemented |
+| Server-side authenticator ceremonies (`none` attestation MVP) | Implemented |
+| Unlinkable `userHandle` + distinct keys per RP (PA_16/17/18) | Implemented |
+| TS10 `PseudonymGeneration`, `PseudonymDeletion`, `PseudonymousAuthentication` | Implemented |
+| `Ts10Pseudonym.value` = COSE EC public key (Base64URL) | Implemented |
+| EU WebAuthn profile placeholder (PA_21) | Stub interface only |
+
+**Server-side model:** WPB acts as the logical WebAuthn **authenticator** (keys in remote HSM). The WPI client proxies browser `navigator.credentials` ceremonies to the WPB API. Yubico `webauthn-server-core` is used only for wallet-access FIDO2 (Sole Control), not for RP passkey generation.
+
+**Distinct from wallet-access FIDO2:** `UserDevice` credentials authenticate the user **to the WPB**. `pseudonym_credentials` are passkeys for **external Relying Parties**.
+
+**Out of scope (Phase 15):** OID4VP/SD-JWT pseudonym injection, attested pseudonyms, scope rate-limited pseudonyms (PA_23–31), full EU WebAuthn profile, hardware attestation/MDS.
+
+### API
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/wallet/pseudonyms?holderId=&rpId=` | FIDO2 | List pseudonyms (PA_09) |
+| `POST` | `/api/v1/wallet/pseudonyms` | FIDO2 | Create pseudonym slot |
+| `PATCH` | `/api/v1/wallet/pseudonyms/{id}/alias?holderId=` | FIDO2 | Update alias (PA_05) |
+| `DELETE` | `/api/v1/wallet/pseudonyms/{id}?holderId=` | FIDO2 | Delete pseudonym + HSM key (PA_07) |
+| `POST` | `/api/v1/wallet/pseudonyms/{id}/registration/options` | FIDO2 | Begin WebAuthn registration |
+| `POST` | `/api/v1/wallet/pseudonyms/{id}/registration/finish` | FIDO2 | Complete registration → log generation |
+| `POST` | `/api/v1/wallet/pseudonyms/{id}/authentication/options` | FIDO2 | Begin WebAuthn authentication |
+| `POST` | `/api/v1/wallet/pseudonyms/{id}/authentication/finish` | FIDO2 | Complete authentication → log auth |
+
+`POST /pseudonyms` returns **409** `pseudonym_limit_reached` when `max-per-rp` is exceeded (no auto-eviction).
+
+### Configuration
+
+```
+wpb.pseudonym.enabled=false
+wpb.pseudonym.max-per-rp=10
+wpb.pseudonym.allowed-rp-ids=
+wpb.pseudonym.user-handle-entropy-bytes=32
+wpb.pseudonym.challenge-ttl-seconds=300
+wpb.pseudonym.log-include-alias-in-export=false
+```
+
+**PA_20 note:** `allowed-rp-ids` is a dev/MVP mitigation only. It does not replace TLS/browser RP verification or access-certificate trust (Phase 5).

@@ -793,6 +793,33 @@
       "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
       "description": "Allow POST /trust-mark/refresh to invalidate cache (dev/ops).",
       "defaultValue": false
+    },
+    {
+      "name": "wpb.pseudonym.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.PseudonymProperties",
+      "description": "Enable WebAuthn passkey pseudonym management (Topic 11 / Use Case A).",
+      "defaultValue": false
+    },
+    {
+      "name": "wpb.pseudonym.max-per-rp",
+      "type": "java.lang.Integer",
+      "sourceType": "di.swallet.wpb.config.PseudonymProperties",
+      "description": "Maximum pseudonyms per holder and rpId (PA_04).",
+      "defaultValue": 10
+    },
+    {
+      "name": "wpb.pseudonym.allowed-rp-ids",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.PseudonymProperties",
+      "description": "Comma-separated rpId allow-list for MVP (PA_20 mitigation). Empty allows any valid rpId when enabled."
+    },
+    {
+      "name": "wpb.pseudonym.log-include-alias-in-export",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.PseudonymProperties",
+      "description": "Include user alias in TS10 pseudonym export payloads (off by default, PA_19).",
+      "defaultValue": false
     }
   ],
   "hints": []

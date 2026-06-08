@@ -329,4 +329,78 @@ class HsmService(
         val derSignature = signDataWithAlias(keyAlias, bytesToSign)
         return ECDSA.transcodeSignatureToConcat(derSignature, 64)
     }
+
+    /**
+     * Generates an EC key pair in the HSM under [alias] without a [WalletKey] metadata row.
+     * Used for per-RP pseudonym passkeys (Topic 11 / PA_14).
+     */
+    fun generateDedicatedEcKey(alias: String): java.security.interfaces.ECPublicKey {
+        try {
+            val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
+            keyStore.load(null, pin.toCharArray())
+            if (keyStore.containsAlias(alias)) {
+                throw ResponseStatusException(HttpStatus.CONFLICT, "HSM alias already exists: $alias")
+            }
+            val keyPairGen = KeyPairGenerator.getInstance("EC", pkcs11Provider)
+            keyPairGen.initialize(ECGenParameterSpec("secp256r1"))
+            val keyPair = keyPairGen.generateKeyPair()
+            val chain = arrayOf(generateSelfSignedCertificate(keyPair))
+            keyStore.setKeyEntry(alias, keyPair.private, null, chain)
+            logger.info("WSCA: Dedicated pseudonym key created with alias $alias")
+            return keyPair.public as java.security.interfaces.ECPublicKey
+        } catch (e: ResponseStatusException) {
+            throw e
+        } catch (e: Exception) {
+            logger.error("WSCA: Dedicated key generation failed for alias $alias: ${e.message}")
+            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "HSM Error: ${e.message}")
+        }
+    }
+
+    fun getDedicatedPublicKey(alias: String): java.security.interfaces.ECPublicKey {
+        try {
+            val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
+            keyStore.load(null, pin.toCharArray())
+            val certificate = keyStore.getCertificate(alias)
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "HSM key alias not found: $alias")
+            return certificate.publicKey as java.security.interfaces.ECPublicKey
+        } catch (e: ResponseStatusException) {
+            throw e
+        } catch (e: Exception) {
+            logger.error("WSCA: Failed to read public key for alias $alias: ${e.message}")
+            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to read HSM public key")
+        }
+    }
+
+    fun signEs256WithDedicatedAlias(alias: String, dataToSign: ByteArray): ByteArray {
+        try {
+            val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
+            keyStore.load(null, pin.toCharArray())
+            val privateKey = keyStore.getKey(alias, null) as? PrivateKey
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "HSM key alias not found: $alias")
+            val signature = Signature.getInstance("SHA256withECDSA", pkcs11Provider)
+            signature.initSign(privateKey)
+            signature.update(dataToSign)
+            val derSignature = signature.sign()
+            return ECDSA.transcodeSignatureToConcat(derSignature, 64)
+        } catch (e: ResponseStatusException) {
+            throw e
+        } catch (e: Exception) {
+            logger.error("WSCA: Dedicated signing failed for alias $alias: ${e.message}")
+            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Signing failed: ${e.message}")
+        }
+    }
+
+    fun deleteDedicatedKey(alias: String) {
+        try {
+            val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
+            keyStore.load(null, pin.toCharArray())
+            if (keyStore.containsAlias(alias)) {
+                keyStore.deleteEntry(alias)
+                logger.info("WSCA: Deleted dedicated HSM key alias $alias")
+            }
+        } catch (e: Exception) {
+            logger.error("WSCA: Failed to delete dedicated key alias $alias: ${e.message}")
+            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to delete HSM key")
+        }
+    }
 }

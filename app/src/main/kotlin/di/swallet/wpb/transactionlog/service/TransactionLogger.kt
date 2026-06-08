@@ -93,6 +93,21 @@ class TransactionLogger(
             .onFailure { logger.warn("Failed to persist DPA report transaction for holder {}", holderId, it) }
     }
 
+    fun logPseudonymGeneration(holderId: String, transaction: Ts10Transaction) {
+        runCatching { transactionLogRecorder.record(holderId, transaction) }
+            .onFailure { logger.warn("Failed to persist pseudonym generation transaction for holder {}", holderId, it) }
+    }
+
+    fun logPseudonymDeletion(holderId: String, transaction: Ts10Transaction) {
+        runCatching { transactionLogRecorder.record(holderId, transaction) }
+            .onFailure { logger.warn("Failed to persist pseudonym deletion transaction for holder {}", holderId, it) }
+    }
+
+    fun logPseudonymousAuthentication(holderId: String, transaction: Ts10Transaction) {
+        runCatching { transactionLogRecorder.record(holderId, transaction) }
+            .onFailure { logger.warn("Failed to persist pseudonymous authentication transaction for holder {}", holderId, it) }
+    }
+
     companion object {
         private val TERMINAL_STATES = setOf(
             PresentationState.DISPATCHED,

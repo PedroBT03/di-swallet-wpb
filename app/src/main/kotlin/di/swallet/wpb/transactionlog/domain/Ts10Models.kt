@@ -100,6 +100,31 @@ data class Ts10OtherTransaction(
     val description: String,
 )
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class Ts10Pseudonym(
+    val value: String,
+    val alias: String? = null,
+)
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class Ts10PseudonymGeneration(
+    val pseudonym: Ts10Pseudonym,
+)
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class Ts10PseudonymDeletion(
+    val pseudonym: Ts10Pseudonym,
+)
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class Ts10PseudonymousAuthentication(
+    val interactingPartyIdentifier: Ts10Identifier? = null,
+    val interactingPartyType: String = "ServiceProvider",
+    val interactingPartyName: String? = null,
+    val pseudonym: Ts10Pseudonym,
+    val reasonOfNoncompletion: String? = null,
+)
+
 enum class Ts10TransactionType {
     Presentation,
     CredentialIssuance,
@@ -107,6 +132,9 @@ enum class Ts10TransactionType {
     SigningSealing,
     DataDeletionRequest,
     DPAReport,
+    PseudonymGeneration,
+    PseudonymDeletion,
+    PseudonymousAuthentication,
     OtherTransaction,
 }
 
@@ -127,6 +155,9 @@ data class Ts10Transaction(
     val signingSealing: Ts10SigningSealing? = null,
     val dataDeletionRequest: Ts10DataDeletionRequest? = null,
     val dpaReport: Ts10DpaReport? = null,
+    val pseudonymGeneration: Ts10PseudonymGeneration? = null,
+    val pseudonymDeletion: Ts10PseudonymDeletion? = null,
+    val pseudonymousAuthentication: Ts10PseudonymousAuthentication? = null,
     val otherTransaction: Ts10OtherTransaction? = null,
 )
 

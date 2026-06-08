@@ -2,6 +2,7 @@ package di.swallet.wpb
 
 import di.swallet.wpb.config.DataDeletionRequestProperties
 import di.swallet.wpb.config.DpaReportProperties
+import di.swallet.wpb.config.PseudonymProperties
 import di.swallet.wpb.config.TrustMarkProperties
 import di.swallet.wpb.config.HsmProperties
 import di.swallet.wpb.config.MdocProperties
@@ -28,6 +29,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
     DataDeletionRequestProperties::class,
     DpaReportProperties::class,
     TrustMarkProperties::class,
+    PseudonymProperties::class,
 )
 class WpbApplication
 

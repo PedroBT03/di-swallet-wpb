@@ -13,7 +13,7 @@ import java.util.Optional
 class StatusListServiceTest {
 
     private val repository = mock(StatusListRepository::class.java)
-    private val properties = StatusListProperties(capacity = 1024)
+    private val properties = StatusListProperties().apply { capacity = 1024 }
     private lateinit var statusListService: StatusListService
 
     @BeforeEach

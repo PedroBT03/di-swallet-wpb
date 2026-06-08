@@ -91,6 +91,11 @@
       "type": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
       "sourceMethod": "getKa()"
+    },
+    {
+      "name": "wpb.status-list",
+      "type": "di.swallet.wpb.config.StatusListProperties",
+      "sourceType": "di.swallet.wpb.config.StatusListProperties"
     }
   ],
   "properties": [
@@ -604,6 +609,48 @@
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
       "description": "Comma-separated file/classpath paths for PEM trust anchors used in strict mode.",
       "defaultValue": ""
+    },
+    {
+      "name": "wpb.status-list.capacity",
+      "type": "java.lang.Integer",
+      "sourceType": "di.swallet.wpb.config.StatusListProperties",
+      "description": "Fixed bitstring capacity for random index allocation (VCR_17 / TS3 herd privacy).",
+      "defaultValue": 131072
+    },
+    {
+      "name": "wpb.status-list.signing-key-pem-path",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.StatusListProperties",
+      "description": "PEM path for the dedicated Status List signing key (separate from WIA/KA).",
+      "defaultValue": "classpath:status-list/dev-signing-key.pem"
+    },
+    {
+      "name": "wpb.status-list.auto-generate-signing-key-if-missing",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.StatusListProperties",
+      "description": "Generate a dev signing key when the PEM path is missing (non-classpath paths only).",
+      "defaultValue": true
+    },
+    {
+      "name": "wpb.status-list.jwt-ttl-seconds",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.StatusListProperties",
+      "description": "JWT time-to-live for published Token Status Lists (seconds).",
+      "defaultValue": 86400
+    },
+    {
+      "name": "wpb.status-list.sync-cron",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.StatusListProperties",
+      "description": "Cron expression for background revocation state sync (VCR_19).",
+      "defaultValue": "0 0 * * * *"
+    },
+    {
+      "name": "wpb.status-list.public-base-url",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.StatusListProperties",
+      "description": "Base URL for status list credential references (no trailing slash).",
+      "defaultValue": "http://localhost:8080/api/v1/wallet/status-lists"
     }
   ],
   "hints": []

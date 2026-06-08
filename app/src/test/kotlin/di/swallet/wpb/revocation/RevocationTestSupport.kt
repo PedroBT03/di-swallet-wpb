@@ -25,5 +25,5 @@ object RevocationTestSupport {
         CredentialStatusParser(ObjectMapper())
 
     fun statusListProperties(capacity: Int = 1024): StatusListProperties =
-        StatusListProperties(capacity = capacity)
+        StatusListProperties().apply { this.capacity = capacity }
 }

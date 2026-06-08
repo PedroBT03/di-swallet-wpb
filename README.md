@@ -708,3 +708,52 @@ Credentials issued before Phase 9 have no `statusListIndex`. They remain present
 ### Random index policy
 
 Indices are chosen uniformly in `[0, capacity)` among unallocated slots. `capacity` defaults to **131072** (TS3 recommends ≥10000 for herd privacy). Allocation does **not** use sequential `nextIndex` as the upper bound, to avoid correlating list size with issuance volume.
+
+## Phase 10 - Transaction log and export (TS10)
+
+### What Phase 10 delivers
+
+| Capability | Status |
+|---|---|
+| Durable TS10 `Transaction` log per holder (PostgreSQL, Flyway `V4`) | Implemented |
+| Presentation / CredentialIssuance / CredentialDeletion / SigningSealing / OtherTransaction | Implemented |
+| Claim paths only in presentation logs (DASH_03a — no attribute values) | Implemented |
+| HMAC integrity over metadata + encrypted payload (DASH_06) | Implemented |
+| Per-holder AES-GCM encryption at rest | Implemented |
+| OID4VP / OID4VCI terminal-state instrumentation | Implemented |
+| Legacy wallet paths (`issue-sd`, `presentation`, `sign`) | Implemented |
+| `DELETE /credentials/{id}` — user deletion distinct from revoke (DASH_05a) | Implemented |
+| Dashboard API: list / get / soft-delete entries (DASH_06a) | Implemented |
+| Export selected transactions as TS10 JWE (`PBES2-HS256+A128KW` + `A128GCM`) | Implemented |
+| Migration Object export (`transactionLog` + `listOfCredentials` + `nonDeviceBoundCredentials`) | Implemented |
+| `device_bound` flag on `WalletCredential` for migration classification | Implemented |
+| Retention job with warning `OtherTransaction` (DASH_02a) | Implemented |
+
+**Out of scope (deferred):** Migration import (Mig_06–07b), W2W / pseudonym / DPA / data-deletion transaction types, dashboard UI.
+
+**WIAM_12a note:** In this server-side MVP the WPB stores encrypted logs with per-holder DEKs on the server. Export JWE uses a user-provided password (TS10 §5). Full “WP cannot read log contents” requires a client-side or user-held key model and is documented as a known architectural limit.
+
+### Configuration knobs (transaction log)
+
+```
+wpb.transaction-log.encryption-key=<base64 32-byte AES key>
+wpb.transaction-log.integrity-key=<base64 32-byte HMAC key>
+wpb.transaction-log.ts10-schema-version=1.2
+wpb.transaction-log.retention-days=365
+wpb.transaction-log.max-entries-per-holder=10000
+wpb.transaction-log.retention-grace-days=30
+wpb.transaction-log.retention-cron=0 30 2 * * *
+```
+
+### API endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/wallet/transactions?holderId=` | List transaction metadata |
+| `GET` | `/api/v1/wallet/transactions/{id}?holderId=` | Get decrypted TS10 transaction |
+| `DELETE` | `/api/v1/wallet/transactions/{id}?holderId=` | Soft-delete entry (DASH_06a) |
+| `POST` | `/api/v1/wallet/transactions/export` | Export `TransactionLog` JWE |
+| `POST` | `/api/v1/wallet/migration/export` | Export `MigrationData` JWE |
+| `DELETE` | `/api/v1/wallet/credentials/{id}` | Delete credential + log `CredentialDeletion` |
+
+All endpoints under `/api/v1/wallet/**` require FIDO2 authorization. Export additionally requires a user password in the request body for JWE encryption.

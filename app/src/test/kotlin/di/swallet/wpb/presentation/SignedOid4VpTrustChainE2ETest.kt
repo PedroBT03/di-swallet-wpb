@@ -13,6 +13,7 @@ import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.ka.trust.CertificateChainValidator
 import di.swallet.wpb.observability.InMemorySessionEventStore
+import di.swallet.wpb.transactionlog.TransactionLogTestSupport
 import di.swallet.wpb.openid4vp.adapter.SdkOpenId4VpGateway
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
 import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
@@ -137,6 +138,7 @@ class SignedOid4VpTrustChainE2ETest {
                 ),
                 vpTokenBuilder = vpBuilderStub(),
                 eventStore = eventStore,
+                transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
             )
 
             val passed = orchestrator.startSession(requestUri, "holder-1")

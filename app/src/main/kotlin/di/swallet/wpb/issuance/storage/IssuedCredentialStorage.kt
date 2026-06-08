@@ -34,6 +34,7 @@ interface IssuedCredentialStorage {
         issued: IssuedCredential,
         walletKey: WalletKey? = null,
         keyAliasHint: String? = null,
+        deviceBound: Boolean = true,
     ): Long
 }
 
@@ -52,6 +53,7 @@ class JpaIssuedCredentialStorage(
         issued: IssuedCredential,
         walletKey: WalletKey?,
         keyAliasHint: String?,
+        deviceBound: Boolean,
     ): Long {
         val (encoded, encryptedDisclosures) = when (issued.format) {
             IssuanceCredentialFormat.SD_JWT_VC -> splitSdJwt(issued.rawPayload)
@@ -77,6 +79,7 @@ class JpaIssuedCredentialStorage(
             walletKey = resolvedKey,
             issuerStatusUri = issuerStatus?.listUri,
             issuerStatusIndex = issuerStatus?.listIndex,
+            deviceBound = deviceBound,
         )
         val savedId = repository.save(entity).id ?: error("WalletCredential persisted without id")
         resolvedKey?.let {

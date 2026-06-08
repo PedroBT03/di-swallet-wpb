@@ -93,6 +93,11 @@
       "sourceMethod": "getKa()"
     },
     {
+      "name": "wpb.transaction-log",
+      "type": "di.swallet.wpb.config.TransactionLogProperties",
+      "description": "TS10 transaction log persistence, integrity, and retention settings."
+    },
+    {
       "name": "wpb.status-list",
       "type": "di.swallet.wpb.config.StatusListProperties",
       "sourceType": "di.swallet.wpb.config.StatusListProperties"
@@ -651,6 +656,53 @@
       "sourceType": "di.swallet.wpb.config.StatusListProperties",
       "description": "Base URL for status list credential references (no trailing slash).",
       "defaultValue": "http://localhost:8080/api/v1/wallet/status-lists"
+    },
+    {
+      "name": "wpb.transaction-log.encryption-key",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.TransactionLogProperties",
+      "description": "Base64-encoded 32-byte AES key for per-holder transaction log encryption at rest."
+    },
+    {
+      "name": "wpb.transaction-log.integrity-key",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.TransactionLogProperties",
+      "description": "Base64-encoded 32-byte HMAC key for transaction log entry integrity."
+    },
+    {
+      "name": "wpb.transaction-log.ts10-schema-version",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.TransactionLogProperties",
+      "description": "TS10 schema version stored on new transaction log entries.",
+      "defaultValue": "1.2"
+    },
+    {
+      "name": "wpb.transaction-log.retention-days",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.TransactionLogProperties",
+      "description": "Minimum retention period in days before pruning (DASH_02a).",
+      "defaultValue": 365
+    },
+    {
+      "name": "wpb.transaction-log.max-entries-per-holder",
+      "type": "java.lang.Integer",
+      "sourceType": "di.swallet.wpb.config.TransactionLogProperties",
+      "description": "Maximum active transaction log entries per holder before retention warning.",
+      "defaultValue": 10000
+    },
+    {
+      "name": "wpb.transaction-log.retention-grace-days",
+      "type": "java.lang.Long",
+      "sourceType": "di.swallet.wpb.config.TransactionLogProperties",
+      "description": "Grace period after retention warning before physical prune.",
+      "defaultValue": 30
+    },
+    {
+      "name": "wpb.transaction-log.retention-cron",
+      "type": "java.lang.String",
+      "sourceType": "di.swallet.wpb.config.TransactionLogProperties",
+      "description": "Cron expression for transaction log retention job.",
+      "defaultValue": "0 30 2 * * *"
     }
   ],
   "hints": []

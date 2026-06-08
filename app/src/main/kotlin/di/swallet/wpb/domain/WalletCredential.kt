@@ -52,4 +52,8 @@ class WalletCredential(
     @Enumerated(EnumType.STRING)
     @Column(name = "revocation_state", nullable = false)
     var revocationState: CredentialRevocationState = CredentialRevocationState.ACTIVE,
+
+    /** Whether the credential is bound to the device key (TS10 migration classification). */
+    @Column(name = "device_bound", nullable = false)
+    var deviceBound: Boolean = true,
 )

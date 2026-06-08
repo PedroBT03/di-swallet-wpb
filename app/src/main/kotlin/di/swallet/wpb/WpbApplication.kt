@@ -5,6 +5,7 @@ import di.swallet.wpb.config.MdocProperties
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.config.StatusListProperties
+import di.swallet.wpb.config.TransactionLogProperties
 import di.swallet.wpb.config.WalletBindingProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -20,6 +21,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
     OpenId4VciProperties::class,
     WalletBindingProperties::class,
     StatusListProperties::class,
+    TransactionLogProperties::class,
 )
 class WpbApplication
 

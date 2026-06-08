@@ -28,6 +28,8 @@ import di.swallet.wpb.service.LegacySdJwtIssuanceSupport
 import di.swallet.wpb.revocation.CredentialRevocationGuard
 import di.swallet.wpb.revocation.WalletRevocationService
 import di.swallet.wpb.revocation.WpCredentialStatusAllocator
+import di.swallet.wpb.transactionlog.service.TransactionLogger
+import di.swallet.wpb.transactionlog.service.WalletCredentialDeletionService
 
 /**
  * Data Transfer Object for signing requests.
@@ -86,6 +88,8 @@ class WalletController(
     private val wpCredentialStatusAllocator: WpCredentialStatusAllocator,
     private val credentialRevocationGuard: CredentialRevocationGuard,
     private val walletRevocationService: WalletRevocationService,
+    private val transactionLogger: TransactionLogger,
+    private val walletCredentialDeletionService: WalletCredentialDeletionService,
 ) {
 
     // --- SECTION 1: AUTHENTICATION & ONBOARDING ---
@@ -271,6 +275,7 @@ class WalletController(
             walletKey = walletKey,
             statusListId = statusAllocation.listId,
             statusListIndex = statusAllocation.index,
+            deviceBound = true,
         )
 
         val saved = credentialRepository.save(credential)
@@ -280,7 +285,20 @@ class WalletController(
             keyAlias = walletKey.keyAlias,
             format = CredentialBindingFormat.SD_JWT,
         )
+        transactionLogger.logLegacyIssuance(
+            holderId = userId,
+            credentialType = "PID",
+            issuerName = "pt-mock-issuer.gov.pt",
+            issuerId = "PLKRS.0000123456",
+        )
         return saved
+    }
+
+    @DeleteMapping("/credentials/{credentialId}")
+    @Operation(summary = "Delete credential from wallet", description = "User-initiated deletion (DASH_05a), distinct from revocation.")
+    fun deleteCredential(@PathVariable credentialId: Long): Map<String, Any> {
+        walletCredentialDeletionService.deleteCredential(credentialId)
+        return mapOf("credentialId" to credentialId, "status" to "DELETED")
     }
 
     @PostMapping("/credentials/{credentialId}/revoke")
@@ -327,6 +345,14 @@ class WalletController(
         // Filter the multipart token to include only requested disclosures.
         val minimizedSdJwt = presentationService.createSelectivePresentation(fullSdJwt, request.claimsToDisclose)
 
+        transactionLogger.logLegacyPresentation(
+            holderId = credential.userId,
+            credentialType = credential.credentialType,
+            claimsRequested = request.claimsToDisclose,
+            claimsPresented = request.claimsToDisclose,
+            completed = true,
+        )
+
         return mapOf(
             "userId" to credential.userId,
             "credentialType" to credential.credentialType,
@@ -350,8 +376,16 @@ class WalletController(
         // Validate key state before cryptographic execution
         hsmService.validateKeyStatus(key)
 
-        val signatureBytes = hsmService.signData(userId, request.data.toByteArray())
+        val payload = request.data.toByteArray()
+        val signatureBytes = hsmService.signData(userId, payload)
         val signatureBase64 = Base64.getEncoder().encodeToString(signatureBytes)
+
+        transactionLogger.logSigning(
+            holderId = userId,
+            payload = payload,
+            algorithm = "SHA256withECDSA",
+            completed = true,
+        )
 
         return mapOf(
             "userId" to userId,

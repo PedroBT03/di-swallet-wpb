@@ -20,6 +20,7 @@ import di.swallet.wpb.presentation.persistence.PresentationSessionRepository
 import di.swallet.wpb.presentation.policy.PolicyEngine
 import di.swallet.wpb.presentation.registry.RegistryValidator
 import di.swallet.wpb.presentation.trust.TrustValidator
+import di.swallet.wpb.transactionlog.service.TransactionLogger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
@@ -39,6 +40,7 @@ class DefaultPresentationFlowOrchestrator(
     private val credentialMatcher: CredentialMatcher,
     private val vpTokenBuilder: VpTokenBuilder,
     private val eventStore: SessionEventStore,
+    private val transactionLogger: TransactionLogger,
     @param:Value("\${wpb.openid4vp.session.ttl-seconds:600}") private val sessionTtlSeconds: Long = 600,
 ) : PresentationFlowOrchestrator {
 
@@ -84,8 +86,10 @@ class DefaultPresentationFlowOrchestrator(
             )
             val after = persistUpdate(dispatched)
             record(after, "authorize.dispatch.error", mapOf("outcome" to dispatchOutcome.toString()))
+            transactionLogger.logPresentationIfTerminal(after)
             after
         } else {
+            transactionLogger.logPresentationIfTerminal(persistedFailed)
             persistedFailed
         }
     }
@@ -286,6 +290,7 @@ class DefaultPresentationFlowOrchestrator(
         val dispatched = transitionTo(context.copy(dispatchOutcome = dispatchOutcome), PresentationState.DISPATCHED)
         val after = persistUpdate(dispatched)
         record(after, "dispatch.positive", mapOf("outcome" to dispatchOutcome.toString()))
+        transactionLogger.logPresentationIfTerminal(after)
         return after
     }
 
@@ -305,12 +310,16 @@ class DefaultPresentationFlowOrchestrator(
         val expired = transitionTo(session.toContext(), PresentationState.EXPIRED)
         val persisted = persistUpdate(expired)
         record(persisted, "session.expired", emptyMap())
+        transactionLogger.logPresentationIfTerminal(persisted)
         return persisted
     }
 
     private suspend fun dispatchTerminalNegative(context: PresentationContext, eventType: String): PresentationContext {
         val requestToken = context.authorizationRequest?.requestToken
-            ?: return context
+            ?: run {
+                transactionLogger.logPresentationIfTerminal(context)
+                return context
+            }
         val outcome = gateway.dispatchNegative(requestToken)
         val dispatched = transitionTo(
             context.copy(dispatchOutcome = outcome),
@@ -319,6 +328,7 @@ class DefaultPresentationFlowOrchestrator(
         )
         val after = persistUpdate(dispatched)
         record(after, eventType, mapOf("outcome" to outcome.toString()))
+        transactionLogger.logPresentationIfTerminal(after)
         return after
     }
 

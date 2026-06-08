@@ -33,6 +33,7 @@ import di.swallet.wpb.wia.attestation.WalletAttestationProvider
 import di.swallet.wpb.wia.validation.WiaValidationException
 import di.swallet.wpb.wia.validation.WiaValidationService
 import di.swallet.wpb.service.KeyBindingRuntimeService
+import di.swallet.wpb.transactionlog.service.TransactionLogger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -56,6 +57,7 @@ class DefaultIssuanceFlowOrchestrator(
     private val keyBindingRuntimeService: KeyBindingRuntimeService,
     private val eventStore: IssuanceEventStore,
     private val properties: OpenId4VciProperties,
+    private val transactionLogger: TransactionLogger,
 ) : IssuanceFlowOrchestrator {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -407,11 +409,17 @@ class DefaultIssuanceFlowOrchestrator(
         terminalState: IssuanceState,
         keyAliasHint: String?,
     ): IssuanceContext {
+        val metadata = ctx.issuerMetadata
         val storedIds = credentials.map { issued ->
+            val configuration = metadata?.credentialConfigurations?.firstOrNull {
+                it.id == issued.credentialConfigurationId
+            }
+            val deviceBound = metadata?.let { shouldRequireKa(it, configuration) } ?: false
             credentialStorage.store(
                 holderId = ctx.sessionMeta.holderId ?: "anonymous",
                 issued = issued,
                 keyAliasHint = keyAliasHint,
+                deviceBound = deviceBound,
             )
         }
         val withIssued = ctx.copy(issuedCredentials = ctx.issuedCredentials + credentials)
@@ -424,6 +432,7 @@ class DefaultIssuanceFlowOrchestrator(
                 "storedIds" to storedIds.joinToString(","),
             ),
         )
+        transactionLogger.logIssuanceIfTerminal(saved, credentials)
         return saved
     }
 
@@ -502,6 +511,7 @@ class DefaultIssuanceFlowOrchestrator(
         }
         val saved = persistUpdate(transitioned)
         record(saved, "lifecycle.failed", mapOf("code" to error.code, "message" to error.message))
+        transactionLogger.logIssuanceIfTerminal(saved)
         gateway.discard(ctx.sessionMeta.sessionId.toString())
         return saved
     }

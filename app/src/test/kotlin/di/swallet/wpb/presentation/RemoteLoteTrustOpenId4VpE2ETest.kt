@@ -8,6 +8,7 @@ import di.swallet.wpb.ka.trust.CertificateChainValidator
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.observability.InMemorySessionEventStore
+import di.swallet.wpb.transactionlog.TransactionLogTestSupport
 import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
@@ -117,6 +118,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
                 ),
                 vpTokenBuilder = vpBuilderStub(),
                 eventStore = eventStore,
+                transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
             )
 
             // Positive: client_id + cert chain + fingerprint align with remote TS119602 document.
@@ -143,6 +145,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
                 ),
                 vpTokenBuilder = vpBuilderStub(),
                 eventStore = eventStore,
+                transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
             )
             val failed = failingOrchestrator.startSession("http://verifier/req", "holder-1")
             assertEquals(PresentationState.DISPATCHED, failed.state)

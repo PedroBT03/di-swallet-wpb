@@ -1,6 +1,7 @@
 package di.swallet.wpb.presentation
 
 import di.swallet.wpb.observability.InMemorySessionEventStore
+import di.swallet.wpb.transactionlog.TransactionLogTestSupport
 import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
 import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
@@ -119,6 +120,7 @@ class DefaultPresentationFlowOrchestratorTest {
         credentialMatcher = matcher,
         vpTokenBuilder = builder,
         eventStore = InMemorySessionEventStore(),
+            transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
     )
 
     private fun candidate(queryId: String = "q1") = CredentialCandidate(

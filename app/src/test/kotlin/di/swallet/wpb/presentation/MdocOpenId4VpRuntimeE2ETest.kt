@@ -9,6 +9,7 @@ import di.swallet.wpb.issuance.storage.JpaIssuedCredentialStorage
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.observability.InMemorySessionEventStore
+import di.swallet.wpb.transactionlog.TransactionLogTestSupport
 import di.swallet.wpb.openid4vci.adapter.SimulatedOpenId4VciGateway
 import di.swallet.wpb.openid4vci.protocol.IssuanceOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
@@ -183,6 +184,7 @@ class MdocOpenId4VpRuntimeE2ETest {
             credentialMatcher = matcher,
             vpTokenBuilder = vpBuilder,
             eventStore = InMemorySessionEventStore(),
+            transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
         )
     }
 

@@ -13,6 +13,7 @@ import di.swallet.wpb.issuance.storage.IssuedCredentialStorage
 import di.swallet.wpb.issuance.trust.DefaultIssuerTrustValidator
 import di.swallet.wpb.issuance.trust.IssuerSignedMetadataValidator
 import di.swallet.wpb.observability.InMemoryIssuanceEventStore
+import di.swallet.wpb.transactionlog.TransactionLogTestSupport
 import di.swallet.wpb.ka.attestation.KeyAttestationProvider
 import di.swallet.wpb.ka.validation.KeyAttestationValidationException
 import di.swallet.wpb.ka.validation.KeyAttestationValidationService
@@ -53,6 +54,7 @@ class DefaultIssuanceFlowOrchestratorTest {
             issued: IssuedCredential,
             walletKey: WalletKey?,
             keyAliasHint: String?,
+            deviceBound: Boolean,
         ): Long =
             seq.incrementAndGet()
     }
@@ -167,6 +169,7 @@ class DefaultIssuanceFlowOrchestratorTest {
             keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),
             eventStore = InMemoryIssuanceEventStore(),
             properties = properties,
+            transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
         )
     }
 

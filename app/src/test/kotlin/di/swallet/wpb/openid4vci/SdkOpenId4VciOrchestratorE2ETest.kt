@@ -15,6 +15,8 @@ import com.github.tomakehurst.wiremock.client.WireMock.verify
 import com.nimbusds.jose.crypto.ECDSAVerifier
 import com.nimbusds.jwt.SignedJWT
 import di.swallet.wpb.BaseIntegrationTest
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.consent.IssuanceConsentTestSupport
 import di.swallet.wpb.issuance.domain.IssuanceState
 import di.swallet.wpb.issuance.orchestration.IssuanceFlowOrchestrator
@@ -39,6 +41,7 @@ import java.util.UUID
  * Exercises the full issuance orchestrator against [SdkOpenId4VciGateway]
  * (demo-mode=false) with a local WireMock issuer and HSM-backed proof material.
  */
+@ConformanceTest
 class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
 
     @Autowired
@@ -90,6 +93,7 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
     }
 
     @Test
+    @ConformanceScenario("vci_haip_issuance_happy_path")
     fun `sdk gateway orchestrator flow uses hsm proof keys against wiremock issuer`() {
         val holderId = "sdk-orchestrator-${UUID.randomUUID()}"
         WalletTestSupport.bootstrapHolderForIssuance(deviceBindingService, walletUnitRepository, hsmService, holderId)

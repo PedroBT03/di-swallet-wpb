@@ -1,5 +1,7 @@
 package di.swallet.wpb.pseudonym
 
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.config.PseudonymProperties
 import di.swallet.wpb.security.Fido2TestHelper
 import di.swallet.wpb.service.HsmService
@@ -16,6 +18,7 @@ import java.security.interfaces.ECPublicKey
 import java.util.Base64
 import java.util.UUID
 
+@ConformanceTest
 class PseudonymUnlinkabilityTest {
     private val properties = PseudonymProperties().apply { enabled = true }
     private val repository = mock(PseudonymCredentialRepository::class.java)
@@ -42,6 +45,7 @@ class PseudonymUnlinkabilityTest {
     }
 
     @Test
+    @ConformanceScenario("pseudonym_unlinkability")
     fun `same holder different rps produce unlinkable passkeys`() {
         val holderId = "holder-1"
         val rpA = "shop.example.com"

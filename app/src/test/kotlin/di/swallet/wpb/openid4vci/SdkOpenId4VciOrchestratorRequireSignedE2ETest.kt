@@ -7,6 +7,8 @@ import com.github.tomakehurst.wiremock.client.WireMock.okJson
 import com.github.tomakehurst.wiremock.client.WireMock.stubFor
 import com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo
 import di.swallet.wpb.BaseIntegrationTest
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.issuance.domain.IssuanceState
 import di.swallet.wpb.issuance.orchestration.IssuanceFlowOrchestrator
 import org.junit.jupiter.api.AfterAll
@@ -19,6 +21,7 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import java.util.UUID
 
+@ConformanceTest
 class SdkOpenId4VciOrchestratorRequireSignedE2ETest : BaseIntegrationTest() {
 
     @Autowired
@@ -83,6 +86,7 @@ class SdkOpenId4VciOrchestratorRequireSignedE2ETest : BaseIntegrationTest() {
     }
 
     @Test
+    @ConformanceScenario("vci_metadata_unsigned_rejected")
     fun `requireSigned rejects unsigned issuer metadata in sdk orchestrator flow`() {
         val issuer = "http://localhost:${wireMock.port()}"
         val offer =

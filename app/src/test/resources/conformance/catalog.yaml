@@ -1,0 +1,223 @@
+scenarios:
+  # --- OID4VP DCQL (Tier 1) ---
+  - id: vp_sd_jwt_simple_claim
+    hlr: [OIA_01, OIA_07, OIA_03c]
+    protocol: openid4vp
+    tier: 1
+    fixture: fixtures/simple_claim.json
+    negative: false
+    description: Selective disclosure of a single flat SD-JWT claim (given_name).
+
+  - id: vp_sd_jwt_nested_claim
+    hlr: [OIA_01, OIA_07, OIA_03c]
+    protocol: openid4vp
+    tier: 1
+    fixture: fixtures/nested_claim.json
+    negative: false
+    description: Nested DCQL path address.locality matches dot-notation disclosure.
+
+  - id: vp_sd_jwt_multi_nested
+    hlr: [OIA_01, OIA_07, OIA_03c]
+    protocol: openid4vp
+    tier: 1
+    fixture: fixtures/multi_nested.json
+    negative: false
+    description: Multiple nested claim paths on one credential query.
+
+  - id: vp_sd_jwt_array_wildcard
+    hlr: [OIA_01, OIA_07, OIA_03c]
+    protocol: openid4vp
+    tier: 1
+    fixture: fixtures/array_wildcard.json
+    negative: false
+    description: DCQL array wildcard segment matches list disclosure.
+
+  - id: vp_sd_jwt_array_index
+    hlr: [OIA_01, OIA_07, OIA_03c]
+    protocol: openid4vp
+    tier: 1
+    fixture: fixtures/array_index.json
+    negative: false
+    description: DCQL array index segment matches list disclosure.
+
+  - id: vp_sd_jwt_claims_absent
+    hlr: [OIA_01, OIA_07]
+    protocol: openid4vp
+    tier: 1
+    fixture: fixtures/claims_absent.json
+    negative: false
+    description: Credential query without claims matches any stored SD-JWT credential.
+
+  - id: vp_sd_jwt_empty_claims
+    hlr: [OIA_01, OIA_07]
+    protocol: openid4vp
+    tier: 1
+    fixture: fixtures/empty_claims.json
+    negative: false
+    description: Empty claims array matches any stored SD-JWT credential.
+
+  # --- OID4VP negatives (Tier 1) ---
+  - id: vp_trust_untrusted_client
+    hlr: [RPA_05, RPA_06a]
+    protocol: openid4vp
+    tier: 1
+    negative: true
+    description: Untrusted client_id rejects before credential matching.
+
+  - id: vp_registry_intended_use_fail
+    hlr: [RPA_05]
+    protocol: openid4vp
+    tier: 1
+    negative: true
+    description: Registry intended-use rejection dispatches negative VP.
+
+  - id: vp_no_matching_credentials
+    hlr: [OIA_01]
+    protocol: openid4vp
+    tier: 1
+    negative: true
+    description: No wallet credential satisfies DCQL → policy reject + negative dispatch.
+
+  - id: vp_consent_denied
+    hlr: [RPA_10, OIA_10]
+    protocol: openid4vp
+    tier: 1
+    negative: true
+    description: Holder denies consent → negative dispatch without positive VP.
+
+  # --- OID4VP trust / registry E2E (Tier 1) ---
+  - id: vp_pkix_access_certificate_trust
+    hlr: [RPA_01, RPA_02, OIA_03c]
+    protocol: openid4vp
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.presentation.SignedOid4VpTrustChainE2ETest
+    description: Signed authorization request → PKIX access certificate trust chain.
+
+  - id: vp_remote_lote_trust
+    hlr: [RPA_01, RPA_06]
+    protocol: openid4vp
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.presentation.RemoteLoteTrustOpenId4VpE2ETest
+    description: LoTE trust snapshot resolves verifier client_id.
+
+  - id: vp_ts5_registry_intended_use
+    hlr: [RPA_05]
+    protocol: openid4vp
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.presentation.Ts5RegistryOpenId4VpE2ETest
+    description: TS5 registry intended-use validation accepts matching RP.
+
+  # --- OID4VCI (Tier 1) ---
+  - id: vci_haip_issuance_happy_path
+    hlr: [ISSU_01, ISSU_06]
+    protocol: openid4vci
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.openid4vci.SdkOpenId4VciOrchestratorE2ETest
+    description: WireMock issuer → authorization → credential → storage (HAIP-profiled SDK path).
+
+  - id: vci_metadata_unsigned_rejected
+    hlr: [ISSU_06, ISSU_11]
+    protocol: openid4vci
+    tier: 1
+    negative: true
+    testClass: di.swallet.wpb.openid4vci.SdkOpenId4VciOrchestratorRequireSignedE2ETest
+    description: requireSigned metadata policy rejects unsigned issuer metadata.
+
+  - id: vci_ka_binding_e2e
+    hlr: [ISSU_06, ISSU_10, ISSU_11]
+    protocol: openid4vci
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.ka.OpenId4VciKaE2ETest
+    description: Key attestation binding exercised during OID4VCI authorization.
+
+  # --- mdoc (Tier 1) ---
+  - id: vp_mdoc_runtime_e2e
+    hlr: [OIA_03b, ProxId_01]
+    protocol: openid4vp
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.presentation.MdocOpenId4VpRuntimeE2ETest
+    description: mdoc credential matched and VP built for remote presentation.
+
+  - id: mdoc_cross_interop_verifier
+    hlr: [OIA_03b]
+    protocol: mdoc
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.format.mdoc.MdocCrossInteropIndependentVerifierTest
+    description: Independent COSE/mdoc verifier validates device response.
+
+  # --- Status lists / revocation (Tier 1) ---
+  - id: status_list_publication
+    hlr: [VCR_07, VCR_08]
+    protocol: status-list
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.controller.StatusListPublicationTest
+    description: Public status list JSON/JWT endpoints publish revocation bits.
+
+  - id: credential_revocation_blocks_use
+    hlr: [VCR_01, VCR_01a]
+    protocol: status-list
+    tier: 1
+    negative: true
+    testClass: di.swallet.wpb.revocation.WalletCredentialRevocationTest
+    description: Revoked wallet credential excluded from presentation matching.
+
+  # --- Phase 16 consent (Tier 1) ---
+  - id: consent_no_attribute_values_in_audit
+    hlr: [OIA_10, OIA_11, RPA_10a, DASH_03a]
+    protocol: consent
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.consent.ConsentNoAttributeValuesInAuditTest
+    description: Consent audit events omit attribute values.
+
+  # --- Phase 11 transaction log (Tier 1) ---
+  - id: transaction_log_export_deletion
+    hlr: [DASH_03, DASH_03a]
+    protocol: transaction-log
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.transactionlog.TransactionLogServiceIntegrationTest
+    description: TS10 export JWE and user deletion marker.
+
+  # --- Phase 12 data deletion (Tier 1) ---
+  - id: data_deletion_request_service
+    hlr: [DATA_DLT]
+    protocol: data-deletion
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.datadeletion.DataDeletionRequestServiceTest
+    description: GDPR Art. 17 deletion request orchestration to RPs.
+
+  # --- Phase 15 pseudonyms (Tier 1) ---
+  - id: pseudonym_unlinkability
+    hlr: [PA_16, PA_17, PA_18]
+    protocol: pseudonym
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.pseudonym.PseudonymUnlinkabilityTest
+    description: Distinct user handles and keys per RP (unlinkability).
+
+  # --- Tier 3 external interop (opt-in, not in default conformanceTest) ---
+  - id: vci_real_issuer_smoke
+    hlr: [ISSU_01]
+    protocol: openid4vci
+    tier: 3
+    negative: false
+    testClass: di.swallet.wpb.openid4vci.adapter.SdkOpenId4VciGatewayRealIssuerIT
+    description: Optional smoke against a real OID4VCI issuer (env-gated).
+
+  - id: vp_real_registry_smoke
+    hlr: [RPA_05]
+    protocol: openid4vp
+    tier: 3
+    negative: false
+    testClass: di.swallet.wpb.presentation.registry.Ts5RpRegistryRealRegistryIT
+    description: Optional smoke against a real WRP registry (env-gated).

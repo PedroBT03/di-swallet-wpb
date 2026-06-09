@@ -1,5 +1,7 @@
 package di.swallet.wpb.presentation
 
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.config.WalletProperties
@@ -54,6 +56,7 @@ import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
+@ConformanceTest
 class MdocOpenId4VpRuntimeE2ETest {
     private val holder = MdocTestSupport.holderBinding()
     private val stack = MdocTestSupport.stack(holderBindings = listOf(holder))
@@ -61,6 +64,7 @@ class MdocOpenId4VpRuntimeE2ETest {
     private val mdocCodec = stack.codec
 
     @Test
+    @ConformanceScenario("vp_mdoc_runtime_e2e")
     fun `mdoc runtime supports PID and mDL positive and negative`() = runBlocking {
         val storedCredentials = mutableListOf<WalletCredential>()
         val credentialRepository = inMemoryRepository(storedCredentials)

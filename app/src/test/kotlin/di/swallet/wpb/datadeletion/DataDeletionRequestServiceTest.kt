@@ -1,5 +1,7 @@
 package di.swallet.wpb.datadeletion
 
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.config.DataDeletionRequestProperties
 import di.swallet.wpb.presentation.registry.RpRegistryResolver
 import di.swallet.wpb.transactionlog.domain.Ts10ClaimInfo
@@ -21,6 +23,7 @@ import org.mockito.Mockito.`when`
 import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 
+@ConformanceTest
 class DataDeletionRequestServiceTest {
     private val transactionLogService = mock(TransactionLogService::class.java)
     private val registryResolver = mock(RpRegistryResolver::class.java)
@@ -48,6 +51,7 @@ class DataDeletionRequestServiceTest {
     }
 
     @Test
+    @ConformanceScenario("data_deletion_request_service")
     fun `initiate returns mailto and web actions ordered web email phone`() {
         val presentationId = "pres-1"
         `when`(transactionLogService.get("holder-1", presentationId))

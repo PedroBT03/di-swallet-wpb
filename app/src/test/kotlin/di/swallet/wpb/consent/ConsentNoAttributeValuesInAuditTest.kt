@@ -1,5 +1,7 @@
 package di.swallet.wpb.consent
 
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.observability.InMemorySessionEventStore
 import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
@@ -29,9 +31,11 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+@ConformanceTest
 class ConsentNoAttributeValuesInAuditTest {
 
     @Test
+    @ConformanceScenario("consent_no_attribute_values_in_audit")
     fun `consent events and session do not contain attribute values`() = runBlocking {
         val eventStore = InMemorySessionEventStore()
         val consentDeps = ConsentTestSupport.presentationOrchestratorDeps()

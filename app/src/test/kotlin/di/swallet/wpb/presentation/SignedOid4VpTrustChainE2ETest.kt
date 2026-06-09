@@ -7,6 +7,8 @@ import com.nimbusds.jose.crypto.ECDSASigner
 import com.nimbusds.jwt.JWTClaimsSet
 import com.nimbusds.jwt.SignedJWT
 import com.sun.net.httpserver.HttpServer
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
@@ -71,10 +73,12 @@ import com.nimbusds.jose.JWEAlgorithm
  * DefaultVerifierCertificateExtractor → PkixAccessCertificateValidationService →
  * DefaultTrustValidator.
  */
+@ConformanceTest
 class SignedOid4VpTrustChainE2ETest {
     private val mdocCodec = MdocTestSupport.stack().codec
 
     @Test
+    @ConformanceScenario("vp_pkix_access_certificate_trust")
     fun `signed authorization request drives extractor to pkix trust validation`() = runBlocking {
         val certChain = TrustTestCertificates.issueChain()
         val lotePath = writeTempFile(ts119602Payload("verifier-demo-client", certChain.leaf, certChain.root))

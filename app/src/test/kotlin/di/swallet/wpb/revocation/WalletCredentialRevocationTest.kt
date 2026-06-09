@@ -1,6 +1,8 @@
 package di.swallet.wpb.revocation
 
 import di.swallet.wpb.BaseIntegrationTest
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.service.DeviceBindingService
@@ -13,6 +15,7 @@ import org.springframework.http.HttpEntity
 import org.springframework.http.HttpStatus
 import java.util.UUID
 
+@ConformanceTest
 class WalletCredentialRevocationTest : BaseIntegrationTest() {
 
     @Autowired lateinit var deviceBindingService: DeviceBindingService
@@ -20,6 +23,7 @@ class WalletCredentialRevocationTest : BaseIntegrationTest() {
     @Autowired lateinit var hsmService: HsmService
 
     @Test
+    @ConformanceScenario("credential_revocation_blocks_use")
     fun `revoked WP-managed credential is rejected for presentation`() {
         val userId = "revoke-cred-${UUID.randomUUID()}"
         WalletTestSupport.bootstrapHolderForIssuance(

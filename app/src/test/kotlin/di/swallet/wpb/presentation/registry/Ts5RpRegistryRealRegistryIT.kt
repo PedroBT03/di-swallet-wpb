@@ -1,6 +1,9 @@
 package di.swallet.wpb.presentation.registry
 
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTags
 import di.swallet.wpb.config.OpenId4VpProperties
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -20,6 +23,8 @@ import org.junit.jupiter.api.Test
 class Ts5RpRegistryRealRegistryIT {
 
     @Test
+    @Tag(ConformanceTags.EXTERNAL)
+    @ConformanceScenario("vp_real_registry_smoke")
     fun `production https policy accepts signed record from configured registry`() {
         val enabled = System.getenv("WPB_REAL_REGISTRY_ENABLED")?.equals("true", ignoreCase = true) == true
         val baseUrl = System.getenv("WPB_REAL_REGISTRY_BASE_URL")?.trim().orEmpty()

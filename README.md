@@ -947,3 +947,55 @@ wpb.pseudonym.log-include-alias-in-export=false
 ```
 
 **PA_20 note:** `allowed-rp-ids` is a dev/MVP mitigation only. It does not replace TLS/browser RP verification or access-certificate trust (Phase 5).
+
+## Conformance and Interop (Phase 17)
+
+### What it delivers
+
+| Capability | Status |
+|---|---|
+| `catalog.yaml` scenario ↔ HLR traceability matrix | Implemented |
+| `@Tag(conformance)` suite + `conformanceTest` Gradle task | Implemented |
+| DCQL fixtures from `verifier-emulator/requests/conformance/` automated (Tier 1) | Implemented |
+| Explicit `HaipProfileAssertions` (OIA_03b/c, KB-JWT, DCQL subset) | Implemented |
+| Negative VP scenarios (trust, registry, no-match, consent deny) | Implemented |
+| `summary.md` + `summary.json` conformance report | Implemented |
+| GitHub Actions CI (`test` + `conformanceTest`, SoftHSM init) | Implemented |
+| Tier 3 external interop (`externalInteropTest`, env-gated) | Implemented |
+
+**Server-side model:** conformance tests exercise WPB orchestrators and REST APIs. The WPI is simulated via test helpers (`PresentationTestSupport`, `WalletTestSupport`, `ConsentTestSupport`).
+
+### Running locally
+
+```bash
+# Full regression (all tests, including conformance-tagged)
+./gradlew :app:test
+
+# Conformance subset + report (app/build/reports/conformance/summary.md)
+./gradlew :app:conformanceTest
+
+# Optional Tier 3 (skipped unless env vars are set)
+WPB_REAL_ISSUER_ENABLED=true WPB_REAL_ISSUER_OFFER_URI='...' ./gradlew :app:externalInteropTest
+```
+
+SoftHSM2 must be initialized before integration/conformance tests (see [Initialize the SoftHSM2 token](#1-initialize-the-softhsm2-token)).
+
+### Scenario catalog (Tier 1 excerpt)
+
+| id | HLR | protocol |
+|----|-----|----------|
+| `vp_sd_jwt_simple_claim` | OIA_01, OIA_07, OIA_03c | openid4vp |
+| `vp_trust_untrusted_client` | RPA_05, RPA_06a | openid4vp |
+| `vci_haip_issuance_happy_path` | ISSU_01, ISSU_06 | openid4vci |
+| `vci_metadata_unsigned_rejected` | ISSU_06, ISSU_11 | openid4vci |
+| `vp_pkix_access_certificate_trust` | RPA_01, RPA_02, OIA_03c | openid4vp |
+| `vp_mdoc_runtime_e2e` | OIA_03b, ProxId_01 | openid4vp |
+| `status_list_publication` | VCR_07, VCR_08 | status-list |
+| `consent_no_attribute_values_in_audit` | OIA_10, OIA_11, RPA_10a, DASH_03a | consent |
+| `transaction_log_export_deletion` | DASH_03, DASH_03a | transaction-log |
+| `data_deletion_request_service` | DATA_DLT | data-deletion |
+| `pseudonym_unlinkability` | PA_16, PA_17, PA_18 | pseudonym |
+
+Full matrix: `app/src/test/resources/conformance/catalog.yaml`. After `conformanceTest`, copy `app/build/reports/conformance/summary.md` into thesis evidence.
+
+**Out of scope (Phase 17):** emulator ES256 signed requests (Tier 2 stretch), `POST /validate/vp` on emulator, full HAIP/ARB certification lab, W2W proximity.

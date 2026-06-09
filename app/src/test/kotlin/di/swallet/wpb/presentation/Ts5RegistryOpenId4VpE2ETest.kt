@@ -8,6 +8,8 @@ import com.nimbusds.jwt.JWTClaimsSet
 import com.nimbusds.jwt.SignedJWT
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
@@ -71,10 +73,12 @@ import java.util.Base64
 import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
 
+@ConformanceTest
 class Ts5RegistryOpenId4VpE2ETest {
     private val mdocCodec = MdocTestSupport.stack().codec
 
     @Test
+    @ConformanceScenario("vp_ts5_registry_intended_use")
     fun `ts5 signed registry response changes openid4vp runtime decision`() = runBlocking {
         val trustChain = issueChain(clientIdDns = "verifier.example")
         val registrySigner = ecKeyPair()

@@ -1,5 +1,7 @@
 package di.swallet.wpb.transactionlog
 
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.config.TransactionLogProperties
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.transactionlog.crypto.TransactionLogCrypto
@@ -41,11 +43,13 @@ class TransactionLogServiceIntegrationTestConfig
         "wpb.transaction-log.integrity-key=YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=",
     ],
 )
+@ConformanceTest
 class TransactionLogServiceIntegrationTest {
     @Autowired lateinit var service: TransactionLogService
     @Autowired lateinit var repository: TransactionLogRepository
 
     @Test
+    @ConformanceScenario("transaction_log_export_deletion")
     fun `record list export and soft delete`() {
         val tx = Ts10Transaction(
             transactionIdentifier = "tx-integration-1",

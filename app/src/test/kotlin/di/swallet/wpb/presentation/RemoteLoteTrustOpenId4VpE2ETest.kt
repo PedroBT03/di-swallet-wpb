@@ -1,6 +1,8 @@
 package di.swallet.wpb.presentation
 
 import com.sun.net.httpserver.HttpServer
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
@@ -56,10 +58,12 @@ import java.time.Instant
 import java.util.Base64
 import java.util.Date
 
+@ConformanceTest
 class RemoteLoteTrustOpenId4VpE2ETest {
     private val mdocCodec = MdocTestSupport.stack().codec
 
     @Test
+    @ConformanceScenario("vp_remote_lote_trust")
     fun `remote TS119602 drives runtime trust decision pass and fail`() = runBlocking {
         val certChain = issueChain(clientIdDns = "verifier.example")
         val lotePayload = ts119602Payload(

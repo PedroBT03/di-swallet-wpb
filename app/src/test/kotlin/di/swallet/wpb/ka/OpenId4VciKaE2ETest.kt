@@ -1,6 +1,8 @@
 package di.swallet.wpb.ka
 
 import di.swallet.wpb.BaseIntegrationTest
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.consent.IssuanceConsentTestSupport
 import di.swallet.wpb.issuance.domain.IssuanceState
 import di.swallet.wpb.issuance.domain.KaState
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import java.util.UUID
 
+@ConformanceTest
 class OpenId4VciKaE2ETest : BaseIntegrationTest() {
 
     @Autowired
@@ -36,6 +39,7 @@ class OpenId4VciKaE2ETest : BaseIntegrationTest() {
     lateinit var walletUnitRepository: WalletUnitRepository
 
     @Test
+    @ConformanceScenario("vci_ka_binding_e2e")
     fun `device bound issuance performs KA generation attachment and validation`() {
         val holderId = "ka-e2e-${UUID.randomUUID()}"
         WalletTestSupport.bootstrapHolderForIssuance(deviceBindingService, walletUnitRepository, hsmService, holderId)

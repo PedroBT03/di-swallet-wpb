@@ -1,6 +1,8 @@
 package di.swallet.wpb.controller
 
 import di.swallet.wpb.BaseIntegrationTest
+import di.swallet.wpb.conformance.ConformanceScenario
+import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.domain.WalletKey
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -8,9 +10,11 @@ import org.springframework.http.HttpEntity
 import org.springframework.http.HttpStatus
 import java.util.*
 
+@ConformanceTest
 class StatusListPublicationTest : BaseIntegrationTest() {
 
     @Test
+    @ConformanceScenario("status_list_publication")
     fun `should publish revocation status list without authentication`() {
         val response = restTemplate.getForEntity(
             "/api/v1/wallet/status-lists/PRIMARY_LIST?format=json",

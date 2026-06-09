@@ -78,6 +78,7 @@ dependencies {
     testImplementation("org.wiremock:wiremock-standalone:3.5.4")
     testImplementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.20.1")
     testImplementation("com.augustcellars.cose:cose-java:1.1.0")
+    testImplementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.20.1")
 }
 
 kapt {
@@ -154,6 +155,11 @@ tasks.jacocoTestCoverageVerification {
 tasks.withType<Test> {
     useJUnitPlatform()
     finalizedBy(tasks.jacocoTestReport)
+
+    jvmArgs(
+        "--add-exports=jdk.crypto.cryptoki/sun.security.pkcs11=ALL-UNNAMED",
+        "--add-exports=java.base/sun.security.x509=ALL-UNNAMED",
+    )
     
     // Activate 'test' profile to enable clean, human-readable reporting logs
     systemProperty("spring.profiles.active", "test")
@@ -166,6 +172,29 @@ tasks.withType<Test> {
     
     // Automated environment variable for SoftHSM2 during test execution
     environment("SOFTHSM2_CONF", "${System.getProperty("user.home")}/.softhsm2.conf")
+}
+
+val conformanceReportDir = layout.buildDirectory.dir("reports/conformance")
+
+tasks.register<Test>("conformanceTest") {
+    description = "Runs @Tag(conformance) tests and writes build/reports/conformance/summary.md"
+    group = "verification"
+    useJUnitPlatform {
+        includeTags("conformance")
+    }
+    systemProperty("conformance.report.dir", conformanceReportDir.get().asFile.absolutePath)
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+}
+
+tasks.register<Test>("externalInteropTest") {
+    description = "Runs optional external interop tests (env-gated, Tier 3)"
+    group = "verification"
+    useJUnitPlatform {
+        includeTags("external")
+    }
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {

@@ -1,6 +1,8 @@
 package di.swallet.wpb.issuance.orchestration
 
+import di.swallet.wpb.consent.IssuanceConsentView
 import di.swallet.wpb.issuance.domain.IssuanceContext
+import di.swallet.wpb.openid4vci.protocol.IssuanceConsentSubmission
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import java.util.UUID
@@ -26,6 +28,10 @@ interface IssuanceFlowOrchestrator {
     fun queryDeferred(sessionId: UUID): IssuanceContext
 
     fun notify(sessionId: UUID, event: NotificationEvent, description: String?): IssuanceContext
+
+    fun getConsentView(sessionId: UUID, holderId: String): IssuanceConsentView
+
+    fun submitIssuanceConsent(sessionId: UUID, decision: IssuanceConsentSubmission): IssuanceContext
 
     fun getSession(sessionId: UUID): IssuanceContext
 }

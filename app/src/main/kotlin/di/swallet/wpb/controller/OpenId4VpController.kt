@@ -2,6 +2,7 @@ package di.swallet.wpb.controller
 
 import di.swallet.wpb.observability.SessionEvent
 import di.swallet.wpb.observability.SessionEventStore
+import di.swallet.wpb.consent.PresentationConsentView
 import di.swallet.wpb.openid4vp.protocol.AuthorizationStartRequest
 import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
 import di.swallet.wpb.presentation.domain.PresentationContext
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
@@ -33,8 +35,18 @@ class OpenId4VpController(
         )
     }
 
+    @GetMapping("/session/{id}/consent-view")
+    @Operation(
+        summary = "Get presentation consent view for WPI",
+        description = "Preferred endpoint for holder consent screens. Requires matching holderId.",
+    )
+    suspend fun getConsentView(
+        @PathVariable id: UUID,
+        @RequestParam holderId: String,
+    ): PresentationConsentView = presentationFlowOrchestrator.getConsentView(id, holderId)
+
     @PostMapping("/consent")
-    @Operation(summary = "Submit holder consent")
+    @Operation(summary = "Submit holder consent (requires FIDO2)")
     suspend fun consent(@RequestBody request: ConsentSubmission): PresentationContext {
         return presentationFlowOrchestrator.submitConsent(
             sessionId = UUID.fromString(request.sessionId),
@@ -43,7 +55,10 @@ class OpenId4VpController(
     }
 
     @GetMapping("/session/{id}")
-    @Operation(summary = "Get presentation session")
+    @Operation(
+        summary = "Get presentation session",
+        description = "Low-level lifecycle context. WPI consent UI should use GET /session/{id}/consent-view instead.",
+    )
     suspend fun getSession(@PathVariable id: UUID): PresentationContext {
         return presentationFlowOrchestrator.getSession(id)
     }

@@ -18,6 +18,7 @@ import di.swallet.wpb.presentation.domain.TrustDecision
 import di.swallet.wpb.presentation.domain.VpToken
 import di.swallet.wpb.presentation.format.VpTokenBuilder
 import di.swallet.wpb.presentation.matching.CredentialMatcher
+import di.swallet.wpb.consent.ConsentTestSupport
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.PolicyEngine
@@ -111,17 +112,25 @@ class DefaultPresentationFlowOrchestratorTest {
         policy: PolicyEngine = StubPolicy(),
         matcher: CredentialMatcher = StubMatcher(listOf(candidate())),
         builder: VpTokenBuilder = StubVpBuilder(),
-    ) = DefaultPresentationFlowOrchestrator(
-        gateway = gateway,
-        repository = InMemoryPresentationSessionRepository(),
-        trustValidator = trust,
-        registryValidator = registry,
-        policyEngine = policy,
-        credentialMatcher = matcher,
-        vpTokenBuilder = builder,
-        eventStore = InMemorySessionEventStore(),
+    ): DefaultPresentationFlowOrchestrator {
+        val consentDeps = ConsentTestSupport.presentationOrchestratorDeps()
+        return DefaultPresentationFlowOrchestrator(
+            gateway = gateway,
+            repository = InMemoryPresentationSessionRepository(),
+            trustValidator = trust,
+            registryValidator = registry,
+            policyEngine = policy,
+            credentialMatcher = matcher,
+            vpTokenBuilder = builder,
+            eventStore = InMemorySessionEventStore(),
             transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
-    )
+            consentViewBuilder = consentDeps.consentViewBuilder,
+            consentCredentialSelector = consentDeps.consentCredentialSelector,
+            consentSessionGuard = consentDeps.consentSessionGuard,
+            consentAuditRecorder = consentDeps.consentAuditRecorder,
+            minimizationEvaluator = consentDeps.minimizationEvaluator,
+        )
+    }
 
     private fun candidate(queryId: String = "q1") = CredentialCandidate(
         candidateId = "c1",
@@ -142,7 +151,12 @@ class DefaultPresentationFlowOrchestratorTest {
 
         val after = orchestrator.submitConsent(
             ctx.sessionMeta.sessionId,
-            ConsentSubmission(ctx.sessionMeta.sessionId.toString(), granted = true, selectedCredentialIds = listOf("c1")),
+            ConsentSubmission(
+                sessionId = ctx.sessionMeta.sessionId.toString(),
+                holderId = "holder-1",
+                granted = true,
+                selectedCredentialIds = listOf("c1"),
+            ),
         )
         assertEquals(PresentationState.DISPATCHED, after.state)
         assertNotNull(gateway.lastPositiveToken)
@@ -156,7 +170,11 @@ class DefaultPresentationFlowOrchestratorTest {
 
         val after = orchestrator.submitConsent(
             ctx.sessionMeta.sessionId,
-            ConsentSubmission(ctx.sessionMeta.sessionId.toString(), granted = false),
+            ConsentSubmission(
+                sessionId = ctx.sessionMeta.sessionId.toString(),
+                holderId = "holder-1",
+                granted = false,
+            ),
         )
 
         assertEquals(PresentationState.DISPATCHED, after.state)

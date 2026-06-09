@@ -1,6 +1,7 @@
 package di.swallet.wpb.ka
 
 import di.swallet.wpb.BaseIntegrationTest
+import di.swallet.wpb.consent.IssuanceConsentTestSupport
 import di.swallet.wpb.issuance.domain.IssuanceState
 import di.swallet.wpb.issuance.domain.KaState
 import di.swallet.wpb.issuance.orchestration.IssuanceFlowOrchestrator
@@ -46,6 +47,7 @@ class OpenId4VciKaE2ETest : BaseIntegrationTest() {
         ctx = orchestrator.prepareAuthorization(ctx.sessionMeta.sessionId)
         ctx = orchestrator.completeAuthorizationCode(ctx.sessionMeta.sessionId, "auth-code", ctx.preparedAuthorization!!.state)
         ctx = orchestrator.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"))
+        ctx = IssuanceConsentTestSupport.approveStorageIfPending(orchestrator, ctx, holderId)
 
         assertEquals(IssuanceState.CREDENTIAL_ISSUED, ctx.state)
         assertEquals(KaState.VALIDATED, ctx.ka?.state)

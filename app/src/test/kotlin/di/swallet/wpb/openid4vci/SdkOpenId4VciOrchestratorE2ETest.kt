@@ -15,6 +15,7 @@ import com.github.tomakehurst.wiremock.client.WireMock.verify
 import com.nimbusds.jose.crypto.ECDSAVerifier
 import com.nimbusds.jwt.SignedJWT
 import di.swallet.wpb.BaseIntegrationTest
+import di.swallet.wpb.consent.IssuanceConsentTestSupport
 import di.swallet.wpb.issuance.domain.IssuanceState
 import di.swallet.wpb.issuance.orchestration.IssuanceFlowOrchestrator
 import di.swallet.wpb.issuance.trust.SignedIssuerMetadataTestSupport
@@ -118,6 +119,7 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
             ctx.sessionMeta.sessionId,
             IssuanceRequest(credentialConfigurationId = "pid_jwt"),
         )
+        ctx = IssuanceConsentTestSupport.approveStorageIfPending(orchestrator, ctx, holderId)
         assertEquals(IssuanceState.CREDENTIAL_ISSUED, ctx.state)
         assertEquals(1, ctx.issuedCredentials.size)
 

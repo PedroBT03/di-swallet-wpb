@@ -83,6 +83,7 @@ sealed interface AuthorizationRequestResolution {
 @Serializable
 data class ConsentSubmission(
     val sessionId: String,
+    val holderId: String,
     val granted: Boolean,
     val selectedCredentialIds: List<String> = emptyList(),
     val reason: String? = null,

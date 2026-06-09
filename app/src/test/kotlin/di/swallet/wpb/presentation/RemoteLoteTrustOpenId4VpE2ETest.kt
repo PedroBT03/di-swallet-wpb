@@ -13,6 +13,7 @@ import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
 import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
+import di.swallet.wpb.consent.ConsentTestSupport
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
 import di.swallet.wpb.presentation.domain.PresentationRequirements
@@ -104,6 +105,10 @@ class RemoteLoteTrustOpenId4VpE2ETest {
                         ),
                     )
             }
+            val consentDeps = ConsentTestSupport.presentationOrchestratorDeps(
+                repository = repository,
+                openId4VpProperties = props,
+            )
             val orchestrator = DefaultPresentationFlowOrchestrator(
                 gateway = gatewayStub(clientId = "verifier-demo-client", leaf = certChain.leaf),
                 repository = InMemoryPresentationSessionRepository(),
@@ -119,6 +124,11 @@ class RemoteLoteTrustOpenId4VpE2ETest {
                 vpTokenBuilder = vpBuilderStub(),
                 eventStore = eventStore,
                 transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
+                consentViewBuilder = consentDeps.consentViewBuilder,
+                consentCredentialSelector = consentDeps.consentCredentialSelector,
+                consentSessionGuard = consentDeps.consentSessionGuard,
+                consentAuditRecorder = consentDeps.consentAuditRecorder,
+                minimizationEvaluator = consentDeps.minimizationEvaluator,
             )
 
             // Positive: client_id + cert chain + fingerprint align with remote TS119602 document.
@@ -146,6 +156,11 @@ class RemoteLoteTrustOpenId4VpE2ETest {
                 vpTokenBuilder = vpBuilderStub(),
                 eventStore = eventStore,
                 transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
+                consentViewBuilder = consentDeps.consentViewBuilder,
+                consentCredentialSelector = consentDeps.consentCredentialSelector,
+                consentSessionGuard = consentDeps.consentSessionGuard,
+                consentAuditRecorder = consentDeps.consentAuditRecorder,
+                minimizationEvaluator = consentDeps.minimizationEvaluator,
             )
             val failed = failingOrchestrator.startSession("http://verifier/req", "holder-1")
             assertEquals(PresentationState.DISPATCHED, failed.state)

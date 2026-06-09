@@ -20,6 +20,7 @@ import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.domain.VpToken
 import di.swallet.wpb.presentation.format.VpTokenBuilder
 import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
+import di.swallet.wpb.consent.ConsentTestSupport
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.DefaultPolicyEngine
@@ -147,6 +148,10 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
                     ),
                 )
         }
+        val consentDeps = ConsentTestSupport.presentationOrchestratorDeps(
+            repository = repository,
+            openId4VpProperties = trustProperties,
+        )
         val orchestrator = DefaultPresentationFlowOrchestrator(
             gateway = gateway,
             repository = InMemoryPresentationSessionRepository(),
@@ -167,6 +172,11 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
             vpTokenBuilder = StubVpBuilder(),
             eventStore = InMemorySessionEventStore(),
             transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
+            consentViewBuilder = consentDeps.consentViewBuilder,
+            consentCredentialSelector = consentDeps.consentCredentialSelector,
+            consentSessionGuard = consentDeps.consentSessionGuard,
+            consentAuditRecorder = consentDeps.consentAuditRecorder,
+            minimizationEvaluator = consentDeps.minimizationEvaluator,
         )
         return orchestrator to gateway
     }
@@ -216,9 +226,15 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
 
         val (orchestrator, gateway) = orchestrator(repository)
         val ctx = orchestrator.startSession("http://verifier/req", "holder-1")
+        val candidateId = ctx.credentialCandidates.single().candidateId
         val after = orchestrator.submitConsent(
             ctx.sessionMeta.sessionId,
-            ConsentSubmission(ctx.sessionMeta.sessionId.toString(), granted = true),
+            ConsentSubmission(
+                sessionId = ctx.sessionMeta.sessionId.toString(),
+                holderId = "holder-1",
+                granted = true,
+                selectedCredentialIds = listOf(candidateId),
+            ),
         )
         assertEquals(PresentationState.DISPATCHED, after.state)
         assertEquals(1, gateway.positiveCount)

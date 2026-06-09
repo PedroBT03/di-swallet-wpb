@@ -187,8 +187,8 @@ either stubbed, partially implemented, or guarded by `demo-mode`.
 | **Demo-mode fallback resolver** parses authorization requests as plain JSON or HS256 JWTs (used by the local emulator). It is off by default and rejects when not enabled. | Required to exercise the protocol end-to-end without operating a full signed-request verifier. | Removed when a real signed verifier is integrated |
 | **Verifier emulator** signs request objects with a shared HS256 secret rather than ES256 + JWKS. | It is a local development aid only. | Replaced by a real verifier in interop tests (Phase 17) |
 | **Sessions are stored in memory** (`InMemoryPresentationSessionRepository`) and the SDK adapter keeps `ResolvedRequestObject` in a per-instance `ConcurrentHashMap`. | A single instance is enough for Phase 1 protocol validation. | Phase 10 (durable transaction log) |
-| **Policy engine is intentionally permissive**: it only validates trust + at-least-one candidate. RP-intended-use / attribute-minimisation policies are out of scope here. | Aligned with the roadmap's Phase 16 scoping. | Phase 16 |
-| **OpenID4VP endpoints (`/openid4vp/**`) are not behind the FIDO2 interceptor**. Only `/api/v1/wallet/**` is gated by `X-Wallet-Authorization`. | The presentation flow is intended to be initiated by a holder-authenticated UI in a later phase. | Phase 16 / production hardening |
+| **Policy engine blocks server-side** (trust + registry intended-use); holder-facing minimisation warnings are in Phase 16 consent views. | Phase 6 enforced registry; Phase 16 adds WPI UX. | Phase 16 (implemented) |
+| **Consent submit requires FIDO2** on `POST /openid4vp/consent` and `POST /openid4vci/consent` (RPA_08). Other OID4 paths remain open for WPI session bootstrap. | Gate at approval moment, not at authorize. | Phase 16 (implemented) |
 | **WIA / KA / device binding** is not exercised inside the OpenID4VP flow. The credential's KB-JWT is signed by the holder's HSM key but no WIA is attached. | Roadmap defers WIA/KA to dedicated phases. | Phase 3 (WIA) and Phase 4 (KA) |
 | **Array-of-object paths** (wildcard/index into arrays of objects) depend on issuer structuring; only scalar arrays and key paths are matched. | PID rulebook often uses flat dot-notation or whole-array claims. | Real issuer credentials + interop (Phase 17) |
 | **Deeply nested SD-JWT** (objects within objects, each with `_sd`) is only supported for one nesting level in mock issuance. | Covers typical PID `address` object + Phase 1 DCQL paths. | Full recursive issuance with external issuers (Phase 2/17) |
@@ -215,12 +215,16 @@ curl -X POST http://localhost:8080/openid4vp/authorize \
   -H 'Content-Type: application/json' \
   -d '{"requestUri":"http://localhost:8081/request/direct_post.json","holderId":"pedro-ist"}'
 
-# 4. submit consent (sessionId from step 3)
+# 4. fetch consent view for WPI (holderId must match session)
+curl "http://localhost:8080/openid4vp/session/<uuid>/consent-view?holderId=pedro-ist"
+
+# 5. submit consent (FIDO2 required in production; sessionId from step 3)
 curl -X POST http://localhost:8080/openid4vp/consent \
   -H 'Content-Type: application/json' \
-  -d '{"sessionId":"<uuid>","granted":true}'
+  -H 'X-Wallet-Authorization: fido2-assertion:<base64url-json>' \
+  -d '{"sessionId":"<uuid>","holderId":"pedro-ist","granted":true,"selectedCredentialIds":["<candidateId>"]}'
 
-# 5. inspect the lifecycle trail
+# 6. inspect the lifecycle trail
 curl http://localhost:8080/openid4vp/session/<uuid>/events | jq .
 ```
 
@@ -266,7 +270,7 @@ implements issuer endpoints.
 | **mdoc issuance is deferred**: the simulator returns `unsupported_format` for `MSO_MDOC` and the policy rejects mdoc credential configurations unless `wpb.openid4vci.policy.allow-mdoc=true`. | The roadmap defers mdoc to Phase 7. | Phase 7 (ISO 18013-5). |
 | **Sessions are stored in memory** (`InMemoryIssuanceSessionRepository`) and adapter SDK state is per-instance. Optimistic locking is in place but no JPA persistence. | Single-instance prototype is enough for Phase 2 protocol validation. | Phase 10 (durable transaction log). |
 | **Deferred polling uses a counter** in the simulator (`wpb.openid4vci.simulator.deferred-polls-before-issue`) rather than real issuer-driven retry hints. | The simulator must produce deterministic deferred behaviour for tests. | Replaced by real issuer interaction in Phase 3. |
-| **`/openid4vci/**` endpoints are not gated by the FIDO2 interceptor** (same as Phase 1's `/openid4vp/**`). | Issuance flows are intended to be initiated by a holder-authenticated UI in a later phase. | Phase 16 / production hardening. |
+| **Issuance storage consent (ISSU_11)** pauses at `ISSUANCE_CONSENT_PENDING` until `POST /openid4vci/consent` (FIDO2). Preview via `GET /session/{id}/consent-view`. | Holder must approve before `WalletCredential` persistence. | Phase 16 (implemented) |
 | **The simulated SD-JWT VC payload is syntactically shaped but cryptographically meaningless** (no real issuer signature, no real `cnf` binding). | Phase 2 validates the orchestration contract, not credential cryptography (Phase 1 already exercises real signature production). | Real issuer signatures arrive with the SDK adapter wiring. |
 | **By-reference offer resolution does not actually fetch the URL** in the simulator. | A real HTTP fetch belongs to the SDK-backed adapter. | SDK adapter hardening. |
 
@@ -507,7 +511,7 @@ fetches is covered by automated tests plus an opt-in real-registry smoke path.
 | Limitation | Why acceptable now | Planned hardening |
 |---|---|---|
 | Registry disabled by default (`wpb.openid4vp.registry.enabled=false`). | Keeps local emulator flows working without a national registry endpoint. | Enable with HTTPS base URL + verification keys in production deployments. |
-| Attribute-minimisation UX and consent copy remain Phase 16 scope. | Phase 6 enforces registered intended-use data, not holder-facing UX. | Phase 16 privacy controls. |
+| Holder-facing minimisation warnings and consent views (Phase 16). | Phase 6 enforces registered intended-use server-side; Phase 16 surfaces warnings in `consent-view`. | Phase 16 (implemented) |
 | Real registry smoke test is env-gated and not part of default CI. | Avoids coupling CI to external federation availability. | Expand into repeatable interop suite when a stable registry sandbox is available. |
 
 ### Configuration knobs (RP registry)
@@ -854,6 +858,46 @@ wpb.trust-mark.wallet-solution-id=
 wpb.trust-mark.cache-ttl-seconds=3600
 wpb.trust-mark.default-language=en
 wpb.trust-mark.allow-admin-refresh=false
+```
+
+## Privacy Controls and Consent (Topic 6 / ISSU_11)
+
+### What it delivers
+
+| Capability | Status |
+|---|---|
+| `PresentationConsentView` for WPI (`GET /openid4vp/session/{id}/consent-view`) | Implemented |
+| `IssuanceConsentView` with SD-JWT claim preview (`GET /openid4vci/session/{id}/consent-view`) | Implemented |
+| ISSU_11 gate: `ISSUANCE_CONSENT_PENDING` before credential storage (incl. deferred path) | Implemented |
+| OIA_10/11 explicit credential choice (no auto-select when enabled) | Implemented |
+| RPA_10a all-or-nothing across all DCQL query ids | Implemented |
+| RPA_08 FIDO2 on `POST .../consent` (VP + VCI) | Implemented |
+| Attribute minimisation warnings (registry disabled / intended-use borderline) | Implemented |
+| Encrypted pending issuance payload + TTL while awaiting consent | Implemented |
+| Audit events without attribute values (DASH_03a) | Implemented |
+
+**Server-side model:** WPB returns structured consent DTOs; the WPI renders UI. Use `consent-view` endpoints (with matching `holderId`), not raw `GET /session/{id}`, for consent screens. Issuance preview may include claim **values** for the WPI only; they are never written to the transaction log or session event store.
+
+**Out of scope:** native dashboard UI, W3C Digital Credentials API, ISSU_37–57 linkability methods, full mdoc preview, SD-JWT storage re-encryption, ISSU_61 batch UX.
+
+### API
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/openid4vp/session/{id}/consent-view?holderId=` | Optional | Presentation consent view (RPA_10, OIA_06/07) |
+| `POST` | `/openid4vp/consent` | FIDO2 | Approve/deny presentation |
+| `GET` | `/openid4vci/session/{id}/consent-view?holderId=` | Optional | Issuance storage preview (ISSU_11) |
+| `POST` | `/openid4vci/consent` | FIDO2 | Approve/deny credential storage |
+
+### Configuration
+
+```
+wpb.consent.enabled=true
+wpb.consent.require-fido2-on-submit=true
+wpb.consent.enforce-all-or-nothing=true
+wpb.consent.require-explicit-credential-choice=true
+wpb.consent.issuance.enabled=true
+wpb.consent.issuance.pending-ttl-seconds=600
 ```
 
 ## Pseudonyms (Topic 11 / WebAuthn Use Case A)

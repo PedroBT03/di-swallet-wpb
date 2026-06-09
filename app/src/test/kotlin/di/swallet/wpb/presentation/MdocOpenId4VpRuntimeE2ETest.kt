@@ -32,6 +32,7 @@ import di.swallet.wpb.format.sdjwt.KeyBindingJwtSigner
 import di.swallet.wpb.presentation.format.MdocVpBuilder
 import di.swallet.wpb.format.sdjwt.SdJwtVpBuilder
 import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
+import di.swallet.wpb.consent.ConsentTestSupport
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.DefaultPolicyEngine
@@ -161,6 +162,7 @@ class MdocOpenId4VpRuntimeE2ETest {
             sdJwtVpBuilder = sdJwtBuilder,
             mdocVpBuilder = MdocVpBuilder(repository, mdocCodec, mdocRegistry),
         )
+        val consentDeps = ConsentTestSupport.presentationOrchestratorDeps(repository = repository)
         return DefaultPresentationFlowOrchestrator(
             gateway = gateway,
             repository = InMemoryPresentationSessionRepository(),
@@ -185,6 +187,11 @@ class MdocOpenId4VpRuntimeE2ETest {
             vpTokenBuilder = vpBuilder,
             eventStore = InMemorySessionEventStore(),
             transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
+            consentViewBuilder = consentDeps.consentViewBuilder,
+            consentCredentialSelector = consentDeps.consentCredentialSelector,
+            consentSessionGuard = consentDeps.consentSessionGuard,
+            consentAuditRecorder = consentDeps.consentAuditRecorder,
+            minimizationEvaluator = consentDeps.minimizationEvaluator,
         )
     }
 
@@ -199,6 +206,7 @@ class MdocOpenId4VpRuntimeE2ETest {
             sessionId = session.sessionMeta.sessionId,
             decision = ConsentSubmission(
                 sessionId = session.sessionMeta.sessionId.toString(),
+                holderId = "holder-1",
                 granted = true,
                 selectedCredentialIds = selected,
             ),

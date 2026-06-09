@@ -119,6 +119,7 @@ enum class IssuanceState {
     AUTHORIZATION_PREPARED,
     AUTHORIZED,
     CREDENTIAL_REQUESTED,
+    ISSUANCE_CONSENT_PENDING,
     CREDENTIAL_ISSUED,
     DEFERRED_PENDING,
     DEFERRED_ISSUED,
@@ -136,9 +137,10 @@ enum class IssuanceState {
         OFFER_RESOLVED -> next in setOf(AUTHORIZATION_PREPARED, AUTHORIZED, FAILED, REJECTED, EXPIRED)
         AUTHORIZATION_PREPARED -> next in setOf(AUTHORIZED, FAILED, REJECTED, EXPIRED)
         AUTHORIZED -> next in setOf(CREDENTIAL_REQUESTED, FAILED, REJECTED, EXPIRED)
-        CREDENTIAL_REQUESTED -> next in setOf(CREDENTIAL_ISSUED, DEFERRED_PENDING, FAILED, REJECTED, EXPIRED)
+        CREDENTIAL_REQUESTED -> next in setOf(ISSUANCE_CONSENT_PENDING, CREDENTIAL_ISSUED, DEFERRED_PENDING, FAILED, REJECTED, EXPIRED)
+        ISSUANCE_CONSENT_PENDING -> next in setOf(CREDENTIAL_ISSUED, DEFERRED_ISSUED, REJECTED, FAILED, EXPIRED)
         CREDENTIAL_ISSUED -> next in setOf(NOTIFIED, FAILED, EXPIRED)
-        DEFERRED_PENDING -> next in setOf(DEFERRED_PENDING, DEFERRED_ISSUED, CREDENTIAL_ISSUED, FAILED, REJECTED, EXPIRED)
+        DEFERRED_PENDING -> next in setOf(DEFERRED_PENDING, ISSUANCE_CONSENT_PENDING, DEFERRED_ISSUED, CREDENTIAL_ISSUED, FAILED, REJECTED, EXPIRED)
         DEFERRED_ISSUED -> next in setOf(NOTIFIED, FAILED, EXPIRED)
         NOTIFIED -> next == EXPIRED
         FAILED -> next == EXPIRED
@@ -189,6 +191,14 @@ data class IssuancePolicyDecision(
 )
 
 /**
+ * Holder decision for ISSU_11 storage consent.
+ */
+data class IssuanceConsentDecision(
+    val granted: Boolean,
+    val reason: String? = null,
+)
+
+/**
  * Identifier of a deferred issuance result returned by the credential issuer.
  *
  * `serializedContext` is the EUDI SDK's `DeferredIssuanceContext` serialised by
@@ -220,6 +230,9 @@ data class IssuanceContext(
     val ka: KaContext? = null,
     val deferredHandle: DeferredIssuanceHandle? = null,
     val issuedCredentials: List<IssuedCredential> = emptyList(),
+    val pendingCredentialsEncrypted: String? = null,
+    val pendingFromDeferred: Boolean = false,
+    val issuanceConsentDecision: IssuanceConsentDecision? = null,
     val notificationOutcome: String? = null,
     val error: IssuanceError? = null,
 )
@@ -244,6 +257,9 @@ data class IssuanceSession(
     val ka: KaContext? = null,
     val deferredHandle: DeferredIssuanceHandle? = null,
     val issuedCredentials: List<IssuedCredential> = emptyList(),
+    val pendingCredentialsEncrypted: String? = null,
+    val pendingFromDeferred: Boolean = false,
+    val issuanceConsentDecision: IssuanceConsentDecision? = null,
     val notificationOutcome: String? = null,
     val error: IssuanceError? = null,
 )
@@ -265,6 +281,9 @@ fun IssuanceContext.toSession(): IssuanceSession = IssuanceSession(
     ka = ka,
     deferredHandle = deferredHandle,
     issuedCredentials = issuedCredentials,
+    pendingCredentialsEncrypted = pendingCredentialsEncrypted,
+    pendingFromDeferred = pendingFromDeferred,
+    issuanceConsentDecision = issuanceConsentDecision,
     notificationOutcome = notificationOutcome,
     error = error,
 )
@@ -286,6 +305,9 @@ fun IssuanceSession.toContext(): IssuanceContext = IssuanceContext(
     ka = ka,
     deferredHandle = deferredHandle,
     issuedCredentials = issuedCredentials,
+    pendingCredentialsEncrypted = pendingCredentialsEncrypted,
+    pendingFromDeferred = pendingFromDeferred,
+    issuanceConsentDecision = issuanceConsentDecision,
     notificationOutcome = notificationOutcome,
     error = error,
 )

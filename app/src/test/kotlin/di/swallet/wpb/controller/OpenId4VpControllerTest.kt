@@ -8,8 +8,13 @@ import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
 import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
 import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.PresentationRequirements
-import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.domain.SessionMetadata
+import di.swallet.wpb.consent.ApprovalMode
+import di.swallet.wpb.consent.MinimizationAssessment
+import di.swallet.wpb.consent.MinimizationLevel
+import di.swallet.wpb.consent.PresentationConsentView
+import di.swallet.wpb.consent.VerifierConsentInfo
+import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.orchestration.PresentationFlowOrchestrator
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -55,6 +60,21 @@ class OpenId4VpControllerTest {
             startCount++
             return produced
         }
+        override suspend fun getConsentView(sessionId: UUID, holderId: String): PresentationConsentView =
+            PresentationConsentView(
+                sessionId = produced.sessionMeta.sessionId,
+                state = produced.state,
+                holderId = holderId,
+                verifier = VerifierConsentInfo("verifier", "Verifier", true, "ok"),
+                intendedUse = emptyList(),
+                privacyPolicyUri = null,
+                registryWarnings = emptyList(),
+                minimization = MinimizationAssessment(MinimizationLevel.OK),
+                queries = emptyList(),
+                choiceGroups = emptyList(),
+                approvalMode = ApprovalMode.ALL_OR_NOTHING,
+            )
+
         override suspend fun submitConsent(sessionId: UUID, decision: ConsentSubmission): PresentationContext {
             consentCount++
             lastConsent = decision
@@ -88,6 +108,7 @@ class OpenId4VpControllerTest {
         val response = controller.consent(
             ConsentSubmission(
                 sessionId = context.sessionMeta.sessionId.toString(),
+                holderId = "holder-1",
                 granted = true,
                 selectedCredentialIds = listOf("c1"),
             ),

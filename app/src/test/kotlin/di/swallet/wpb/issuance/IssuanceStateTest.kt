@@ -15,6 +15,7 @@ class IssuanceStateTest {
             IssuanceState.AUTHORIZATION_PREPARED,
             IssuanceState.AUTHORIZED,
             IssuanceState.CREDENTIAL_REQUESTED,
+            IssuanceState.ISSUANCE_CONSENT_PENDING,
             IssuanceState.CREDENTIAL_ISSUED,
             IssuanceState.NOTIFIED,
         )
@@ -28,6 +29,7 @@ class IssuanceStateTest {
         val deferredPath = listOf(
             IssuanceState.CREDENTIAL_REQUESTED,
             IssuanceState.DEFERRED_PENDING,
+            IssuanceState.ISSUANCE_CONSENT_PENDING,
             IssuanceState.DEFERRED_ISSUED,
             IssuanceState.NOTIFIED,
         )

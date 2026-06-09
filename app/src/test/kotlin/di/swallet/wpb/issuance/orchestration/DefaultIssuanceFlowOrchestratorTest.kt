@@ -1,6 +1,12 @@
 package di.swallet.wpb.issuance.orchestration
 
+import di.swallet.wpb.config.ConsentProperties
 import di.swallet.wpb.config.OpenId4VciProperties
+import di.swallet.wpb.consent.ConsentSessionGuard
+import di.swallet.wpb.consent.ConsentTestSupport
+import di.swallet.wpb.consent.IssuedCredentialPreviewParser
+import di.swallet.wpb.consent.IssuanceConsentViewBuilder
+import di.swallet.wpb.consent.PendingCredentialStore
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.issuance.domain.IssuanceState
 import di.swallet.wpb.issuance.domain.KeyAttestation
@@ -21,6 +27,7 @@ import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.openid4vci.adapter.SimulatedOpenId4VciGateway
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
+import di.swallet.wpb.openid4vci.protocol.IssuanceConsentSubmission
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
@@ -48,6 +55,7 @@ class DefaultIssuanceFlowOrchestratorTest {
      * issued credential and return its persistence id".
      */
     private class StubIssuedCredentialStorage : IssuedCredentialStorage {
+        val stored = mutableListOf<IssuedCredential>()
         private val seq = java.util.concurrent.atomic.AtomicLong()
         override fun store(
             holderId: String,
@@ -55,8 +63,10 @@ class DefaultIssuanceFlowOrchestratorTest {
             walletKey: WalletKey?,
             keyAliasHint: String?,
             deviceBound: Boolean,
-        ): Long =
-            seq.incrementAndGet()
+        ): Long {
+            stored += issued
+            return seq.incrementAndGet()
+        }
     }
 
     private class StubWiaStatusManagementService : WiaStatusManagementService {
@@ -130,7 +140,9 @@ class DefaultIssuanceFlowOrchestratorTest {
     private fun orchestrator(
         properties: OpenId4VciProperties = OpenId4VciProperties(),
         kaRevoked: Boolean = false,
-    ): DefaultIssuanceFlowOrchestrator {
+        consentProperties: ConsentProperties = ConsentTestSupport.properties(),
+        storage: StubIssuedCredentialStorage = StubIssuedCredentialStorage(),
+    ): Pair<DefaultIssuanceFlowOrchestrator, StubIssuedCredentialStorage> {
         val wiaStatus = StubWiaStatusManagementService()
         val validationService = object : KeyAttestationValidationService {
             override fun validateTechnical(attestation: KeyAttestation, configuration: CredentialConfigurationDescriptor) {
@@ -147,7 +159,8 @@ class DefaultIssuanceFlowOrchestratorTest {
 
             override fun validateBinding(attestation: KeyAttestation, proof: di.swallet.wpb.issuance.proof.ProofMaterial) = Unit
         }
-        return DefaultIssuanceFlowOrchestrator(
+        val pendingStore = ConsentTestSupport.pendingCredentialStore()
+        val orchestrator = DefaultIssuanceFlowOrchestrator(
             gateway = SimulatedOpenId4VciGateway(
                 properties,
                 MdocDocTypeRegistry(),
@@ -165,11 +178,36 @@ class DefaultIssuanceFlowOrchestratorTest {
             ),
             keyAttestationProvider = StubKeyAttestationProvider(),
             keyAttestationValidationService = validationService,
-            credentialStorage = StubIssuedCredentialStorage(),
+            credentialStorage = storage,
             keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),
             eventStore = InMemoryIssuanceEventStore(),
             properties = properties,
+            consentProperties = consentProperties,
+            pendingCredentialStore = pendingStore,
+            issuanceConsentViewBuilder = IssuanceConsentViewBuilder(
+                consentProperties,
+                pendingStore,
+                IssuedCredentialPreviewParser(),
+            ),
+            consentSessionGuard = ConsentSessionGuard(),
             transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
+        )
+        return orchestrator to storage
+    }
+
+    private fun approveStorage(
+        orch: DefaultIssuanceFlowOrchestrator,
+        ctx: di.swallet.wpb.issuance.domain.IssuanceContext,
+        holderId: String,
+    ): di.swallet.wpb.issuance.domain.IssuanceContext {
+        if (ctx.state != IssuanceState.ISSUANCE_CONSENT_PENDING) return ctx
+        return orch.submitIssuanceConsent(
+            ctx.sessionMeta.sessionId,
+            IssuanceConsentSubmission(
+                sessionId = ctx.sessionMeta.sessionId.toString(),
+                holderId = holderId,
+                granted = true,
+            ),
         )
     }
 
@@ -181,7 +219,7 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     @Test
     fun `authorization_code happy path goes to NOTIFIED`() {
-        val orch = orchestrator()
+        val (orch, _) = orchestrator()
         var ctx = orch.resolveOffer(offerByValue, holderId = "holder-1")
         assertEquals(IssuanceState.OFFER_RESOLVED, ctx.state)
         assertNotNull(ctx.resolvedOffer)
@@ -202,6 +240,8 @@ class DefaultIssuanceFlowOrchestratorTest {
 
         ctx = orch.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"))
         assertNull(ctx.error)
+        assertEquals(IssuanceState.ISSUANCE_CONSENT_PENDING, ctx.state)
+        ctx = approveStorage(orch, ctx, "holder-1")
         assertEquals(IssuanceState.CREDENTIAL_ISSUED, ctx.state)
         assertEquals(1, ctx.issuedCredentials.size)
         assertEquals("ka.generated", orchEvents(orch, ctx.sessionMeta.sessionId).firstOrNull { it == "ka.generated" })
@@ -214,7 +254,7 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     @Test
     fun `revoked key attestation fails issuance and emits ka revoked event`() {
-        val orch = orchestrator(kaRevoked = true)
+        val (orch, _) = orchestrator(kaRevoked = true)
         var ctx = orch.resolveOffer(offerByValue, holderId = "holder-revoked")
         ctx = orch.prepareAuthorization(ctx.sessionMeta.sessionId)
         ctx = orch.completeAuthorizationCode(ctx.sessionMeta.sessionId, "code", ctx.preparedAuthorization!!.state)
@@ -227,7 +267,7 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     @Test
     fun `pre-authorized_code path requires tx_code`() {
-        val orch = orchestrator()
+        val (orch, _) = orchestrator()
         val ctx = orch.resolveOffer(preAuthOffer, holderId = "holder-2")
         assertEquals(IssuanceState.OFFER_RESOLVED, ctx.state)
         val failed = orch.completePreAuthorizedCode(ctx.sessionMeta.sessionId, txCode = null)
@@ -237,12 +277,14 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     @Test
     fun `pre-authorized_code path with tx_code completes`() {
-        val orch = orchestrator()
+        val (orch, _) = orchestrator()
         var ctx = orch.resolveOffer(preAuthOffer, holderId = "holder-3")
         ctx = orch.completePreAuthorizedCode(ctx.sessionMeta.sessionId, txCode = "1234")
         assertEquals(IssuanceState.AUTHORIZED, ctx.state)
         ctx = orch.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"))
         assertNull(ctx.error)
+        assertEquals(IssuanceState.ISSUANCE_CONSENT_PENDING, ctx.state)
+        ctx = approveStorage(orch, ctx, "holder-3")
         assertEquals(IssuanceState.CREDENTIAL_ISSUED, ctx.state)
     }
 
@@ -250,13 +292,15 @@ class DefaultIssuanceFlowOrchestratorTest {
     fun `non-device bound configuration does not require KA`() {
         val offer =
             """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["academic_card"]}"""
-        val orch = orchestrator()
+        val (orch, _) = orchestrator()
         var ctx = orch.resolveOffer(offer, holderId = "holder-no-ka")
         ctx = orch.prepareAuthorization(ctx.sessionMeta.sessionId)
         ctx = orch.completeAuthorizationCode(ctx.sessionMeta.sessionId, "c", ctx.preparedAuthorization!!.state)
         ctx = orch.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest(credentialConfigurationId = "academic_card"))
 
         assertNull(ctx.error)
+        assertEquals(IssuanceState.ISSUANCE_CONSENT_PENDING, ctx.state)
+        ctx = approveStorage(orch, ctx, "holder-no-ka")
         assertEquals(IssuanceState.CREDENTIAL_ISSUED, ctx.state)
         assertEquals(di.swallet.wpb.issuance.domain.KaState.NOT_REQUIRED, ctx.ka?.state)
         assertFalse(orchEvents(orch, ctx.sessionMeta.sessionId).contains("ka.generated"))
@@ -264,7 +308,7 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     @Test
     fun `deferred path persists transaction id and resumes issuance`() {
-        val orch = orchestrator(OpenId4VciProperties().apply {
+        val (orch, _) = orchestrator(OpenId4VciProperties().apply {
             simulator.alwaysDefer = true
             simulator.deferredPollsBeforeIssue = 2
         })
@@ -280,8 +324,10 @@ class DefaultIssuanceFlowOrchestratorTest {
         ctx = orch.queryDeferred(ctx.sessionMeta.sessionId)
         assertEquals(IssuanceState.DEFERRED_PENDING, ctx.state)
 
-        // Second poll: issued
+        // Second poll: awaiting storage consent
         ctx = orch.queryDeferred(ctx.sessionMeta.sessionId)
+        assertEquals(IssuanceState.ISSUANCE_CONSENT_PENDING, ctx.state)
+        ctx = approveStorage(orch, ctx, "holder-deferred")
         assertEquals(IssuanceState.DEFERRED_ISSUED, ctx.state)
         assertEquals(1, ctx.issuedCredentials.size)
 
@@ -291,7 +337,7 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     @Test
     fun `untrusted issuer rejects with REJECTED terminal`() {
-        val orch = orchestrator(OpenId4VciProperties().apply {
+        val (orch, _) = orchestrator(OpenId4VciProperties().apply {
             demoMode = false
             trust.allowedIssuerIds = "https://another-issuer"
         })
@@ -302,7 +348,7 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     @Test
     fun `mdoc policy block rejects offer`() {
-        val orch = orchestrator(OpenId4VciProperties().apply {
+        val (orch, _) = orchestrator(OpenId4VciProperties().apply {
             policy.allowMdoc = false
         })
         val mdocOffer =
@@ -313,7 +359,7 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     @Test
     fun `cannot request credential before authorization`() {
-        val orch = orchestrator()
+        val (orch, _) = orchestrator()
         val ctx = orch.resolveOffer(offerByValue, holderId = "holder-x")
         val ex = assertThrows(IllegalArgumentException::class.java) {
             orch.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest("pid_jwt"))
@@ -323,7 +369,7 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     @Test
     fun `cannot prepare authorization for pre-authorized offer`() {
-        val orch = orchestrator()
+        val (orch, _) = orchestrator()
         var ctx = orch.resolveOffer(preAuthOffer, holderId = "holder-x")
         ctx = orch.prepareAuthorization(ctx.sessionMeta.sessionId)
         assertEquals(IssuanceState.FAILED, ctx.state)
@@ -332,15 +378,38 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     @Test
     fun `getSession returns null-equivalent via 404 for unknown id`() {
-        val orch = orchestrator()
+        val (orch, _) = orchestrator()
         assertThrows(ResponseStatusException::class.java) {
             orch.getSession(java.util.UUID.randomUUID())
         }
     }
 
     @Test
+    fun `rejecting issuance consent does not persist credential`() {
+        val storage = StubIssuedCredentialStorage()
+        val (orch, stubStorage) = orchestrator(storage = storage)
+        var ctx = orch.resolveOffer(offerByValue, holderId = "holder-reject")
+        ctx = orch.prepareAuthorization(ctx.sessionMeta.sessionId)
+        ctx = orch.completeAuthorizationCode(ctx.sessionMeta.sessionId, "code", ctx.preparedAuthorization!!.state)
+        ctx = orch.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"))
+        assertEquals(IssuanceState.ISSUANCE_CONSENT_PENDING, ctx.state)
+
+        val rejected = orch.submitIssuanceConsent(
+            ctx.sessionMeta.sessionId,
+            IssuanceConsentSubmission(
+                sessionId = ctx.sessionMeta.sessionId.toString(),
+                holderId = "holder-reject",
+                granted = false,
+                reason = "do not store",
+            ),
+        )
+        assertEquals(IssuanceState.REJECTED, rejected.state)
+        assertTrue(stubStorage.stored.isEmpty())
+    }
+
+    @Test
     fun `getSession returns persisted snapshot`() {
-        val orch = orchestrator()
+        val (orch, _) = orchestrator()
         val ctx = orch.resolveOffer(offerByValue, holderId = "holder-snap")
         val snap = orch.getSession(ctx.sessionMeta.sessionId)
         assertEquals(ctx.state, snap.state)

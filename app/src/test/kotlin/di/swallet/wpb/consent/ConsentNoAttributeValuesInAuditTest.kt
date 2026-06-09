@@ -1,0 +1,145 @@
+package di.swallet.wpb.consent
+
+import di.swallet.wpb.observability.InMemorySessionEventStore
+import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
+import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
+import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
+import di.swallet.wpb.presentation.domain.CredentialCandidate
+import di.swallet.wpb.presentation.domain.CredentialFormat
+import di.swallet.wpb.presentation.domain.PolicyDecision
+import di.swallet.wpb.presentation.domain.PresentationContext
+import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
+import di.swallet.wpb.presentation.domain.PresentationRequirements
+import di.swallet.wpb.presentation.domain.PresentationState
+import di.swallet.wpb.presentation.domain.TrustDecision
+import di.swallet.wpb.presentation.domain.VpToken
+import di.swallet.wpb.presentation.format.VpTokenBuilder
+import di.swallet.wpb.presentation.matching.CredentialMatcher
+import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
+import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
+import di.swallet.wpb.presentation.policy.PolicyEngine
+import di.swallet.wpb.presentation.registry.RegistryValidator
+import di.swallet.wpb.presentation.trust.TrustValidator
+import di.swallet.wpb.transactionlog.TransactionLogTestSupport
+import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
+import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
+import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+
+class ConsentNoAttributeValuesInAuditTest {
+
+    @Test
+    fun `consent events and session do not contain attribute values`() = runBlocking {
+        val eventStore = InMemorySessionEventStore()
+        val consentDeps = ConsentTestSupport.presentationOrchestratorDeps()
+        val orchestrator = DefaultPresentationFlowOrchestrator(
+            gateway = gatewayWithAliceClaim(),
+            repository = InMemoryPresentationSessionRepository(),
+            trustValidator = StubTrust(),
+            registryValidator = StubRegistry(),
+            policyEngine = StubPolicy(),
+            credentialMatcher = StubMatcher(),
+            vpTokenBuilder = StubVpBuilder(),
+            eventStore = eventStore,
+            transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
+            consentViewBuilder = consentDeps.consentViewBuilder,
+            consentCredentialSelector = consentDeps.consentCredentialSelector,
+            consentSessionGuard = consentDeps.consentSessionGuard,
+            consentAuditRecorder = consentDeps.consentAuditRecorder,
+            minimizationEvaluator = consentDeps.minimizationEvaluator,
+        )
+
+        val ctx = orchestrator.startSession("http://verifier/request", "holder-1")
+        val view = orchestrator.getConsentView(ctx.sessionMeta.sessionId, "holder-1")
+        assertEquals(PresentationState.CONSENT_PENDING, view.state)
+        assertEquals("holder-1", view.holderId)
+
+        val after = orchestrator.submitConsent(
+            ctx.sessionMeta.sessionId,
+            ConsentSubmission(
+                sessionId = ctx.sessionMeta.sessionId.toString(),
+                holderId = "holder-1",
+                granted = true,
+                selectedCredentialIds = listOf("c1"),
+            ),
+        )
+
+        val forbidden = setOf("Alice", "SECRET_VALUE")
+        val sessionJson = after.toString()
+        assertFalse(forbidden.any { sessionJson.contains(it) })
+
+        val events = eventStore.getEvents(ctx.sessionMeta.sessionId)
+        val eventsBlob = events.joinToString { "${it.type}:${it.attributes}" }
+        assertFalse(forbidden.any { eventsBlob.contains(it) })
+        assertTrue(events.any { it.type == "consent.granted" })
+    }
+
+    private fun gatewayWithAliceClaim(): OpenId4VpGateway {
+        val resolved = ResolvedAuthorizationRequest(
+            requestToken = "rt",
+            requestUri = "http://verifier/request",
+            clientId = "verifier",
+            responseMode = PresentationResponseMode.DIRECT_POST,
+            nonce = "n",
+            state = "s",
+            requirements = PresentationRequirements(
+                dcqlQueryJson = "{}",
+                credentialQueryIds = listOf("q1"),
+            ),
+        )
+        return object : OpenId4VpGateway {
+            override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution =
+                AuthorizationRequestResolution.Success(resolved)
+            override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken) =
+                PresentationDispatchOutcome.VerifierAccepted(null)
+            override suspend fun dispatchNegative(requestToken: String) =
+                PresentationDispatchOutcome.VerifierAccepted(null)
+            override suspend fun dispatchError(errorToken: String) =
+                PresentationDispatchOutcome.VerifierAccepted(null)
+        }
+    }
+
+    private class StubTrust : TrustValidator {
+        override fun validate(context: PresentationContext) =
+            context.copy(trustDecision = TrustDecision(trusted = true))
+    }
+
+    private class StubRegistry : RegistryValidator {
+        override fun validate(context: PresentationContext) =
+            context.copy(
+                registryDecision = di.swallet.wpb.presentation.domain.RegistryDecision(
+                    accepted = true,
+                    intendedUseChecked = true,
+                ),
+            )
+    }
+
+    private class StubPolicy : PolicyEngine {
+        override fun evaluate(context: PresentationContext) =
+            context.copy(policyDecision = PolicyDecision(allowed = true))
+    }
+
+    private class StubMatcher : CredentialMatcher {
+        override fun match(context: PresentationContext): PresentationContext =
+            context.copy(
+                credentialCandidates = listOf(
+                    CredentialCandidate(
+                        candidateId = "c1",
+                        credentialId = 1L,
+                        holderId = "holder-1",
+                        queryId = "q1",
+                        credentialType = "PID",
+                        format = CredentialFormat.SD_JWT,
+                    ),
+                ),
+            )
+    }
+
+    private class StubVpBuilder : VpTokenBuilder {
+        override fun build(context: PresentationContext): PresentationContext =
+            context.copy(vpToken = VpToken(mapOf("q1" to listOf("vp"))))
+    }
+}

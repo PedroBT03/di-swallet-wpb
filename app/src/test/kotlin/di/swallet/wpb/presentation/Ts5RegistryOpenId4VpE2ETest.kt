@@ -28,6 +28,7 @@ import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.domain.VpToken
 import di.swallet.wpb.presentation.format.VpTokenBuilder
 import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
+import di.swallet.wpb.consent.ConsentTestSupport
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.DefaultPolicyEngine
@@ -148,6 +149,10 @@ class Ts5RegistryOpenId4VpE2ETest {
             )
             val eventStore = InMemorySessionEventStore()
 
+            val consentDeps = ConsentTestSupport.presentationOrchestratorDeps(
+                repository = repository,
+                openId4VpProperties = props,
+            )
             val orchestrator = DefaultPresentationFlowOrchestrator(
                 gateway = gatewayStub(clientId = "rp-123", leaf = trustChain.leaf),
                 repository = InMemoryPresentationSessionRepository(),
@@ -163,6 +168,11 @@ class Ts5RegistryOpenId4VpE2ETest {
                 vpTokenBuilder = vpBuilderStub(),
                 eventStore = eventStore,
                 transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
+                consentViewBuilder = consentDeps.consentViewBuilder,
+                consentCredentialSelector = consentDeps.consentCredentialSelector,
+                consentSessionGuard = consentDeps.consentSessionGuard,
+                consentAuditRecorder = consentDeps.consentAuditRecorder,
+                minimizationEvaluator = consentDeps.minimizationEvaluator,
             )
 
             // Positive: trust is valid and TS5 check-intended-use is true.

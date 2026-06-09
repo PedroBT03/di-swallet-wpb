@@ -10,6 +10,10 @@ class WebConfig(private val authInterceptor: AuthorizationInterceptor) : WebMvcC
 
     override fun addInterceptors(registry: InterceptorRegistry) {
         registry.addInterceptor(authInterceptor)
-            .addPathPatterns("/api/v1/wallet/**")
+            .addPathPatterns(
+                "/api/v1/wallet/**",
+                "/openid4vp/consent",
+                "/openid4vci/consent",
+            )
     }
 }

@@ -1,12 +1,15 @@
 package di.swallet.wpb.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import di.swallet.wpb.consent.IssuanceConsentView
+import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.issuance.domain.IssuanceContext
 import di.swallet.wpb.issuance.domain.IssuanceSessionMetadata
 import di.swallet.wpb.issuance.domain.IssuanceState
 import di.swallet.wpb.issuance.orchestration.IssuanceFlowOrchestrator
 import di.swallet.wpb.observability.IssuanceEvent
 import di.swallet.wpb.observability.IssuanceEventStore
+import di.swallet.wpb.openid4vci.protocol.IssuanceConsentSubmission
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -68,6 +71,21 @@ class OpenId4VciControllerTest {
         override fun notify(sessionId: UUID, event: NotificationEvent, description: String?): IssuanceContext {
             notifyCalls++; lastSessionId = sessionId; return produced.copy(state = IssuanceState.NOTIFIED)
         }
+        override fun getConsentView(sessionId: UUID, holderId: String): IssuanceConsentView =
+            IssuanceConsentView(
+                sessionId = produced.sessionMeta.sessionId,
+                state = produced.state,
+                holderId = holderId,
+                issuer = di.swallet.wpb.consent.IssuerConsentInfo("https://issuer.example", "Issuer"),
+                credentialConfigurationId = "pid_jwt",
+                format = IssuanceCredentialFormat.SD_JWT_VC,
+                deviceBound = true,
+                claimPreview = emptyList(),
+            )
+
+        override fun submitIssuanceConsent(sessionId: UUID, decision: IssuanceConsentSubmission): IssuanceContext =
+            produced.copy(state = IssuanceState.CREDENTIAL_ISSUED)
+
         override fun getSession(sessionId: UUID): IssuanceContext = produced
     }
 

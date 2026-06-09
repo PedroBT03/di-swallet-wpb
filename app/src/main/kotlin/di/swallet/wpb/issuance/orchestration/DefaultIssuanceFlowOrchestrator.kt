@@ -1,6 +1,13 @@
 package di.swallet.wpb.issuance.orchestration
 
+import di.swallet.wpb.config.ConsentProperties
 import di.swallet.wpb.config.OpenId4VciProperties
+import di.swallet.wpb.consent.ConsentSessionGuard
+import di.swallet.wpb.consent.IssuanceConsentView
+import di.swallet.wpb.consent.IssuanceConsentViewBuilder
+import di.swallet.wpb.consent.PendingCredentialStore
+import di.swallet.wpb.consent.PendingIssuancePayload
+import di.swallet.wpb.issuance.domain.IssuanceConsentDecision
 import di.swallet.wpb.issuance.domain.IssuanceContext
 import di.swallet.wpb.issuance.domain.IssuanceError
 import di.swallet.wpb.issuance.domain.KaContext
@@ -25,7 +32,9 @@ import di.swallet.wpb.openid4vci.adapter.OpenId4VciGateway
 import di.swallet.wpb.openid4vci.protocol.AuthorizationFlowKind
 import di.swallet.wpb.openid4vci.protocol.DeferredQueryOutcome
 import di.swallet.wpb.openid4vci.protocol.IssuanceOutcome
+import di.swallet.wpb.openid4vci.protocol.IssuanceConsentSubmission
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
+import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.openid4vci.protocol.KeyAttestationTransport
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
@@ -57,6 +66,10 @@ class DefaultIssuanceFlowOrchestrator(
     private val keyBindingRuntimeService: KeyBindingRuntimeService,
     private val eventStore: IssuanceEventStore,
     private val properties: OpenId4VciProperties,
+    private val consentProperties: ConsentProperties,
+    private val pendingCredentialStore: PendingCredentialStore,
+    private val issuanceConsentViewBuilder: IssuanceConsentViewBuilder,
+    private val consentSessionGuard: ConsentSessionGuard,
     private val transactionLogger: TransactionLogger,
 ) : IssuanceFlowOrchestrator {
 
@@ -326,11 +339,11 @@ class DefaultIssuanceFlowOrchestrator(
                         ),
                     )
                 }
-                persistIssued(
+                handleIssuedCredentials(
                     validated,
                     outcome.credentials,
-                    terminalState = IssuanceState.CREDENTIAL_ISSUED,
                     keyAliasHint = proof.keyId,
+                    fromDeferred = false,
                 )
             }
             is IssuanceOutcome.Deferred -> {
@@ -356,11 +369,11 @@ class DefaultIssuanceFlowOrchestrator(
         }
 
         return when (outcome) {
-            is DeferredQueryOutcome.Issued -> persistIssued(
+            is DeferredQueryOutcome.Issued -> handleIssuedCredentials(
                 ctx,
                 outcome.credentials,
-                terminalState = IssuanceState.DEFERRED_ISSUED,
                 keyAliasHint = null,
+                fromDeferred = true,
             )
             is DeferredQueryOutcome.StillPending -> {
                 val updated = ctx.copy(deferredHandle = outcome.updatedHandle)
@@ -372,10 +385,68 @@ class DefaultIssuanceFlowOrchestrator(
         }
     }
 
+    override fun getConsentView(sessionId: UUID, holderId: String): IssuanceConsentView {
+        val ctx = loadConsentPending(sessionId)
+        consentSessionGuard.requireHolderMatch(ctx.sessionMeta.holderId, holderId)
+        return issuanceConsentViewBuilder.build(ctx)
+    }
+
+    override fun submitIssuanceConsent(sessionId: UUID, decision: IssuanceConsentSubmission): IssuanceContext {
+        val current = loadConsentPending(sessionId)
+        consentSessionGuard.requireHolderMatch(current.sessionMeta.holderId, decision.holderId)
+
+        val encrypted = current.pendingCredentialsEncrypted
+            ?: throwBadRequest("pending credential payload missing")
+        val pending = pendingCredentialStore.decrypt(encrypted)
+        if (pendingCredentialStore.isExpired(pending)) {
+            val expired = transitionAndPersist(
+                current.copy(pendingCredentialsEncrypted = null),
+                IssuanceState.EXPIRED,
+            )
+            record(expired, "issuance.consent.expired", emptyMap())
+            throw ResponseStatusException(HttpStatus.GONE, "Issuance consent window expired")
+        }
+
+        if (!decision.granted) {
+            val rejected = transitionAndPersist(
+                current.copy(
+                    pendingCredentialsEncrypted = null,
+                    issuanceConsentDecision = IssuanceConsentDecision(
+                        granted = false,
+                        reason = decision.reason ?: "Holder rejected credential storage",
+                    ),
+                    error = IssuanceError("issuance_consent_denied", decision.reason ?: "Holder rejected credential storage"),
+                ),
+                IssuanceState.REJECTED,
+            )
+            record(rejected, "issuance.consent.rejected", mapOf("reason" to (decision.reason ?: "")))
+            transactionLogger.logIssuanceIfTerminal(rejected)
+            gateway.discard(current.sessionMeta.sessionId.toString())
+            return rejected
+        }
+
+        val terminalState = if (pending.fromDeferred) {
+            IssuanceState.DEFERRED_ISSUED
+        } else {
+            IssuanceState.CREDENTIAL_ISSUED
+        }
+        val approved = current.copy(
+            pendingCredentialsEncrypted = null,
+            issuanceConsentDecision = IssuanceConsentDecision(granted = true, reason = decision.reason),
+        )
+        record(approved, "issuance.consent.granted", mapOf("count" to pending.credentials.size.toString()))
+        return persistIssued(
+            approved,
+            pending.credentials,
+            terminalState = terminalState,
+            keyAliasHint = pending.keyAliasHint,
+        )
+    }
+
     override fun getSession(sessionId: UUID): IssuanceContext {
         val session = repository.findById(sessionId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "session $sessionId not found")
-        return session.toContext()
+        return expirePendingConsentIfNeeded(session.toContext())
     }
 
     override fun notify(sessionId: UUID, event: NotificationEvent, description: String?): IssuanceContext {
@@ -403,9 +474,78 @@ class DefaultIssuanceFlowOrchestrator(
     // Internals
     // ---------------------------------------------------------------
 
+    private fun handleIssuedCredentials(
+        ctx: IssuanceContext,
+        credentials: List<IssuedCredential>,
+        keyAliasHint: String?,
+        fromDeferred: Boolean,
+    ): IssuanceContext {
+        if (consentProperties.issuance.enabled) {
+            return stageForIssuanceConsent(ctx, credentials, keyAliasHint, fromDeferred)
+        }
+        val terminalState = if (fromDeferred) IssuanceState.DEFERRED_ISSUED else IssuanceState.CREDENTIAL_ISSUED
+        return persistIssued(ctx, credentials, terminalState = terminalState, keyAliasHint = keyAliasHint)
+    }
+
+    private fun stageForIssuanceConsent(
+        ctx: IssuanceContext,
+        credentials: List<IssuedCredential>,
+        keyAliasHint: String?,
+        fromDeferred: Boolean,
+    ): IssuanceContext {
+        val expiresAt = Instant.now().plusSeconds(consentProperties.issuance.pendingTtlSeconds)
+        val encrypted = pendingCredentialStore.encrypt(
+            PendingIssuancePayload(
+                credentials = credentials,
+                keyAliasHint = keyAliasHint,
+                fromDeferred = fromDeferred,
+                expiresAt = expiresAt,
+            ),
+        )
+        val staged = ctx.copy(
+            pendingCredentialsEncrypted = encrypted,
+            pendingFromDeferred = fromDeferred,
+        )
+        val saved = transitionAndPersist(staged, IssuanceState.ISSUANCE_CONSENT_PENDING)
+        record(
+            saved,
+            "issuance.consent.pending",
+            mapOf(
+                "count" to credentials.size.toString(),
+                "fromDeferred" to fromDeferred.toString(),
+                "expiresAt" to expiresAt.toString(),
+            ),
+        )
+        return saved
+    }
+
+    private fun loadConsentPending(sessionId: UUID): IssuanceContext {
+        val ctx = loadActive(sessionId)
+        if (ctx.state != IssuanceState.ISSUANCE_CONSENT_PENDING) {
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "session $sessionId is not awaiting issuance consent (state=${ctx.state})",
+            )
+        }
+        return expirePendingConsentIfNeeded(ctx)
+    }
+
+    private fun expirePendingConsentIfNeeded(ctx: IssuanceContext): IssuanceContext {
+        if (ctx.state != IssuanceState.ISSUANCE_CONSENT_PENDING) return ctx
+        val encrypted = ctx.pendingCredentialsEncrypted ?: return ctx
+        val pending = runCatching { pendingCredentialStore.decrypt(encrypted) }.getOrNull() ?: return ctx
+        if (!pendingCredentialStore.isExpired(pending)) return ctx
+        val expired = transitionAndPersist(
+            ctx.copy(pendingCredentialsEncrypted = null),
+            IssuanceState.EXPIRED,
+        )
+        record(expired, "issuance.consent.expired", emptyMap())
+        return expired
+    }
+
     private fun persistIssued(
         ctx: IssuanceContext,
-        credentials: List<di.swallet.wpb.openid4vci.protocol.IssuedCredential>,
+        credentials: List<IssuedCredential>,
         terminalState: IssuanceState,
         keyAliasHint: String?,
     ): IssuanceContext {
@@ -459,7 +599,10 @@ class DefaultIssuanceFlowOrchestrator(
     private fun loadActive(sessionId: UUID): IssuanceContext {
         val session = repository.findById(sessionId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "session $sessionId not found")
-        val ctx = session.toContext()
+        val ctx = expirePendingConsentIfNeeded(session.toContext())
+        if (ctx.state == IssuanceState.EXPIRED) {
+            throw ResponseStatusException(HttpStatus.GONE, "session $sessionId expired")
+        }
         if (ctx.sessionMeta.expiresAt.isBefore(Instant.now())) {
             persistUpdate(ctx.copy(state = IssuanceState.EXPIRED))
             throw ResponseStatusException(HttpStatus.GONE, "session $sessionId expired")

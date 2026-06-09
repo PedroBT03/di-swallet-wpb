@@ -1,5 +1,11 @@
 package di.swallet.wpb.presentation.orchestration
 
+import di.swallet.wpb.consent.AttributeMinimizationEvaluator
+import di.swallet.wpb.consent.ConsentAuditRecorder
+import di.swallet.wpb.consent.ConsentCredentialSelector
+import di.swallet.wpb.consent.ConsentSessionGuard
+import di.swallet.wpb.consent.PresentationConsentView
+import di.swallet.wpb.consent.PresentationConsentViewBuilder
 import di.swallet.wpb.observability.SessionEventStore
 import di.swallet.wpb.observability.SessionEvent
 import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
@@ -10,7 +16,6 @@ import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.PresentationError
 import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.domain.SessionMetadata
-import di.swallet.wpb.presentation.domain.SelectedCredential
 import di.swallet.wpb.presentation.domain.TrustDecisionMode
 import di.swallet.wpb.presentation.domain.toContext
 import di.swallet.wpb.presentation.domain.toSession
@@ -41,6 +46,11 @@ class DefaultPresentationFlowOrchestrator(
     private val vpTokenBuilder: VpTokenBuilder,
     private val eventStore: SessionEventStore,
     private val transactionLogger: TransactionLogger,
+    private val consentViewBuilder: PresentationConsentViewBuilder,
+    private val consentCredentialSelector: ConsentCredentialSelector,
+    private val consentSessionGuard: ConsentSessionGuard,
+    private val consentAuditRecorder: ConsentAuditRecorder,
+    private val minimizationEvaluator: AttributeMinimizationEvaluator,
     @param:Value("\${wpb.openid4vp.session.ttl-seconds:600}") private val sessionTtlSeconds: Long = 600,
 ) : PresentationFlowOrchestrator {
 
@@ -226,8 +236,14 @@ class DefaultPresentationFlowOrchestrator(
 
         context = transitionTo(context, PresentationState.CONSENT_PENDING)
         context = persistUpdate(context)
-        record(context, "consent.pending", mapOf("candidates" to context.credentialCandidates.size.toString()))
+        record(context, "consent.pending", consentAuditRecorder.presentationPendingAttributes(context))
         return context
+    }
+
+    override suspend fun getConsentView(sessionId: UUID, holderId: String): PresentationConsentView {
+        val current = getSession(sessionId)
+        consentSessionGuard.requireHolderMatch(current.sessionMeta.holderId, holderId)
+        return consentViewBuilder.build(current)
     }
 
     override suspend fun submitConsent(sessionId: UUID, decision: ConsentSubmission): PresentationContext {
@@ -238,6 +254,7 @@ class DefaultPresentationFlowOrchestrator(
         if (current.state != PresentationState.CONSENT_PENDING) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Session $sessionId is not awaiting consent (state=${current.state})")
         }
+        consentSessionGuard.requireHolderMatch(current.sessionMeta.holderId, decision.holderId)
 
         return if (!decision.granted) {
             handleConsentDenied(current, decision)
@@ -258,15 +275,17 @@ class DefaultPresentationFlowOrchestrator(
             PresentationState.REJECTED,
         )
         val persistedRejected = persistUpdate(rejected)
-        record(persistedRejected, "consent.rejected", mapOf("reason" to (decision.reason ?: "")))
+        record(
+            persistedRejected,
+            "consent.rejected",
+            consentAuditRecorder.presentationRejectedAttributes(decision.reason ?: "Holder rejected the request"),
+        )
         return dispatchTerminalNegative(persistedRejected, "dispatch.negative")
     }
 
     private suspend fun handleConsentGranted(current: PresentationContext, decision: ConsentSubmission): PresentationContext {
-        val selected = selectCredentials(current, decision.selectedCredentialIds)
-        if (selected.isEmpty()) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "No valid credentials were selected for session ${current.sessionMeta.sessionId}")
-        }
+        val selected = consentCredentialSelector.select(current, decision.selectedCredentialIds)
+        val minimizationLevel = minimizationEvaluator.evaluate(current).level
         var context = transitionTo(
             current.copy(
                 consentDecision = ConsentDecision(
@@ -279,7 +298,11 @@ class DefaultPresentationFlowOrchestrator(
             PresentationState.CONSENT_GRANTED,
         )
         context = persistUpdate(context)
-        record(context, "consent.granted", mapOf("selected" to selected.size.toString()))
+        record(
+            context,
+            "consent.granted",
+            consentAuditRecorder.presentationGrantedAttributes(selected.size, minimizationLevel),
+        )
 
         context = transitionTo(vpTokenBuilder.build(context), PresentationState.VP_BUILT)
         context = persistUpdate(context)
@@ -398,28 +421,4 @@ class DefaultPresentationFlowOrchestrator(
         )
     }
 
-    private fun selectCredentials(
-        context: PresentationContext,
-        selectedCredentialIds: List<String>,
-    ): List<SelectedCredential> {
-        val candidatesById = context.credentialCandidates.associateBy { it.candidateId }
-        val selectedCandidates = if (selectedCredentialIds.isEmpty()) {
-            // Default: select one candidate per queryId so the verifier always gets a complete response.
-            context.credentialCandidates.groupBy { it.queryId }.map { it.value.first() }
-        } else {
-            selectedCredentialIds.mapNotNull { candidatesById[it] }
-        }
-
-        return selectedCandidates.map {
-            SelectedCredential(
-                candidateId = it.candidateId,
-                credentialId = it.credentialId,
-                holderId = it.holderId,
-                queryId = it.queryId,
-                credentialType = it.credentialType,
-                format = it.format,
-                requestedClaimPaths = it.requestedClaimPaths,
-            )
-        }
-    }
 }

@@ -16,6 +16,7 @@ import di.swallet.wpb.observability.InMemorySessionEventStore
 import di.swallet.wpb.transactionlog.TransactionLogTestSupport
 import di.swallet.wpb.openid4vp.adapter.SdkOpenId4VpGateway
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
+import di.swallet.wpb.consent.ConsentTestSupport
 import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
 import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.domain.VpToken
@@ -124,6 +125,10 @@ class SignedOid4VpTrustChainE2ETest {
                         ),
                     )
             }
+            val consentDeps = ConsentTestSupport.presentationOrchestratorDeps(
+                repository = repository,
+                openId4VpProperties = props,
+            )
             val orchestrator = DefaultPresentationFlowOrchestrator(
                 gateway = gateway,
                 repository = InMemoryPresentationSessionRepository(),
@@ -139,6 +144,11 @@ class SignedOid4VpTrustChainE2ETest {
                 vpTokenBuilder = vpBuilderStub(),
                 eventStore = eventStore,
                 transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
+                consentViewBuilder = consentDeps.consentViewBuilder,
+                consentCredentialSelector = consentDeps.consentCredentialSelector,
+                consentSessionGuard = consentDeps.consentSessionGuard,
+                consentAuditRecorder = consentDeps.consentAuditRecorder,
+                minimizationEvaluator = consentDeps.minimizationEvaluator,
             )
 
             val passed = orchestrator.startSession(requestUri, "holder-1")

@@ -1,9 +1,11 @@
 package di.swallet.wpb.controller
 
+import di.swallet.wpb.consent.IssuanceConsentView
 import di.swallet.wpb.issuance.domain.IssuanceContext
 import di.swallet.wpb.issuance.orchestration.IssuanceFlowOrchestrator
 import di.swallet.wpb.observability.IssuanceEvent
 import di.swallet.wpb.observability.IssuanceEventStore
+import di.swallet.wpb.openid4vci.protocol.IssuanceConsentSubmission
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import io.swagger.v3.oas.annotations.Operation
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
@@ -84,8 +87,26 @@ class OpenId4VciController(
             description = request.description,
         )
 
+    @GetMapping("/session/{id}/consent-view")
+    @Operation(
+        summary = "Get issuance storage consent preview for WPI",
+        description = "Shows issuer identity and claim preview before ISSU_11 storage approval.",
+    )
+    fun getConsentView(
+        @PathVariable id: UUID,
+        @RequestParam holderId: String,
+    ): IssuanceConsentView = orchestrator.getConsentView(id, holderId)
+
+    @PostMapping("/consent")
+    @Operation(summary = "Approve or reject credential storage (requires FIDO2)")
+    fun submitConsent(@RequestBody request: IssuanceConsentSubmission): IssuanceContext =
+        orchestrator.submitIssuanceConsent(UUID.fromString(request.sessionId), request)
+
     @GetMapping("/session/{id}")
-    @Operation(summary = "Get an issuance session")
+    @Operation(
+        summary = "Get an issuance session",
+        description = "Low-level lifecycle context. WPI storage consent UI should use GET /session/{id}/consent-view.",
+    )
     fun getSession(@PathVariable id: UUID): IssuanceContext = orchestrator.getSession(id)
 
     @GetMapping("/session/{id}/events")

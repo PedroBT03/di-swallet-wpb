@@ -131,7 +131,10 @@ tasks.withType<JavaExec> {
         "--add-exports=java.base/sun.security.x509=ALL-UNNAMED"
     )
     // Automated environment variable for SoftHSM2 configuration
-    environment("SOFTHSM2_CONF", "${System.getProperty("user.home")}/.softhsm2.conf")
+    environment(
+        "SOFTHSM2_CONF",
+        System.getenv("SOFTHSM2_CONF") ?: "${System.getProperty("user.home")}/.softhsm2.conf",
+    )
 }
 
 jacoco {
@@ -173,6 +176,12 @@ tasks.jacocoTestCoverageVerification {
     classDirectories.setFrom(tasks.jacocoTestReport.get().classDirectories)
 }
 
+tasks.named<Test>("test") {
+    useJUnitPlatform {
+        excludeTags("performance", "external")
+    }
+}
+
 tasks.withType<Test> {
     useJUnitPlatform()
     finalizedBy(tasks.jacocoTestReport)
@@ -192,7 +201,10 @@ tasks.withType<Test> {
     }
     
     // Automated environment variable for SoftHSM2 during test execution
-    environment("SOFTHSM2_CONF", "${System.getProperty("user.home")}/.softhsm2.conf")
+    environment(
+        "SOFTHSM2_CONF",
+        System.getenv("SOFTHSM2_CONF") ?: "${System.getProperty("user.home")}/.softhsm2.conf",
+    )
 }
 
 val conformanceReportDir = layout.buildDirectory.dir("reports/conformance")
@@ -203,7 +215,12 @@ tasks.register<Test>("conformanceTest") {
     useJUnitPlatform {
         includeTags("conformance")
     }
+    systemProperty("spring.profiles.active", "test")
     systemProperty("conformance.report.dir", conformanceReportDir.get().asFile.absolutePath)
+    environment(
+        "SOFTHSM2_CONF",
+        System.getenv("SOFTHSM2_CONF") ?: "${System.getProperty("user.home")}/.softhsm2.conf",
+    )
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
 }

@@ -6,10 +6,11 @@ This runbook covers the virtual HSM used in development and automated tests. Pro
 
 ```bash
 mkdir -p ~/softhsm/tokens
-cat > ~/.softhsm2.conf <<EOF
-directories.tokendir = $HOME/softhsm/tokens
-objectstore.backend = file
-EOF
+export SOFTHSM2_CONF="$HOME/.softhsm2.conf"
+printf '%s\n' \
+  "directories.tokendir = $HOME/softhsm/tokens" \
+  "objectstore.backend = file" \
+  > "$SOFTHSM2_CONF"
 softhsm2-util --init-token --free --label "DI-Swallet-WSCD" --pin 1234 --so-pin 123456
 ```
 

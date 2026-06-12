@@ -27,11 +27,13 @@ jobs:
       - name: Initialize SoftHSM2 token
         run: |
           mkdir -p "$HOME/softhsm/tokens"
-          cat > "$HOME/.softhsm2.conf" <<EOF
-          directories.tokendir = $HOME/softhsm/tokens
-          objectstore.backend = file
-          EOF
+          export SOFTHSM2_CONF="$HOME/.softhsm2.conf"
+          printf '%s\n' \
+            "directories.tokendir = $HOME/softhsm/tokens" \
+            "objectstore.backend = file" \
+            > "$SOFTHSM2_CONF"
           printf '123456\n1234\n' | softhsm2-util --init-token --free --label "DI-Swallet-WSCD" --pin 1234 --so-pin 123456
+          echo "SOFTHSM2_CONF=$SOFTHSM2_CONF" >> "$GITHUB_ENV"
 
       - name: Run full test suite
         run: ./gradlew :app:test --no-daemon
@@ -51,7 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
-          path: app/build/reports/jacoco/
+          path: app/build/reports/jacoco/test/
 
   performance:
     runs-on: ubuntu-latest
@@ -70,11 +72,13 @@ jobs:
       - name: Initialize SoftHSM2 token
         run: |
           mkdir -p "$HOME/softhsm/tokens"
-          cat > "$HOME/.softhsm2.conf" <<EOF
-          directories.tokendir = $HOME/softhsm/tokens
-          objectstore.backend = file
-          EOF
+          export SOFTHSM2_CONF="$HOME/.softhsm2.conf"
+          printf '%s\n' \
+            "directories.tokendir = $HOME/softhsm/tokens" \
+            "objectstore.backend = file" \
+            > "$SOFTHSM2_CONF"
           printf '123456\n1234\n' | softhsm2-util --init-token --free --label "DI-Swallet-WSCD" --pin 1234 --so-pin 123456
+          echo "SOFTHSM2_CONF=$SOFTHSM2_CONF" >> "$GITHUB_ENV"
       - name: Run performance smoke tests
         run: ./gradlew :app:performanceTest --no-daemon
 
@@ -94,11 +98,13 @@ jobs:
       - name: Initialize SoftHSM2 token
         run: |
           mkdir -p "$HOME/softhsm/tokens"
-          cat > "$HOME/.softhsm2.conf" <<EOF
-          directories.tokendir = $HOME/softhsm/tokens
-          objectstore.backend = file
-          EOF
+          export SOFTHSM2_CONF="$HOME/.softhsm2.conf"
+          printf '%s\n' \
+            "directories.tokendir = $HOME/softhsm/tokens" \
+            "objectstore.backend = file" \
+            > "$SOFTHSM2_CONF"
           printf '123456\n1234\n' | softhsm2-util --init-token --free --label "DI-Swallet-WSCD" --pin 1234 --so-pin 123456
+          echo "SOFTHSM2_CONF=$SOFTHSM2_CONF" >> "$GITHUB_ENV"
       - name: Run external interop tests (env-gated)
         env:
           WPB_REAL_ISSUER_ENABLED: ${{ secrets.WPB_REAL_ISSUER_ENABLED }}

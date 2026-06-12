@@ -403,4 +403,31 @@ class HsmService(
             throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to delete HSM key")
         }
     }
+
+    /**
+     * Lightweight PKCS#11 probe for actuator health. Opens a session and enumerates aliases
+     * without performing signing operations.
+     */
+    fun probePkcs11Session(): HsmSessionProbe {
+        return try {
+            val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
+            keyStore.load(null, pin.toCharArray())
+            var count = 0
+            val aliases = keyStore.aliases()
+            while (aliases.hasMoreElements()) {
+                aliases.nextElement()
+                count++
+            }
+            HsmSessionProbe(reachable = true, tokenLabel = "SoftHSM2", keyEntryCount = count, message = null)
+        } catch (e: Exception) {
+            HsmSessionProbe(reachable = false, tokenLabel = null, keyEntryCount = 0, message = e.message)
+        }
+    }
 }
+
+data class HsmSessionProbe(
+    val reachable: Boolean,
+    val tokenLabel: String?,
+    val keyEntryCount: Int,
+    val message: String?,
+)

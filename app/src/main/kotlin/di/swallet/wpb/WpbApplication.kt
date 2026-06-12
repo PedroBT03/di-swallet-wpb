@@ -1,6 +1,8 @@
 package di.swallet.wpb
 
 import di.swallet.wpb.config.ConsentProperties
+import di.swallet.wpb.config.OpsProperties
+import di.swallet.wpb.config.SwaggerProperties
 import di.swallet.wpb.config.DataDeletionRequestProperties
 import di.swallet.wpb.config.DpaReportProperties
 import di.swallet.wpb.config.PseudonymProperties
@@ -32,6 +34,8 @@ import org.springframework.scheduling.annotation.EnableScheduling
     TrustMarkProperties::class,
     PseudonymProperties::class,
     ConsentProperties::class,
+    SwaggerProperties::class,
+    OpsProperties::class,
 )
 class WpbApplication
 

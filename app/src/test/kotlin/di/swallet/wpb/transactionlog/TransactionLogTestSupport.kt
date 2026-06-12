@@ -14,6 +14,7 @@ import di.swallet.wpb.transactionlog.mapper.IssuanceTransactionMapper
 import di.swallet.wpb.transactionlog.mapper.PresentationTransactionMapper
 import di.swallet.wpb.transactionlog.mapper.SigningTransactionMapper
 import di.swallet.wpb.transactionlog.service.TransactionLogRecorder
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import di.swallet.wpb.transactionlog.service.TransactionLogger
 
 object TransactionLogTestSupport {
@@ -33,6 +34,7 @@ object TransactionLogTestSupport {
             issuanceMapper = IssuanceTransactionMapper(),
             deletionMapper = CredentialDeletionTransactionMapper(),
             signingMapper = SigningTransactionMapper(crypto),
+            wpbMetrics = WpbMetricsTestSupport.noop(),
         )
 
     private class NoopTransactionLogRecorder : TransactionLogRecorder {

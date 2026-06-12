@@ -9,6 +9,7 @@ import di.swallet.wpb.transactionlog.domain.Ts10Transaction
 import di.swallet.wpb.transactionlog.mapper.CredentialDeletionTransactionMapper
 import di.swallet.wpb.transactionlog.mapper.IssuanceTransactionMapper
 import di.swallet.wpb.transactionlog.mapper.PresentationTransactionMapper
+import di.swallet.wpb.ops.metrics.WpbMetrics
 import di.swallet.wpb.transactionlog.mapper.SigningTransactionMapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -24,6 +25,7 @@ class TransactionLogger(
     private val issuanceMapper: IssuanceTransactionMapper,
     private val deletionMapper: CredentialDeletionTransactionMapper,
     private val signingMapper: SigningTransactionMapper,
+    private val wpbMetrics: WpbMetrics,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -34,6 +36,7 @@ class TransactionLogger(
         val transaction = presentationMapper.fromContext(context) ?: return
         runCatching { transactionLogRecorder.record(holderId, transaction, dedupeKey) }
             .onFailure { logger.warn("Failed to persist presentation transaction log for session {}", context.sessionMeta.sessionId, it) }
+        wpbMetrics.recordPresentationTerminal(context)
     }
 
     fun logLegacyPresentation(
@@ -63,6 +66,7 @@ class TransactionLogger(
         val transaction = issuanceMapper.fromContext(context, issued) ?: return
         runCatching { transactionLogRecorder.record(holderId, transaction, dedupeKey) }
             .onFailure { logger.warn("Failed to persist issuance transaction log for session {}", context.sessionMeta.sessionId, it) }
+        wpbMetrics.recordIssuanceTerminal(context)
     }
 
     fun logLegacyIssuance(holderId: String, credentialType: String, issuerName: String, issuerId: String) {

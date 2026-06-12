@@ -31,6 +31,7 @@ import di.swallet.wpb.presentation.domain.VpToken
 import di.swallet.wpb.presentation.format.VpTokenBuilder
 import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
 import di.swallet.wpb.consent.ConsentTestSupport
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.DefaultPolicyEngine
@@ -131,7 +132,7 @@ class Ts5RegistryOpenId4VpE2ETest {
             }
 
             val chainValidator = CertificateChainValidator(DefaultResourceLoader())
-            val trustSnapshotService = TrustSnapshotService(props, chainValidator, LoteTrustParser())
+            val trustSnapshotService = TrustSnapshotService(props, di.swallet.wpb.config.OpsProperties(), chainValidator, LoteTrustParser())
             val trustValidator = DefaultTrustValidator(
                 properties = props,
                 trustSnapshotResolver = trustSnapshotService,
@@ -142,7 +143,7 @@ class Ts5RegistryOpenId4VpE2ETest {
                 properties = props,
                 resolver = RpRegistryResolver(
                     properties = props,
-                    client = Ts5RpRegistryHttpClient(props),
+                    client = Ts5RpRegistryHttpClient(props, WpbMetricsTestSupport.noop()),
                     signatureVerifier = RpRegistrySignatureVerifier(props),
                 ),
             )
@@ -177,6 +178,7 @@ class Ts5RegistryOpenId4VpE2ETest {
                 consentSessionGuard = consentDeps.consentSessionGuard,
                 consentAuditRecorder = consentDeps.consentAuditRecorder,
                 minimizationEvaluator = consentDeps.minimizationEvaluator,
+                wpbMetrics = WpbMetricsTestSupport.noop(),
             )
 
             // Positive: trust is valid and TS5 check-intended-use is true.

@@ -999,3 +999,67 @@ SoftHSM2 must be initialized before integration/conformance tests (see [Initiali
 Full matrix: `app/src/test/resources/conformance/catalog.yaml`. After `conformanceTest`, copy `app/build/reports/conformance/summary.md` into thesis evidence.
 
 **Out of scope (Phase 17):** emulator ES256 signed requests (Tier 2 stretch), `POST /validate/vp` on emulator, full HAIP/ARB certification lab, W2W proximity.
+
+## Hardening and Operational Readiness (Phase 18)
+
+### What it delivers
+
+| Capability | Status |
+|---|---|
+| `prod` profile + `ProductionReadinessValidator` (fail-fast on weak secrets / demo flags) | Implemented |
+| Spring Boot Actuator (`/actuator/health`, `/actuator/info`, `/actuator/metrics`) | Implemented |
+| `HsmHealthIndicator` — PKCS#11 session probe (no signing) | Implemented |
+| `TrustSnapshotHealthIndicator` — UP / DEGRADED / DOWN | Implemented |
+| `wpb.swagger.enabled` flag (Swagger disabled in prod by default) | Implemented |
+| Micrometer metrics (`WpbMetrics`) on presentation, issuance, trust, FIDO2, status list, registry | Implemented |
+| `performanceTest` Gradle task (`@Tag("performance")`, optional CI job) | Implemented |
+| `ops/` runbooks and deployment checklists | Implemented |
+| `docker-compose.prod.yml` + `.env.prod.example` | Implemented |
+
+**Out of scope (Phase 18):** rate limiting inside WPB (use reverse proxy), FIDO2 MDS, holder full erasure, Kubernetes/SIEM manifests.
+
+### Production profile
+
+```bash
+export SPRING_PROFILES_ACTIVE=prod
+# Override all secrets — see ops/deployment-checklist.md
+./gradlew :app:bootRun
+```
+
+`application-prod.properties` disables Swagger, demo modes, and untrusted attestation. Startup fails if weak defaults remain.
+
+### Actuator
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /actuator/health` | HSM + trust snapshot health |
+| `GET /actuator/info` | Build version, git commit, operational flags |
+| `GET /actuator/metrics` | Micrometer counters/timers |
+| `GET /actuator/prometheus` | Prometheus scrape (when `wpb.ops.prometheus-enabled=true`) |
+
+### Metrics (excerpt)
+
+- `wpb.presentation.sessions` / `wpb.issuance.sessions` — terminal session outcomes
+- `wpb.trust.validation` — trust decision results
+- `wpb.security.fido2.failures` — auth interceptor failures by reason
+- `wpb.statuslist.get` / `wpb.registry.lookup` — latency timers
+
+Full reference: [`ops/metrics.md`](ops/metrics.md).
+
+### Operations documentation
+
+| Document | Purpose |
+|---|---|
+| [`ops/deployment-checklist.md`](ops/deployment-checklist.md) | Pre-production configuration |
+| [`ops/security-review-checklist.md`](ops/security-review-checklist.md) | Security sign-off items |
+| [`ops/runbook-softHSM.md`](ops/runbook-softHSM.md) | Dev/CI HSM operations |
+| [`ops/runbook-incidents.md`](ops/runbook-incidents.md) | Incident response |
+| [`ops/metrics.md`](ops/metrics.md) | Metric names and health semantics |
+
+### Performance smoke tests
+
+```bash
+./gradlew :app:performanceTest
+```
+
+Optional GitHub Actions job: run workflow **CI** manually (`workflow_dispatch`) — includes `performance` job with `continue-on-error: true`.

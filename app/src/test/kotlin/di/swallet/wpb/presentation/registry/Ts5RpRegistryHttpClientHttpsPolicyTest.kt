@@ -1,6 +1,7 @@
 package di.swallet.wpb.presentation.registry
 
 import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -87,6 +88,6 @@ class Ts5RpRegistryHttpClientHttpsPolicyTest {
             registry.connectTimeoutMs = 50
             registry.readTimeoutMs = 50
         }
-        return Ts5RpRegistryHttpClient(props)
+        return Ts5RpRegistryHttpClient(props, WpbMetricsTestSupport.noop())
     }
 }

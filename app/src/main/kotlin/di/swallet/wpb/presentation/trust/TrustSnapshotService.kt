@@ -1,6 +1,7 @@
 package di.swallet.wpb.presentation.trust
 
 import di.swallet.wpb.ka.trust.CertificateChainValidator
+import di.swallet.wpb.config.OpsProperties
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.trust.core.TrustSnapshot
 import di.swallet.wpb.trust.core.TrustSnapshotAvailability
@@ -22,12 +23,49 @@ import java.util.concurrent.atomic.AtomicReference
 @Component
 class TrustSnapshotService(
     private val properties: OpenId4VpProperties,
+    private val opsProperties: OpsProperties,
     private val certificateChainValidator: CertificateChainValidator,
     private val loteTrustParser: LoteTrustParser,
 ) : TrustSnapshotResolver {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val cacheRef = AtomicReference<TrustSnapshot?>()
     private val refreshInProgress = AtomicBoolean(false)
+    private val consecutiveRefreshFailures = java.util.concurrent.atomic.AtomicInteger(0)
+
+    fun cachedSnapshot(): TrustSnapshot? = cacheRef.get()
+
+    fun health(): TrustSnapshotHealth {
+        val snapshot = cacheRef.get()
+        val failures = consecutiveRefreshFailures.get()
+        if (snapshot == null) {
+            return TrustSnapshotHealth(
+                status = TrustSnapshotHealthStatus.DOWN,
+                loadedAt = null,
+                ageSeconds = null,
+                consecutiveFailures = failures,
+                reason = "no trust snapshot loaded",
+            )
+        }
+        val ageSeconds = Duration.between(snapshot.loadedAt, Instant.now()).seconds.coerceAtLeast(0)
+        val expired = isSnapshotExpired(snapshot)
+        val threshold = opsProperties.trustSnapshotFailureThreshold.coerceAtLeast(1)
+        val status = when {
+            failures >= threshold && expired -> TrustSnapshotHealthStatus.DOWN
+            expired -> TrustSnapshotHealthStatus.DEGRADED
+            else -> TrustSnapshotHealthStatus.UP
+        }
+        return TrustSnapshotHealth(
+            status = status,
+            loadedAt = snapshot.loadedAt,
+            ageSeconds = ageSeconds,
+            consecutiveFailures = failures,
+            reason = when (status) {
+                TrustSnapshotHealthStatus.UP -> null
+                TrustSnapshotHealthStatus.DEGRADED -> "trust snapshot exceeded max age; serving cached material"
+                TrustSnapshotHealthStatus.DOWN -> "trust snapshot unavailable after repeated refresh failures"
+            },
+        )
+    }
 
     override fun currentAvailability(): TrustSnapshotAvailability {
         val current = cacheRef.get()
@@ -76,6 +114,7 @@ class TrustSnapshotService(
                             }
                             else -> {
                                 cacheRef.set(snapshot)
+                                consecutiveRefreshFailures.set(0)
                                 val eventName = if (hadCached) "trust.snapshot.refreshed" else "trust.snapshot.loaded"
                                 logger.info(
                                     "event={} source={} entities={} anchors={}",
@@ -89,6 +128,7 @@ class TrustSnapshotService(
                         }
                     },
                     onFailure = { ex ->
+                        consecutiveRefreshFailures.incrementAndGet()
                         logger.warn("event=trust.snapshot.refresh_failed reason={}", ex.message)
                         val cached = cacheRef.get()
                         if (cached != null && !isSnapshotExpired(cached)) {

@@ -2,6 +2,7 @@ package di.swallet.wpb.security
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.config.TrustMarkProperties
+import di.swallet.wpb.ops.metrics.WpbMetrics
 import di.swallet.wpb.service.Fido2Service
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -19,6 +20,7 @@ class AuthorizationInterceptor(
     private val fido2Service: Fido2Service,
     private val objectMapper: ObjectMapper,
     private val trustMarkProperties: TrustMarkProperties,
+    private val wpbMetrics: WpbMetrics,
 ) : HandlerInterceptor {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -70,9 +72,13 @@ class AuthorizationInterceptor(
                     authenticatorData = assertionMap["authenticatorData"] as String,
                     signature = assertionMap["signature"] as String
                 )) return true
+                wpbMetrics.recordFido2Failure("verification_failed")
             } catch (e: Exception) {
                 logger.warn("SecurityPolicy: Failed to parse standard FIDO2 assertion: ${e.message}")
+                wpbMetrics.recordFido2Failure("parse_error")
             }
+        } else {
+            wpbMetrics.recordFido2Failure("missing_or_invalid")
         }
 
         logger.warn("SecurityPolicy: Unauthorized access attempt to ${request.requestURI}")

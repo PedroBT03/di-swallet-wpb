@@ -6,6 +6,7 @@ import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.format.mdoc.MdocTestSupport
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import di.swallet.wpb.observability.InMemorySessionEventStore
 import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
@@ -102,6 +103,7 @@ object PresentationConformanceSupport {
             consentSessionGuard = consentDeps.consentSessionGuard,
             consentAuditRecorder = consentDeps.consentAuditRecorder,
             minimizationEvaluator = consentDeps.minimizationEvaluator,
+            wpbMetrics = WpbMetricsTestSupport.noop(),
         )
         return PresentationConformanceHarness(orchestrator, gateway, repository)
     }

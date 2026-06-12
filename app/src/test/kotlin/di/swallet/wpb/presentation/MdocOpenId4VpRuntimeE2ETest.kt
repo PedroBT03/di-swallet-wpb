@@ -35,6 +35,7 @@ import di.swallet.wpb.presentation.format.MdocVpBuilder
 import di.swallet.wpb.format.sdjwt.SdJwtVpBuilder
 import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
 import di.swallet.wpb.consent.ConsentTestSupport
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.DefaultPolicyEngine
@@ -196,6 +197,7 @@ class MdocOpenId4VpRuntimeE2ETest {
             consentSessionGuard = consentDeps.consentSessionGuard,
             consentAuditRecorder = consentDeps.consentAuditRecorder,
             minimizationEvaluator = consentDeps.minimizationEvaluator,
+            wpbMetrics = WpbMetricsTestSupport.noop(),
         )
     }
 

@@ -67,6 +67,10 @@ dependencies {
     // --- API Documentation ---
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5")
 
+    // --- Operations ---
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-registry-prometheus")
+
     // --- Configuration Metadata Generation ---
     // Enables IDE auto-completion for custom application properties
     kapt("org.springframework.boot:spring-boot-configuration-processor")
@@ -101,6 +105,23 @@ tasks.named<ProcessResources>("processResources") {
 
 application {
     mainClass.set("di.swallet.wpb.WpbApplicationKt")
+}
+
+springBoot {
+    buildInfo {
+        properties {
+            val gitCommit = runCatching {
+                ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+                    .directory(rootProject.projectDir)
+                    .start()
+                    .inputStream
+                    .bufferedReader()
+                    .readText()
+                    .trim()
+            }.getOrDefault("unknown").ifBlank { "unknown" }
+            additional.set(mapOf("git.commit.id.abbrev" to gitCommit))
+        }
+    }
 }
 
 tasks.withType<JavaExec> {
@@ -183,6 +204,16 @@ tasks.register<Test>("conformanceTest") {
         includeTags("conformance")
     }
     systemProperty("conformance.report.dir", conformanceReportDir.get().asFile.absolutePath)
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+}
+
+tasks.register<Test>("performanceTest") {
+    description = "Runs @Tag(performance) smoke tests (manual / optional CI)"
+    group = "verification"
+    useJUnitPlatform {
+        includeTags("performance")
+    }
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
 }

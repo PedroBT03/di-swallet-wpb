@@ -1,6 +1,7 @@
 package di.swallet.wpb.controller
 
 import di.swallet.wpb.config.StatusListProperties
+import di.swallet.wpb.ops.metrics.WpbMetrics
 import di.swallet.wpb.revocation.StatusListJwtEncoder
 import di.swallet.wpb.service.StatusListService
 import io.swagger.v3.oas.annotations.Operation
@@ -31,6 +32,7 @@ class StatusListController(
     private val statusListService: StatusListService,
     private val statusListJwtEncoder: StatusListJwtEncoder,
     private val properties: StatusListProperties,
+    private val wpbMetrics: WpbMetrics,
 ) {
 
     @GetMapping("/{listId}")
@@ -42,7 +44,7 @@ class StatusListController(
         @PathVariable listId: String,
         @RequestParam(required = false, defaultValue = "jwt") format: String,
         request: HttpServletRequest,
-    ): ResponseEntity<Any> {
+    ): ResponseEntity<Any> = wpbMetrics.timeStatusList {
         val canonicalId = statusListService.getListId()
         if (listId != canonicalId) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown status list id: $listId")
@@ -50,7 +52,7 @@ class StatusListController(
 
         if (format.equals("json", ignoreCase = true)) {
             val baseUrl = request.requestURL.toString()
-            return ResponseEntity.ok(
+            return@timeStatusList ResponseEntity.ok(
                 mapOf(
                     "id" to baseUrl,
                     "type" to "BitstringStatusList",
@@ -64,7 +66,7 @@ class StatusListController(
         }
 
         val jwt = statusListJwtEncoder.encode()
-        return ResponseEntity.ok()
+        ResponseEntity.ok()
             .header(HttpHeaders.CACHE_CONTROL, "public, max-age=${properties.jwtTtlSeconds}")
             .contentType(MediaType.parseMediaType("application/statuslist+jwt"))
             .body(jwt)
@@ -78,7 +80,7 @@ class StatusListController(
     fun getStatusEntry(
         @PathVariable listId: String,
         @PathVariable index: Int,
-    ): Map<String, Any> {
+    ): Map<String, Any> = wpbMetrics.timeStatusList {
         val canonicalId = statusListService.getListId()
         if (listId != canonicalId) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown status list id: $listId")
@@ -89,7 +91,7 @@ class StatusListController(
 
         val revoked = statusListService.isRevoked(index)
 
-        return mapOf(
+        mapOf(
             "listId" to canonicalId,
             "index" to index,
             "statusPurpose" to "revocation",

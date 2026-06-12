@@ -6,6 +6,7 @@ import di.swallet.wpb.consent.ConsentCredentialSelector
 import di.swallet.wpb.consent.ConsentSessionGuard
 import di.swallet.wpb.consent.PresentationConsentView
 import di.swallet.wpb.consent.PresentationConsentViewBuilder
+import di.swallet.wpb.ops.metrics.WpbMetrics
 import di.swallet.wpb.observability.SessionEventStore
 import di.swallet.wpb.observability.SessionEvent
 import di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway
@@ -51,6 +52,7 @@ class DefaultPresentationFlowOrchestrator(
     private val consentSessionGuard: ConsentSessionGuard,
     private val consentAuditRecorder: ConsentAuditRecorder,
     private val minimizationEvaluator: AttributeMinimizationEvaluator,
+    private val wpbMetrics: WpbMetrics,
     @param:Value("\${wpb.openid4vp.session.ttl-seconds:600}") private val sessionTtlSeconds: Long = 600,
 ) : PresentationFlowOrchestrator {
 
@@ -146,12 +148,15 @@ class DefaultPresentationFlowOrchestrator(
         when (trustEvaluated.trustDecision?.mode) {
             TrustDecisionMode.TRUSTED -> {
                 record(context, "trust.validation.passed", mapOf("reason" to (trustEvaluated.trustDecision?.reason ?: "")))
+                wpbMetrics.recordTrustValidation("trusted")
             }
             TrustDecisionMode.DEGRADED_DEMO_OPEN -> {
                 record(context, "trust.validation.degraded", mapOf("reason" to (trustEvaluated.trustDecision?.reason ?: "")))
+                wpbMetrics.recordTrustValidation("degraded")
             }
             else -> {
                 record(context, "trust.validation.failed", mapOf("reason" to (trustEvaluated.trustDecision?.reason ?: "")))
+                wpbMetrics.recordTrustValidation("rejected")
             }
         }
 

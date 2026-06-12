@@ -205,6 +205,23 @@ scenarios:
     testClass: di.swallet.wpb.pseudonym.PseudonymUnlinkabilityTest
     description: Distinct user handles and keys per RP (unlinkability).
 
+  # --- Operations / hardening (Phase 18) ---
+  - id: actuator_health_smoke
+    hlr: [SEC_01]
+    protocol: ops
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.ops.ActuatorSmokeTest
+    description: Actuator health exposes HSM and trust snapshot components.
+
+  - id: actuator_info_operational
+    hlr: [SEC_01]
+    protocol: ops
+    tier: 1
+    negative: false
+    testClass: di.swallet.wpb.ops.ActuatorSmokeTest
+    description: Actuator info operational block reflects profile and demo flags.
+
   # --- Tier 3 external interop (opt-in, not in default conformanceTest) ---
   - id: vci_real_issuer_smoke
     hlr: [ISSU_01]

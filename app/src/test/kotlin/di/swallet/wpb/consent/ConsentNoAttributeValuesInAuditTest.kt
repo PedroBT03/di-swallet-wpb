@@ -2,6 +2,7 @@ package di.swallet.wpb.consent
 
 import di.swallet.wpb.conformance.ConformanceScenario
 import di.swallet.wpb.conformance.ConformanceTest
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import di.swallet.wpb.observability.InMemorySessionEventStore
 import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
@@ -54,6 +55,7 @@ class ConsentNoAttributeValuesInAuditTest {
             consentSessionGuard = consentDeps.consentSessionGuard,
             consentAuditRecorder = consentDeps.consentAuditRecorder,
             minimizationEvaluator = consentDeps.minimizationEvaluator,
+            wpbMetrics = WpbMetricsTestSupport.noop(),
         )
 
         val ctx = orchestrator.startSession("http://verifier/request", "holder-1")

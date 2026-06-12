@@ -21,6 +21,7 @@ import di.swallet.wpb.presentation.domain.VpToken
 import di.swallet.wpb.presentation.format.VpTokenBuilder
 import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
 import di.swallet.wpb.consent.ConsentTestSupport
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.DefaultPolicyEngine
@@ -177,6 +178,7 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
             consentSessionGuard = consentDeps.consentSessionGuard,
             consentAuditRecorder = consentDeps.consentAuditRecorder,
             minimizationEvaluator = consentDeps.minimizationEvaluator,
+            wpbMetrics = WpbMetricsTestSupport.noop(),
         )
         return orchestrator to gateway
     }

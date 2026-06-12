@@ -16,6 +16,7 @@ import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
 import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
 import di.swallet.wpb.consent.ConsentTestSupport
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
 import di.swallet.wpb.presentation.domain.PresentationRequirements
@@ -85,7 +86,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
                 trust.maxSnapshotAgeSeconds = 600
             }
             val chainValidator = CertificateChainValidator(DefaultResourceLoader())
-            val trustSnapshotService = TrustSnapshotService(props, chainValidator, LoteTrustParser())
+            val trustSnapshotService = TrustSnapshotService(props, di.swallet.wpb.config.OpsProperties(), chainValidator, LoteTrustParser())
             val certExtractor = DefaultVerifierCertificateExtractor()
             val accessValidation = PkixAccessCertificateValidationService(chainValidator)
             val trustValidator = DefaultTrustValidator(props, trustSnapshotService, certExtractor, accessValidation)
@@ -133,6 +134,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
                 consentSessionGuard = consentDeps.consentSessionGuard,
                 consentAuditRecorder = consentDeps.consentAuditRecorder,
                 minimizationEvaluator = consentDeps.minimizationEvaluator,
+                wpbMetrics = WpbMetricsTestSupport.noop(),
             )
 
             // Positive: client_id + cert chain + fingerprint align with remote TS119602 document.
@@ -165,6 +167,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
                 consentSessionGuard = consentDeps.consentSessionGuard,
                 consentAuditRecorder = consentDeps.consentAuditRecorder,
                 minimizationEvaluator = consentDeps.minimizationEvaluator,
+                wpbMetrics = WpbMetricsTestSupport.noop(),
             )
             val failed = failingOrchestrator.startSession("http://verifier/req", "holder-1")
             assertEquals(PresentationState.DISPATCHED, failed.state)

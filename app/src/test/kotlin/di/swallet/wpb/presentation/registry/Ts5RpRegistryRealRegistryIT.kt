@@ -3,6 +3,7 @@ package di.swallet.wpb.presentation.registry
 import di.swallet.wpb.conformance.ConformanceScenario
 import di.swallet.wpb.conformance.ConformanceTags
 import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -55,7 +56,7 @@ class Ts5RpRegistryRealRegistryIT {
 
         val resolver = RpRegistryResolver(
             properties = props,
-            client = Ts5RpRegistryHttpClient(props),
+            client = Ts5RpRegistryHttpClient(props, WpbMetricsTestSupport.noop()),
             signatureVerifier = RpRegistrySignatureVerifier(props),
         )
 

@@ -19,6 +19,7 @@ import di.swallet.wpb.transactionlog.TransactionLogTestSupport
 import di.swallet.wpb.openid4vp.adapter.SdkOpenId4VpGateway
 import di.swallet.wpb.openid4vp.protocol.AuthorizationRequestResolution
 import di.swallet.wpb.consent.ConsentTestSupport
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import di.swallet.wpb.presentation.domain.PresentationDispatchOutcome
 import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.domain.VpToken
@@ -94,7 +95,7 @@ class SignedOid4VpTrustChainE2ETest {
         }
 
         val chainValidator = CertificateChainValidator(DefaultResourceLoader())
-        val trustSnapshotService = TrustSnapshotService(props, chainValidator, LoteTrustParser())
+        val trustSnapshotService = TrustSnapshotService(props, di.swallet.wpb.config.OpsProperties(), chainValidator, LoteTrustParser())
         val trustValidator = DefaultTrustValidator(
             properties = props,
             trustSnapshotResolver = trustSnapshotService,
@@ -153,6 +154,7 @@ class SignedOid4VpTrustChainE2ETest {
                 consentSessionGuard = consentDeps.consentSessionGuard,
                 consentAuditRecorder = consentDeps.consentAuditRecorder,
                 minimizationEvaluator = consentDeps.minimizationEvaluator,
+                wpbMetrics = WpbMetricsTestSupport.noop(),
             )
 
             val passed = orchestrator.startSession(requestUri, "holder-1")

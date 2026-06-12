@@ -1,0 +1,49 @@
+# Production-like stack: PostgreSQL + WPB (build image locally or pull from registry).
+# Copy .env.prod.example to .env and fill secrets before use.
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: di-swallet-db-prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-diswallet}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  wpb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: di-swallet-wpb-prod
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-diswallet}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      HSM_PIN: ${HSM_PIN}
+      WALLET_DISCLOSURES_ENCRYPTION_KEY: ${WALLET_DISCLOSURES_ENCRYPTION_KEY}
+      WPB_TRANSACTION_LOG_ENCRYPTION_KEY: ${WPB_TRANSACTION_LOG_ENCRYPTION_KEY}
+      WPB_TRANSACTION_LOG_INTEGRITY_KEY: ${WPB_TRANSACTION_LOG_INTEGRITY_KEY}
+      WPB_SWAGGER_ENABLED: "false"
+      WPB_OPS_PROMETHEUS_ENABLED: "true"
+      WALLET_RP_ID: ${WALLET_RP_ID}
+      WALLET_ORIGINS: ${WALLET_ORIGINS}
+    ports:
+      - "${WPB_PORT:-8080}:8080"
+    # Host SoftHSM or PKCS#11 library must be mounted for real HSM use:
+    # volumes:
+    #   - /usr/lib/x86_64-linux-gnu/softhsm:/usr/lib/x86_64-linux-gnu/softhsm:ro
+    restart: unless-stopped
+
+volumes:
+  postgres_prod_data:

@@ -1,6 +1,7 @@
 package di.swallet.wpb.presentation.registry
 
 import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.ops.metrics.WpbMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.net.HttpURLConnection
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets
 @Component
 class Ts5RpRegistryHttpClient(
     private val properties: OpenId4VpProperties,
+    private val wpbMetrics: WpbMetrics,
 ) : RpRegistryClient {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -56,7 +58,7 @@ class Ts5RpRegistryHttpClient(
         return fetch("$base/wrp/check-intended-use?$query")
     }
 
-    private fun fetch(endpoint: String): RegistryHttpResponse {
+    private fun fetch(endpoint: String): RegistryHttpResponse = wpbMetrics.timeRegistryLookup {
         validateRemoteUrlPolicy(endpoint)
         val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             connectTimeout = properties.registry.connectTimeoutMs.toInt()
@@ -70,7 +72,7 @@ class Ts5RpRegistryHttpClient(
         val contentType = conn.contentType
         val jku = conn.getHeaderField("x-jku-url")
         logger.debug("event=registry.http endpoint={} status={}", endpoint, status)
-        return RegistryHttpResponse(
+        RegistryHttpResponse(
             endpoint = endpoint,
             statusCode = status,
             body = body,

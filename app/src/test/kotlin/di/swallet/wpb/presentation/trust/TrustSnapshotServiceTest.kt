@@ -1,6 +1,8 @@
 package di.swallet.wpb.presentation.trust
 
+import di.swallet.wpb.config.OpsProperties
 import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.presentation.trust.TrustSnapshotHealthStatus
 import di.swallet.wpb.ka.trust.CertificateChainValidator
 import di.swallet.wpb.trust.core.TrustSnapshotAvailability
 import di.swallet.wpb.trust.lote.LoteTrustParser
@@ -34,7 +36,7 @@ class TrustSnapshotServiceTest {
             trust.sourceMode = "file"
             trust.localVerifiersPath = emptyJson
         }
-        val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
         val availability = service.refresh()
         assertTrue(availability is TrustSnapshotAvailability.Unavailable)
         assertTrue(
@@ -51,7 +53,7 @@ class TrustSnapshotServiceTest {
             trust.localTrustAnchorPemPaths = ""
             trust.remoteTrustUrl = ""
         }
-        val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
         val availability = service.refresh()
         assertTrue(availability is TrustSnapshotAvailability.Unavailable)
     }
@@ -80,7 +82,7 @@ class TrustSnapshotServiceTest {
             trust.localVerifiersPath = verifierJson
             trust.localTrustAnchorPemPaths = anchorPem
         }
-        val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
         val availability = service.currentAvailability()
         assertTrue(availability is TrustSnapshotAvailability.Available)
         val snapshot = (availability as TrustSnapshotAvailability.Available).snapshot
@@ -116,7 +118,7 @@ class TrustSnapshotServiceTest {
             trust.remoteConnectTimeoutMs = 50
             trust.remoteReadTimeoutMs = 50
         }
-        val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
         val availability = service.currentAvailability()
         assertTrue(availability is TrustSnapshotAvailability.Available)
         val snapshot = (availability as TrustSnapshotAvailability.Available).snapshot
@@ -159,7 +161,7 @@ class TrustSnapshotServiceTest {
                 trust.localTrustAnchorPemPaths = writeTempFile(localAnchorPem)
                 trust.remoteTrustUrl = "http://127.0.0.1:${server.address.port}/trust"
             }
-            val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+            val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
             val availability = service.currentAvailability()
             assertTrue(availability is TrustSnapshotAvailability.Available)
             val snapshot = (availability as TrustSnapshotAvailability.Available).snapshot
@@ -203,7 +205,7 @@ class TrustSnapshotServiceTest {
                 trust.localTrustAnchorPemPaths = localAnchors
                 trust.remoteTrustUrl = "http://127.0.0.1:${server.address.port}/trust"
             }
-            val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+            val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
             val availability = service.currentAvailability()
             assertTrue(availability is TrustSnapshotAvailability.Available)
             val snapshot = (availability as TrustSnapshotAvailability.Available).snapshot
@@ -225,7 +227,7 @@ class TrustSnapshotServiceTest {
             trust.localTrustAnchorPemPaths = anchorPem
             trust.maxSnapshotAgeSeconds = 1
         }
-        val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
         assertTrue(service.currentAvailability() is TrustSnapshotAvailability.Available)
         Thread.sleep(1200)
         props.trust.sourceMode = "remote"
@@ -248,7 +250,7 @@ class TrustSnapshotServiceTest {
             trust.localTrustAnchorPemPaths = anchorPem
             trust.maxSnapshotAgeSeconds = 600
         }
-        val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
         assertTrue(service.currentAvailability() is TrustSnapshotAvailability.Available)
         props.trust.sourceMode = "remote"
         props.trust.remoteTrustUrl = "http://127.0.0.1:9/down"
@@ -267,7 +269,7 @@ class TrustSnapshotServiceTest {
             trust.remoteConnectTimeoutMs = 50
             trust.remoteReadTimeoutMs = 50
         }
-        val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
         val refreshed = service.refresh()
         assertTrue(refreshed is TrustSnapshotAvailability.Unavailable)
     }
@@ -284,13 +286,40 @@ class TrustSnapshotServiceTest {
                 trust.remoteConnectTimeoutMs = 100
                 trust.remoteReadTimeoutMs = 100
             }
-            val service = TrustSnapshotService(props, CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+            val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
             val refreshed = service.refresh()
             assertTrue(refreshed is TrustSnapshotAvailability.Unavailable)
             assertTrue((refreshed as TrustSnapshotAvailability.Unavailable).reason.contains("allow-listed", ignoreCase = true))
         } finally {
             server.stop(0)
         }
+    }
+
+    @Test
+    fun `health is DOWN when no snapshot is loaded`() {
+        val props = OpenId4VpProperties().apply {
+            demoMode = true
+            trust.sourceMode = "remote"
+            trust.remoteTrustUrl = "http://127.0.0.1:9/down"
+            trust.remoteConnectTimeoutMs = 50
+            trust.remoteReadTimeoutMs = 50
+        }
+        val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        val health = service.health()
+        assertEquals(TrustSnapshotHealthStatus.DOWN, health.status)
+    }
+
+    @Test
+    fun `health is UP after local snapshot load`() {
+        val props = OpenId4VpProperties().apply {
+            trust.sourceMode = "hybrid"
+            trust.localVerifiersPath = "classpath:trust/demo-lote.json"
+            trust.localTrustAnchorPemPaths = "classpath:trust/demo-anchor.pem"
+        }
+        val service = TrustSnapshotService(props, OpsProperties(), CertificateChainValidator(DefaultResourceLoader()), LoteTrustParser())
+        service.refresh()
+        val health = service.health()
+        assertEquals(TrustSnapshotHealthStatus.UP, health.status)
     }
 
     private fun writeTempFile(content: String): String {

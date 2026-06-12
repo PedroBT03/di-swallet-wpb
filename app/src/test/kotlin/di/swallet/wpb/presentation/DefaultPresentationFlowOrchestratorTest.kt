@@ -19,6 +19,7 @@ import di.swallet.wpb.presentation.domain.VpToken
 import di.swallet.wpb.presentation.format.VpTokenBuilder
 import di.swallet.wpb.presentation.matching.CredentialMatcher
 import di.swallet.wpb.consent.ConsentTestSupport
+import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import di.swallet.wpb.presentation.orchestration.DefaultPresentationFlowOrchestrator
 import di.swallet.wpb.presentation.persistence.InMemoryPresentationSessionRepository
 import di.swallet.wpb.presentation.policy.PolicyEngine
@@ -129,6 +130,7 @@ class DefaultPresentationFlowOrchestratorTest {
             consentSessionGuard = consentDeps.consentSessionGuard,
             consentAuditRecorder = consentDeps.consentAuditRecorder,
             minimizationEvaluator = consentDeps.minimizationEvaluator,
+            wpbMetrics = WpbMetricsTestSupport.noop(),
         )
     }
 

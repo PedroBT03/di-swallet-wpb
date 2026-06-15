@@ -4,10 +4,10 @@ import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.transactionlog.domain.Ts10CredentialInfo
-import di.swallet.wpb.transactionlog.domain.Ts10Identifier
 import di.swallet.wpb.transactionlog.domain.Ts10MigrationData
 import di.swallet.wpb.transactionlog.domain.Ts10NonDeviceBoundCredential
 import di.swallet.wpb.transactionlog.domain.Ts10Transaction
+import di.swallet.wpb.transactionlog.CredentialIssuerResolver
 import di.swallet.wpb.transactionlog.service.TransactionLogService
 import org.springframework.stereotype.Component
 
@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component
 class MigrationObjectBuilder(
     private val credentialRepository: WalletCredentialRepository,
     private val transactionLogService: TransactionLogService,
+    private val credentialIssuerResolver: CredentialIssuerResolver,
 ) {
     fun build(holderId: String, includeNonDeviceBound: Boolean): Ts10MigrationData {
         val credentials = credentialRepository.findByUserId(holderId)
@@ -32,18 +33,17 @@ class MigrationObjectBuilder(
         )
     }
 
-    private fun toCredentialInfo(credential: WalletCredential): Ts10CredentialInfo =
-        Ts10CredentialInfo(
+    private fun toCredentialInfo(credential: WalletCredential): Ts10CredentialInfo {
+        val issuer = credentialIssuerResolver.resolve(credential)
+        return Ts10CredentialInfo(
             credentialIdentifier = credential.credentialType,
             format = inferFormat(credential),
-            issuerName = credential.issuerStatusUri ?: "Wallet Provider",
-            issuerIdentifier = Ts10Identifier(
-                type = "http://data.europa.eu/eudi/id/EUID",
-                identifier = credential.userId,
-            ),
+            issuerName = issuer.name,
+            issuerIdentifier = issuer.identifier,
             issuerType = if (credential.issuerStatusUri != null) "EAAProvider" else "PIDProvider",
             supplyPointURL = credential.issuerStatusUri,
         )
+    }
 
     private fun toNonDeviceBound(credential: WalletCredential): Ts10NonDeviceBoundCredential? {
         val raw = credential.encodedData

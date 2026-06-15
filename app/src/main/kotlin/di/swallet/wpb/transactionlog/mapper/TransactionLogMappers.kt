@@ -25,11 +25,11 @@ import di.swallet.wpb.transactionlog.domain.Ts10SigningSealing
 import di.swallet.wpb.transactionlog.domain.Ts10Transaction
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionResult
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionType
+import di.swallet.wpb.transactionlog.CredentialIssuerResolver
+import di.swallet.wpb.transactionlog.Ts10InstantFormatter
 import di.swallet.wpb.transactionlog.crypto.TransactionLogCrypto
 import org.springframework.stereotype.Component
 import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 @Component
@@ -38,8 +38,6 @@ class PresentationTransactionMapper(
     private val dpaContactBuilder: Ts10DpaContactBuilder,
     private val rpDnsNameResolver: RpDnsNameResolver,
 ) {
-    private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC)
-
     fun fromContext(context: PresentationContext, now: Instant = Instant.now()): Ts10Transaction? {
         val holderId = context.sessionMeta.holderId ?: return null
         if (holderId.isBlank()) return null
@@ -81,7 +79,7 @@ class PresentationTransactionMapper(
 
         return Ts10Transaction(
             transactionIdentifier = context.sessionMeta.correlationId.ifBlank { UUID.randomUUID().toString() },
-            time = formatter.format(now),
+            time = Ts10InstantFormatter.format(now),
             transactionType = Ts10TransactionType.Presentation.name,
             transactionResult = if (completed) Ts10TransactionResult.Completed.name else Ts10TransactionResult.NotCompleted.name,
             presentation = presentation,
@@ -111,7 +109,7 @@ class PresentationTransactionMapper(
         )
         return Ts10Transaction(
             transactionIdentifier = UUID.randomUUID().toString(),
-            time = formatter.format(now),
+            time = Ts10InstantFormatter.format(now),
             transactionType = Ts10TransactionType.Presentation.name,
             transactionResult = if (completed) Ts10TransactionResult.Completed.name else Ts10TransactionResult.NotCompleted.name,
             presentation = presentation,
@@ -184,8 +182,6 @@ class PresentationTransactionMapper(
 
 @Component
 class IssuanceTransactionMapper {
-    private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC)
-
     fun fromContext(
         context: IssuanceContext,
         issued: List<IssuedCredential> = emptyList(),
@@ -216,7 +212,7 @@ class IssuanceTransactionMapper {
 
         return Ts10Transaction(
             transactionIdentifier = context.sessionMeta.correlationId,
-            time = formatter.format(now),
+            time = Ts10InstantFormatter.format(now),
             transactionType = Ts10TransactionType.CredentialIssuance.name,
             transactionResult = if (completed) Ts10TransactionResult.Completed.name else Ts10TransactionResult.NotCompleted.name,
             credentialIssuance = issuance,
@@ -231,7 +227,7 @@ class IssuanceTransactionMapper {
         now: Instant = Instant.now(),
     ): Ts10Transaction = Ts10Transaction(
         transactionIdentifier = UUID.randomUUID().toString(),
-        time = formatter.format(now),
+        time = Ts10InstantFormatter.format(now),
         transactionType = Ts10TransactionType.CredentialIssuance.name,
         transactionResult = Ts10TransactionResult.Completed.name,
         credentialIssuance = Ts10CredentialIssuance(
@@ -249,32 +245,29 @@ class IssuanceTransactionMapper {
 }
 
 @Component
-class CredentialDeletionTransactionMapper {
-    private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC)
-
-    fun fromCredential(credential: WalletCredential, now: Instant = Instant.now()): Ts10Transaction =
-        Ts10Transaction(
+class CredentialDeletionTransactionMapper(
+    private val credentialIssuerResolver: CredentialIssuerResolver,
+) {
+    fun fromCredential(credential: WalletCredential, now: Instant = Instant.now()): Ts10Transaction {
+        val issuer = credentialIssuerResolver.resolve(credential)
+        return Ts10Transaction(
             transactionIdentifier = UUID.randomUUID().toString(),
-            time = formatter.format(now),
+            time = Ts10InstantFormatter.format(now),
             transactionType = Ts10TransactionType.CredentialDeletion.name,
             transactionResult = Ts10TransactionResult.Completed.name,
             credentialDeletion = Ts10CredentialDeletion(
                 credentialIdentifier = credential.credentialType,
-                credentialIssuerIdentifier = Ts10Identifier(
-                    type = "http://data.europa.eu/eudi/id/EUID",
-                    identifier = credential.userId,
-                ),
-                credentialIssuerName = "Wallet Provider",
+                credentialIssuerIdentifier = issuer.identifier,
+                credentialIssuerName = issuer.name,
             ),
         )
+    }
 }
 
 @Component
 class SigningTransactionMapper(
     private val crypto: TransactionLogCrypto,
 ) {
-    private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC)
-
     fun fromSignOperation(
         payload: ByteArray,
         algorithm: String,
@@ -283,7 +276,7 @@ class SigningTransactionMapper(
         now: Instant = Instant.now(),
     ): Ts10Transaction = Ts10Transaction(
         transactionIdentifier = UUID.randomUUID().toString(),
-        time = formatter.format(now),
+        time = Ts10InstantFormatter.format(now),
         transactionType = Ts10TransactionType.SigningSealing.name,
         transactionResult = if (completed) Ts10TransactionResult.Completed.name else Ts10TransactionResult.NotCompleted.name,
         signingSealing = Ts10SigningSealing(

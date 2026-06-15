@@ -11,6 +11,7 @@ import di.swallet.wpb.transactionlog.domain.Ts10OtherTransaction
 import di.swallet.wpb.transactionlog.domain.Ts10Transaction
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionLogExport
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionType
+import di.swallet.wpb.transactionlog.Ts10InstantFormatter
 import di.swallet.wpb.transactionlog.export.MigrationObjectBuilder
 import org.springframework.context.annotation.Lazy
 import org.springframework.http.HttpStatus
@@ -122,9 +123,7 @@ class TransactionLogService(
     fun recordRetentionWarning(holderId: String, message: String): TransactionLogEntry? {
         val transaction = Ts10Transaction(
             transactionIdentifier = java.util.UUID.randomUUID().toString(),
-            time = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
-                .withZone(java.time.ZoneOffset.UTC)
-                .format(Instant.now()),
+            time = Ts10InstantFormatter.format(Instant.now()),
             transactionType = Ts10TransactionType.OtherTransaction.name,
             transactionResult = "Completed",
             otherTransaction = Ts10OtherTransaction(description = message),

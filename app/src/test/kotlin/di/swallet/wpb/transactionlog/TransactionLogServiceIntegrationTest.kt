@@ -34,6 +34,7 @@ class TransactionLogServiceIntegrationTestConfig
     TransactionLogCrypto::class,
     Ts10JweEncoder::class,
     MigrationObjectBuilder::class,
+    CredentialIssuerResolver::class,
     JacksonAutoConfiguration::class,
     TransactionLogServiceIntegrationTestConfig::class,
 )

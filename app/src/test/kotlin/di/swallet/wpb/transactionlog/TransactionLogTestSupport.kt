@@ -1,6 +1,8 @@
 package di.swallet.wpb.transactionlog
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.config.TransactionLogProperties
+import di.swallet.wpb.transactionlog.CredentialIssuerResolver
 import di.swallet.wpb.datadeletion.SupportUriClassifier
 import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
 import di.swallet.wpb.dpareport.RpDnsNameResolver
@@ -32,7 +34,7 @@ object TransactionLogTestSupport {
             transactionLogRecorder = NoopTransactionLogRecorder(),
             presentationMapper = presentationTransactionMapper(),
             issuanceMapper = IssuanceTransactionMapper(),
-            deletionMapper = CredentialDeletionTransactionMapper(),
+            deletionMapper = CredentialDeletionTransactionMapper(CredentialIssuerResolver(ObjectMapper())),
             signingMapper = SigningTransactionMapper(crypto),
             wpbMetrics = WpbMetricsTestSupport.noop(),
         )

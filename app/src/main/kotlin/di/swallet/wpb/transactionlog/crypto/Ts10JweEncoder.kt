@@ -43,6 +43,6 @@ class Ts10JweEncoder(
 
     companion object {
         private const val SALT_BYTES = 8
-        private const val ITERATION_COUNT = 4096
+        private const val ITERATION_COUNT = 120_000
     }
 }

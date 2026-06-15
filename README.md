@@ -10,8 +10,8 @@ This repository contains the implementation of the **Wallet Provider Backend (WP
 - **Key Metadata Store:** Database layer to track key lifecycles (Candidate, Active, Revoked).
 
 ## 🛠️ Tech Stack
-- **Language:** Kotlin 1.9.24
-- **Framework:** Spring Boot 3.5.12
+- **Language:** Kotlin 2.2.0
+- **Framework:** Spring Boot 3.5.14
 - **Cryptography:** BouncyCastle (Standard Security Provider)
 - **Persistence:** Spring Data JPA with PostgreSQL (runtime) + H2 (tests)
 - **Standard:** PKCS#11 (SunPKCS11)
@@ -125,6 +125,19 @@ Real flow (for development and production-aligned testing):
 ## 🛡️ Security Note
 This implementation ensures that **private keys are non-exportable** and HSM-backed signing is enforced.  
 For full production-grade **LoA High/QES** posture, additional hardening remains (for example: trusted attestation configuration and verified onboarding checks).
+
+### LoA High gaps (document for thesis / production planning)
+
+The WPB prototype intentionally stops short of full **LoA High** device assurance. The following gaps should be stated explicitly in the thesis and closed before any production deployment:
+
+| Gap | Default / current behaviour | Production expectation |
+|-----|----------------------------|------------------------|
+| **FIDO2 MDS** | Not implemented (`Fido2Service`); hardware attestation roots are not verified via the FIDO Metadata Service | Verify authenticator metadata and AAGUID against MDS for hardware-backed keys |
+| **Untrusted attestation** | `wallet.allow-untrusted-attestation=true` in dev; `application-prod.properties` sets it to `false` | Keep `false` in prod; require genuine hardware attestation during onboarding |
+| **WSCD** | SoftHSM2 (software token) | Certified remote HSM / QSCD (FIPS 140-2 L3 or CC EAL4+) |
+| **Onboarding without SUA** | `/wallet/init` and `/auth/register/{userId}` are open for bootstrap | Strong user authentication before key generation in production |
+
+`application-prod.properties` already disables untrusted attestation and enforces secret validation via `ProductionReadinessValidator`; MDS integration and certified WSCD remain out of scope for this academic prototype.
 
 ## OpenID4VP Demo Mode Warning
 Some OpenID4VP shortcuts used for local emulator validation are protected behind:

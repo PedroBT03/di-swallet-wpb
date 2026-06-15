@@ -38,11 +38,13 @@ services:
       WPB_OPS_PROMETHEUS_ENABLED: "true"
       WALLET_RP_ID: ${WALLET_RP_ID}
       WALLET_ORIGINS: ${WALLET_ORIGINS}
+      SOFTHSM2_CONF: /etc/softhsm2.conf
     ports:
       - "${WPB_PORT:-8080}:8080"
-    # Host SoftHSM or PKCS#11 library must be mounted for real HSM use:
-    # volumes:
-    #   - /usr/lib/x86_64-linux-gnu/softhsm:/usr/lib/x86_64-linux-gnu/softhsm:ro
+    volumes:
+      - ${SOFTHSM_LIB_DIR:-/usr/lib/x86_64-linux-gnu/softhsm}:/usr/lib/x86_64-linux-gnu/softhsm:ro
+      - ${SOFTHSM_TOKEN_DIR:-/var/lib/softhsm/tokens}:/var/lib/softhsm/tokens
+      - ${SOFTHSM2_CONF:-/etc/softhsm/softhsm2.conf}:/etc/softhsm2.conf:ro
     restart: unless-stopped
 
 volumes:

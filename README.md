@@ -720,14 +720,14 @@ Test profile (`application-test.properties`) disables Flyway and sets `wpb.walle
 | `credentialStatus` claim embedded in legacy SD-JWT issuance | Implemented |
 | External OID4VCI credentials: issuer status reference parsed and persisted | Implemented |
 | `POST /credentials/{id}/revoke` (WP-managed only) | Implemented |
-| `POST /units/{walletId}/revoke` — cascades WIA/KA/keys/WP-managed credentials | Implemented |
+| `POST /units/{walletId}/revoke` — cascades WIA/KA/keys/WP-managed credentials; **deletes holder wallet key from HSM** (`keyStore.deleteEntry`) | Implemented |
 | Token Status List JWT publication (`application/statuslist+jwt`) with dedicated signing key | Implemented |
 | `CredentialRevocationGuard` — real-time checks on all presentation paths | Implemented |
 | WIA revocation enforcement (`wia_revoked`) | Implemented |
 | Background sync job (VCR_19 denormalized state; presentation always real-time) | Implemented |
 | Flyway `V3__credential_status_and_status_list_capacity.sql` | Implemented |
 
-**Scope limit:** VCR_07c (PID Provider revokes PID when Wallet Unit revoked) is **issuer responsibility**. The WP only revokes artefacts it controls (WIA, KA, wallet keys, WP-managed credentials on `PRIMARY_LIST`).
+**Scope limit:** VCR_07c (PID Provider revokes PID when Wallet Unit revoked) is **issuer responsibility**. The WP only revokes artefacts it controls (WIA, KA, wallet keys, WP-managed credentials on `PRIMARY_LIST`). Wallet unit revocation also **erases the holder's private key from the HSM**; status-list revocation alone (`POST /keys/{userId}/revoke`) does not delete the PKCS#11 entry.
 
 ### Configuration knobs (status lists)
 

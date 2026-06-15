@@ -399,15 +399,27 @@ class HsmService(
 
     fun deleteDedicatedKey(alias: String) {
         wscaAccessGuard.requireSciForDedicatedAlias(alias)
+        deleteKeyEntry(alias)
+    }
+
+    /**
+     * Removes a holder wallet key from the HSM token (GDPR erasure / wallet unit revocation).
+     */
+    fun deleteWalletKey(keyAlias: String) {
+        wscaAccessGuard.requireSciForWalletKeyAlias(keyAlias)
+        deleteKeyEntry(keyAlias)
+    }
+
+    private fun deleteKeyEntry(alias: String) {
         try {
             val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
             keyStore.load(null, pin.toCharArray())
             if (keyStore.containsAlias(alias)) {
                 keyStore.deleteEntry(alias)
-                logger.info("WSCA: Deleted dedicated HSM key alias $alias")
+                logger.info("WSCA: Deleted HSM key alias $alias")
             }
         } catch (e: Exception) {
-            logger.error("WSCA: Failed to delete dedicated key alias $alias: ${e.message}")
+            logger.error("WSCA: Failed to delete HSM key alias $alias: ${e.message}")
             throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to delete HSM key")
         }
     }

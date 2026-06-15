@@ -9,6 +9,7 @@ import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.domain.WalletUnit
 import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.ka.status.KaStatusManagementService
+import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.service.StatusListService
 import di.swallet.wpb.service.WalletUnitLifecycleService
 import di.swallet.wpb.wia.status.WiaStatusManagementService
@@ -28,6 +29,7 @@ class WalletRevocationService(
     private val walletCredentialRepository: WalletCredentialRepository,
     private val statusListService: StatusListService,
     private val credentialRevocationGuard: CredentialRevocationGuard,
+    private val hsmService: HsmService,
 ) {
     @Transactional
     fun revokeCredential(credentialId: Long) {
@@ -65,6 +67,7 @@ class WalletRevocationService(
 
         walletKeyRepository.findByUserId(holderId).ifPresent { key ->
             statusListService.revoke(key.revocationIndex)
+            hsmService.deleteWalletKey(key.keyAlias)
         }
 
         walletCredentialRepository.findByUserId(holderId)

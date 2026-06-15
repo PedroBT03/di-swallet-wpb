@@ -16,8 +16,8 @@ class ProductionReadinessValidatorTest {
     fun `fails fast when demo mode or weak secrets remain in prod`() {
         val env = MockEnvironment().apply {
             setActiveProfiles("prod")
-            setProperty("wpb.hsm.pin", ProductionReadinessValidator.KNOWN_WEAK_HSM_PIN)
-            setProperty("spring.datasource.password", ProductionReadinessValidator.KNOWN_WEAK_DB_PASSWORD)
+            setProperty("wpb.hsm.pin", WeakSecretDefaults.KNOWN_WEAK_HSM_PIN)
+            setProperty("spring.datasource.password", WeakSecretDefaults.KNOWN_WEAK_DB_PASSWORD)
         }
         val validator = validator(
             openId4VpProperties = OpenId4VpProperties().apply { demoMode = true },
@@ -44,7 +44,7 @@ class ProductionReadinessValidatorTest {
             ),
             transactionLogProperties = TransactionLogProperties().apply {
                 dekMode = "holder"
-                encryptionKey = ProductionReadinessValidator.KNOWN_WEAK_TX_ENC_KEY
+                encryptionKey = WeakSecretDefaults.KNOWN_WEAK_TX_ENC_KEY
                 integrityKey = "cHJvZC10eC1pbnQta2V5LXRoaXMyYnl0ZXMtbG9uZw=="
             },
             dpaReportProperties = DpaReportProperties(),
@@ -83,8 +83,8 @@ class ProductionReadinessValidatorTest {
     ): ProductionReadinessValidator {
         val env = MockEnvironment().apply {
             setActiveProfiles("prod")
-            setProperty("wpb.hsm.pin", ProductionReadinessValidator.KNOWN_WEAK_HSM_PIN)
-            setProperty("spring.datasource.password", ProductionReadinessValidator.KNOWN_WEAK_DB_PASSWORD)
+            setProperty("wpb.hsm.pin", WeakSecretDefaults.KNOWN_WEAK_HSM_PIN)
+            setProperty("spring.datasource.password", WeakSecretDefaults.KNOWN_WEAK_DB_PASSWORD)
         }
         return ProductionReadinessValidator(
             environment = env,

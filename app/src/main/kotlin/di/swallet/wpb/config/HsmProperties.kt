@@ -11,4 +11,6 @@ import org.springframework.stereotype.Component
 class HsmProperties {
     var library: String = ""
     var pin: String = ""
+    /** Explicit opt-in for the SoftHSM demo PIN (1234). Must stay false outside dev/CI. */
+    var allowKnownWeakPin: Boolean = false
 }

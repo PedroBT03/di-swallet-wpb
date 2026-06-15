@@ -42,24 +42,24 @@ class ProductionReadinessValidator(
         }
 
         val hsmPin = environment.getProperty("wpb.hsm.pin").orEmpty()
-        if (hsmPin.isBlank() || hsmPin == KNOWN_WEAK_HSM_PIN) {
+        if (hsmPin.isBlank() || hsmPin == WeakSecretDefaults.KNOWN_WEAK_HSM_PIN) {
             violations += "wpb.hsm.pin must be set to a non-default secret"
         }
 
         val dbPassword = environment.getProperty("spring.datasource.password").orEmpty()
-        if (dbPassword.isBlank() || dbPassword == KNOWN_WEAK_DB_PASSWORD) {
+        if (dbPassword.isBlank() || dbPassword == WeakSecretDefaults.KNOWN_WEAK_DB_PASSWORD) {
             violations += "spring.datasource.password must be set to a non-default secret"
         }
 
-        if (walletProperties.disclosures.encryptionKey == KNOWN_WEAK_DISCLOSURE_KEY) {
+        if (walletProperties.disclosures.encryptionKey == WeakSecretDefaults.KNOWN_WEAK_DISCLOSURE_KEY) {
             violations += "wallet.disclosures.encryption-key must be overridden in prod"
         }
         if (transactionLogProperties.resolvedDekMode() == TransactionLogDekMode.SERVER &&
-            transactionLogProperties.encryptionKey == KNOWN_WEAK_TX_ENC_KEY
+            transactionLogProperties.encryptionKey == WeakSecretDefaults.KNOWN_WEAK_TX_ENC_KEY
         ) {
             violations += "wpb.transaction-log.encryption-key must be overridden in prod when dek-mode=server"
         }
-        if (transactionLogProperties.integrityKey == KNOWN_WEAK_TX_INT_KEY) {
+        if (transactionLogProperties.integrityKey == WeakSecretDefaults.KNOWN_WEAK_TX_INT_KEY) {
             violations += "wpb.transaction-log.integrity-key must be overridden in prod"
         }
 
@@ -76,13 +76,5 @@ class ProductionReadinessValidator(
             throw IllegalStateException(message)
         }
         logger.info("event=production.readiness.passed profiles={}", environment.activeProfiles.joinToString())
-    }
-
-    companion object {
-        const val KNOWN_WEAK_HSM_PIN = "1234"
-        const val KNOWN_WEAK_DB_PASSWORD = "tese2026"
-        const val KNOWN_WEAK_DISCLOSURE_KEY = "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY="
-        const val KNOWN_WEAK_TX_ENC_KEY = "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE="
-        const val KNOWN_WEAK_TX_INT_KEY = "YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI="
     }
 }

@@ -157,8 +157,15 @@
       "name": "wpb.hsm.pin",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.HsmProperties",
-      "description": "PIN code for HSM authentication. Should be externalized via environment variable HSM_PIN in production.",
-      "defaultValue": "1234"
+      "description": "PIN code for HSM authentication. Externalize via HSM_PIN in staging/production.",
+      "defaultValue": ""
+    },
+    {
+      "name": "wpb.hsm.allow-known-weak-pin",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.HsmProperties",
+      "description": "Explicit opt-in for the SoftHSM demo PIN (1234). Must remain false outside local dev and CI.",
+      "defaultValue": false
     },
     {
       "name": "wpb.openid4vp.demo-mode",

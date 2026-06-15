@@ -168,6 +168,17 @@ The architecture PDF requires a **Secure Cryptographic Interface** between Walle
 
 **Prototype limitation:** OID4 session start also issues a holder-scoped grant so issuer/presentation flows can complete without FIDO2 on every HTTP hop. A production deployment should replace this with per-operation FIDO2 or a hardware-bound session token. Internal JVM callers cannot bypass the guard when enforcement is on and no grant is present — but a full RCE could still mutate grants in memory; document as research prototype, not CC-certified separation.
 
+### Normative specification gaps (thesis scope)
+
+The WPB prototype targets OID4VP/OID4VCI wallet-side flows (Phases 1–13, 15–18). The following ARF technical specifications are **explicitly out of scope** for this repository and should be stated as such in the thesis:
+
+| Spec | Roadmap phase | WPB status | Thesis note |
+|------|---------------|------------|-------------|
+| **TS9 — Wallet-to-Wallet** | Phase 14 (deferred) | **Not implemented** | No ISO 18013-5 device retrieval, W2W service endpoints, or STS9_01–37 coverage. Proximity / holder-to-holder presentation is a future WPI + WPB extension, not part of this MVP. |
+| **TS11 — Catalogues of attributes and schemes** | No dedicated WPB phase | **Not implemented** | TS11 defines Commission-operated catalogue APIs for QTSPs and scheme discovery. The WPB consumes credential configurations (DCQL claim paths, consent views) from issuers and RPs; it does not host or query the EC catalogues. Document as out-of-wallet-provider scope unless a later phase adds catalogue clients. |
+
+Other deferred items (ZKP/TS4, EU WebAuthn profile PA_21, migration import Mig_06–07b, RP dashboard UI) remain listed under each phase’s **Out of scope** notes below.
+
 ## OpenID4VP Demo Mode Warning
 Some OpenID4VP shortcuts used for local emulator validation are protected behind:
 
@@ -860,7 +871,7 @@ Response includes `transactionId` (new log entry), `sourcePresentationTransactio
 
 **Distinct from Phase 11:** `DataDeletionRequest` contacts the Relying Party for GDPR erasure. `DPAReport` contacts the supervisory DPA about a suspicious request.
 
-**Production note:** configure `wpb.dpa-reporting.provider-fallback-dpa.*` when log/registry lack DPA contacts (required for RPT_DPA_01 in production).
+**Production note:** configure `wpb.dpa-reporting.provider-fallback-dpa.*` with at least one contact channel (`email`, `phone`, or `form-uri`). `ProductionReadinessValidator` **fails startup** in `prod` when none are set (RPT_DPA_01).
 
 **Out of scope (Phase 12b+):** WRPRC/WRPAC DPA extraction, EDPB DPA picker, dashboard UI.
 
@@ -1058,7 +1069,7 @@ Full matrix: `app/src/test/resources/conformance/catalog.yaml`. After `conforman
 
 | Capability | Status |
 |---|---|
-| `prod` profile + `ProductionReadinessValidator` (fail-fast on weak secrets / demo flags) | Implemented |
+| `prod` profile + `ProductionReadinessValidator` (fail-fast on weak secrets / demo flags / DPA fallback) | Implemented |
 | Spring Boot Actuator (`/actuator/health`, `/actuator/info`, `/actuator/metrics`) | Implemented |
 | `HsmHealthIndicator` — PKCS#11 session probe (no signing) | Implemented |
 | `TrustSnapshotHealthIndicator` — UP / DEGRADED / DOWN | Implemented |
@@ -1078,7 +1089,7 @@ export SPRING_PROFILES_ACTIVE=prod
 ./gradlew :app:bootRun
 ```
 
-`application-prod.properties` disables Swagger, demo modes, and untrusted attestation. Startup fails if weak defaults remain.
+`application-prod.properties` disables Swagger, demo modes, and untrusted attestation. Startup fails if weak defaults remain, bundled signing keys are used, or the provider-region DPA fallback has no contact channel.
 
 ### Actuator
 

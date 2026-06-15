@@ -13,7 +13,7 @@ Use this checklist before exposing the Wallet Provider Backend to holders or eco
 - [ ] `wpb.openid4vp.demo-mode=false` and `wpb.openid4vci.demo-mode=false`
 - [ ] `wallet.allow-untrusted-attestation=false`
 - [ ] `wallet.rp.id` and `wallet.origins` — production HTTPS domain only
-- [ ] `wpb.dpa-reporting.provider-fallback-dpa.*` — configured for RPT_DPA_01
+- [ ] `wpb.dpa-reporting.provider-fallback-dpa.*` — at least one of `email`, `phone`, or `form-uri` (RPT_DPA_01; enforced by `ProductionReadinessValidator`)
 
 ## Trust and registry
 
@@ -44,4 +44,4 @@ curl -fsS "https://<host>/api/v1/wallet/status-lists/<LIST_ID>?format=json"
 
 ## Startup validation
 
-With `prod` profile, `ProductionReadinessValidator` fails fast on weak secrets or demo flags. Fix violations before traffic is routed.
+With `prod` profile, `ProductionReadinessValidator` fails fast on weak secrets, demo flags, bundled signing keys, or missing DPA fallback contact. Fix violations before traffic is routed.

@@ -71,8 +71,8 @@ class ProductionReadinessValidator(
         if (!openId4VciProperties.ka.enforceProductionTrustPolicy) {
             logger.warn("prod readiness warning: wpb.openid4vci.ka.enforce-production-trust-policy is false")
         }
-        if (dpaReportProperties.providerFallbackDpa.email.isBlank()) {
-            logger.warn("prod readiness warning: wpb.dpa-reporting.provider-fallback-dpa.email is not configured (RPT_DPA_01)")
+        if (!dpaReportProperties.providerFallbackDpa.hasContactChannel()) {
+            violations += "wpb.dpa-reporting.provider-fallback-dpa must expose at least one contact channel (RPT_DPA_01)"
         }
 
         if (violations.isNotEmpty()) {

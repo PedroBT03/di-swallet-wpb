@@ -49,7 +49,7 @@ class ProductionReadinessValidatorTest {
             },
             statusListProperties = externalSigningKeyProperties(),
             mdocProperties = externalMdocKeyProperties(),
-            dpaReportProperties = DpaReportProperties(),
+            dpaReportProperties = configuredDpaFallback(),
         )
         assertDoesNotThrow { validator.run(null) }
     }
@@ -72,9 +72,32 @@ class ProductionReadinessValidatorTest {
             },
             statusListProperties = externalSigningKeyProperties(),
             mdocProperties = externalMdocKeyProperties(),
-            dpaReportProperties = DpaReportProperties(),
+            dpaReportProperties = configuredDpaFallback(),
         )
         assertDoesNotThrow { validator.run(null) }
+    }
+
+    @Test
+    fun `fails when provider fallback DPA contact is not configured`() {
+        val validator = ProductionReadinessValidator(
+            environment = healthyProdEnvironment(),
+            openId4VpProperties = OpenId4VpProperties().apply { demoMode = false },
+            openId4VciProperties = OpenId4VciProperties().apply { demoMode = false },
+            walletProperties = WalletProperties(
+                allowUntrustedAttestation = false,
+                disclosures = WalletProperties.DisclosuresProperties(
+                    encryptionKey = "cHJvZC1kaXNjbG9zdXJlLWtleS0zMmJ5dGVzbG9uZw==",
+                ),
+            ),
+            transactionLogProperties = TransactionLogProperties().apply {
+                encryptionKey = "cHJvZC10eC1lbmMta2V5LXRoaXMyYnl0ZXMtbG9uZw=="
+                integrityKey = "cHJvZC10eC1pbnQta2V5LXRoaXMyYnl0ZXMtbG9uZw=="
+            },
+            statusListProperties = externalSigningKeyProperties(),
+            mdocProperties = externalMdocKeyProperties(),
+            dpaReportProperties = DpaReportProperties(),
+        )
+        assertThrows(IllegalStateException::class.java) { validator.run(null) }
     }
 
     private fun validator(
@@ -113,5 +136,10 @@ class ProductionReadinessValidatorTest {
         MdocProperties().apply {
             issuerKeyPemPath = "file:/etc/wpb/mdoc-issuer-key.pem"
             autoGenerateIssuerKeyIfMissing = false
+        }
+
+    private fun configuredDpaFallback(): DpaReportProperties =
+        DpaReportProperties().apply {
+            providerFallbackDpa.email = "dpa-fallback@example.com"
         }
 }

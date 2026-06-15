@@ -10,7 +10,7 @@ import org.springframework.test.context.ActiveProfiles
 import java.util.*
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
+@ActiveProfiles("test", "dev")
 abstract class BaseIntegrationTest {
 
     @Autowired

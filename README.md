@@ -139,6 +139,8 @@ The WPB prototype intentionally stops short of full **LoA High** device assuranc
 
 `application-prod.properties` already disables untrusted attestation and enforces secret validation via `ProductionReadinessValidator`; MDS integration and certified WSCD remain out of scope for this academic prototype.
 
+**Dev-only mock components:** `MockIssuerController` (`POST /credentials/issue*`) and `MockRpController` are not registered when `prod` is active. Mock PID issuance is scoped to `@Profile("dev")`; production issuance must use OID4VCI only.
+
 ### WI→WSCA boundary (SCI / WWI prototype)
 
 The architecture PDF requires a **Secure Cryptographic Interface** between Wallet Instance logic and the WSCA before any HSM command runs. This prototype enforces that boundary when `wpb.wsca.enforce-sci-boundary=true` (default; enabled in `prod`):
@@ -693,7 +695,7 @@ Test profile (`application-test.properties`) disables Flyway and sets `wpb.walle
 
 - Device attestation cryptographic verification pipeline is still simulated
   (no full platform attestation trust-chain validation yet).
-- Legacy `/credentials/issue-sd` registers a real KA via `LegacySdJwtIssuanceSupport` for demo flows only.
+- Legacy `/credentials/issue-sd` (dev profile only) registers a real KA via `LegacySdJwtIssuanceSupport` for demo flows only.
 
 ## Phase 9 - Revocation and status lists
 
@@ -751,7 +753,7 @@ Indices are chosen uniformly in `[0, capacity)` among unallocated slots. `capaci
 | HMAC integrity over metadata + encrypted payload (DASH_06) | Implemented |
 | Per-holder AES-GCM encryption at rest | Implemented |
 | OID4VP / OID4VCI terminal-state instrumentation | Implemented |
-| Legacy wallet paths (`issue-sd`, `presentation`, `sign`) | Implemented |
+| Legacy wallet paths (`issue-sd` dev-only, `presentation`, `sign`) | Implemented |
 | `DELETE /credentials/{id}` — user deletion distinct from revoke (DASH_05a) | Implemented |
 | Dashboard API: list / get / soft-delete entries (DASH_06a) | Implemented |
 | Export selected transactions as TS10 JWE (`PBES2-HS256+A128KW` + `A128GCM`) | Implemented |

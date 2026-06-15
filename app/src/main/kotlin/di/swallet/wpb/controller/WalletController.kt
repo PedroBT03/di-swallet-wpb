@@ -6,31 +6,23 @@ import io.swagger.v3.oas.annotations.media.Schema
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.http.HttpStatus
-import com.nimbusds.jwt.JWTClaimsSet
-import java.util.*
 import di.swallet.wpb.service.HsmService
-import di.swallet.wpb.service.MockIssuerService
 import di.swallet.wpb.service.StatusListService
 import di.swallet.wpb.service.Fido2Service
 import di.swallet.wpb.service.DeviceBindingService
 import di.swallet.wpb.service.WalletInitCommand
-import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.service.format.PresentationService
 import di.swallet.wpb.service.format.DisclosureCipherService
-import di.swallet.wpb.domain.CredentialBindingFormat
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.UserDevice
 import di.swallet.wpb.security.AuthenticatedHolderGuard
-import di.swallet.wpb.security.ChallengeService
-import di.swallet.wpb.service.KeyBindingRuntimeService
-import di.swallet.wpb.service.LegacySdJwtIssuanceSupport
 import di.swallet.wpb.revocation.CredentialRevocationGuard
 import di.swallet.wpb.revocation.WalletRevocationService
-import di.swallet.wpb.revocation.WpCredentialStatusAllocator
 import di.swallet.wpb.transactionlog.service.TransactionLogger
 import di.swallet.wpb.transactionlog.service.WalletCredentialDeletionService
+import java.util.Base64
 
 /**
  * Data Transfer Object for signing requests.
@@ -75,18 +67,12 @@ data class PidKeyBindRequest(
 @Tag(name = "Wallet Management", description = "Endpoints for user wallet and key lifecycle")
 class WalletController(
     private val hsmService: HsmService,
-    private val mockIssuerService: MockIssuerService,
-    private val sdJwtService: SdJwtService,
     private val presentationService: PresentationService,
     private val disclosureCipherService: DisclosureCipherService,
     private val credentialRepository: WalletCredentialRepository,
-    private val challengeService: ChallengeService,
     private val statusListService: StatusListService,
     private val fido2Service: Fido2Service,
     private val deviceBindingService: DeviceBindingService,
-    private val keyBindingRuntimeService: KeyBindingRuntimeService,
-    private val legacySdJwtIssuanceSupport: LegacySdJwtIssuanceSupport,
-    private val wpCredentialStatusAllocator: WpCredentialStatusAllocator,
     private val credentialRevocationGuard: CredentialRevocationGuard,
     private val walletRevocationService: WalletRevocationService,
     private val transactionLogger: TransactionLogger,
@@ -213,95 +199,7 @@ class WalletController(
         return mapOf("status" to "REVOKED", "index" to key.revocationIndex.toString())
     }
 
-    // --- SECTION 3: CREDENTIAL ISSUANCE ---
-
-    /**
-     * Simulates the issuance of a Verifiable Credential (PID) using a Mock Issuer.
-     * The resulting JWT is signed by the User's Private Key inside the HSM.
-     */
-    @PostMapping("/credentials/issue/{userId}")
-    @Operation(summary = "Issue Mock PID", description = "Simulates the issuance of a Person Identification Data credential signed by the HSM")
-    fun issueCredential(
-        @PathVariable userId: String,
-        @RequestParam credentialType: String = "PID"
-    ): Map<String, Any> {
-        authenticatedHolderGuard.requireSelf(userId)
-        val userData = mockIssuerService.fetchUserData(userId)
-        
-        val claims = JWTClaimsSet.Builder()
-            .issuer("https://pt-mock-issuer.gov.pt")
-            .subject(userId)
-            .issueTime(Date())
-            .expirationTime(Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365))
-            .claim("vc", mapOf(
-                "type" to listOf("VerifiableCredential", credentialType),
-                "credentialSubject" to userData
-            ))
-            .build()
-
-        val signedJwt = hsmService.signJwt(userId, claims)
-
-        return mapOf(
-            "userId" to userId,
-            "credentialType" to credentialType,
-            "format" to "JWT",
-            "encoded" to signedJwt
-        )
-    }
-
-    /**
-     * Endpoint to issue an SD-JWT credential, which includes the hashing and salting of claims.
-     * The final SD-JWT is signed by the User's Private Key inside the HSM and stored in the database.
-     */
-    @PostMapping("/credentials/issue-sd/{userId}")
-    @Operation(summary = "Issue and Store SD-JWT", description = "Generates an SD-JWT and persists it in the database.")
-    fun issueSdCredential(@PathVariable userId: String): WalletCredential {
-        authenticatedHolderGuard.requireSelf(userId)
-        val walletKey = hsmService.getUserKey(userId)
-        legacySdJwtIssuanceSupport.ensureKaForHolderKey(userId, walletKey.keyAlias, walletKey.publicKeyBase64)
-        val userData = mockIssuerService.fetchUserData(userId)
-
-        val issued = sdJwtService.disclosuresFromClaimMap(userData)
-        val statusAllocation = wpCredentialStatusAllocator.allocate()
-
-        val sdPayload = mutableMapOf<String, Any>(
-            "iss" to "https://pt-mock-issuer.gov.pt",
-            "sub" to userId,
-            "iat" to System.currentTimeMillis() / 1000,
-            "_sd" to issued.digests,
-            "_sd_alg" to "sha-256",
-            "credentialStatus" to wpCredentialStatusAllocator.buildCredentialStatusClaim(statusAllocation),
-        )
-
-        val signedJwt = hsmService.signSdJwt(userId, sdPayload)
-        val encryptedDisclosures = disclosureCipherService.encrypt(issued.disclosures)
-
-        val credential = WalletCredential(
-            userId = userId,
-            credentialType = "PID",
-            encodedData = signedJwt,
-            encryptedDisclosures = encryptedDisclosures,
-            walletKey = walletKey,
-            statusListId = statusAllocation.listId,
-            statusListIndex = statusAllocation.index,
-            deviceBound = true,
-        )
-
-        val saved = credentialRepository.save(credential)
-        val credentialId = saved.id ?: error("WalletCredential persisted without id")
-        keyBindingRuntimeService.bindCredentialToKey(
-            credentialId = credentialId,
-            keyAlias = walletKey.keyAlias,
-            format = CredentialBindingFormat.SD_JWT,
-        )
-        transactionLogger.logLegacyIssuance(
-            holderId = userId,
-            credentialType = "PID",
-            issuerName = "pt-mock-issuer.gov.pt",
-            issuerId = "PLKRS.0000123456",
-        )
-        return saved
-    }
+    // --- SECTION 3: CREDENTIAL MANAGEMENT ---
 
     @DeleteMapping("/credentials/{credentialId}")
     @Operation(summary = "Delete credential from wallet", description = "User-initiated deletion (DASH_05a), distinct from revocation.")

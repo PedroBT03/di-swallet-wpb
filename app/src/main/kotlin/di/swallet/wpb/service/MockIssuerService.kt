@@ -1,5 +1,6 @@
 package di.swallet.wpb.service
 
+import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 
 /**
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Service
  * Simulates the retrieval of authentic user data for credential issuance.
  */
 @Service
+@Profile("dev")
 class MockIssuerService {
 
     /**

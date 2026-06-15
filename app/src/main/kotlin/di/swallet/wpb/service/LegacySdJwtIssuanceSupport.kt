@@ -5,6 +5,7 @@ import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.ka.attestation.KeyAttestationProvider
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
+import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import java.security.KeyFactory
 import java.security.interfaces.ECPublicKey
@@ -16,6 +17,7 @@ import java.util.Base64
  * Registers a real KA (not synthetic) before credential-to-key binding.
  */
 @Service
+@Profile("dev")
 class LegacySdJwtIssuanceSupport(
     private val keyAttestationProvider: KeyAttestationProvider,
     private val keyBindingRuntimeService: KeyBindingRuntimeService,

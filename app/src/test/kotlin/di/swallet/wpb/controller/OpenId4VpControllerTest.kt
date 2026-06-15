@@ -17,6 +17,7 @@ import di.swallet.wpb.consent.VerifierConsentInfo
 import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.orchestration.PresentationFlowOrchestrator
 import kotlinx.coroutines.runBlocking
+import di.swallet.wpb.security.AuthenticatedHolderGuardTestSupport
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -92,7 +93,7 @@ class OpenId4VpControllerTest {
     @Test
     fun `controller exposes lifecycle context as JSON`() = runBlocking {
         val context = newContext()
-        val controller = OpenId4VpController(StubOrchestrator(context), StubEventStore())
+        val controller = OpenId4VpController(StubOrchestrator(context), StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
         val response = controller.getSession(context.sessionMeta.sessionId)
 
         val json = mapper.writeValueAsString(response)
@@ -104,7 +105,7 @@ class OpenId4VpControllerTest {
     fun `controller maps consent submission and returns DISPATCHED`() = runBlocking {
         val context = newContext()
         val orchestrator = StubOrchestrator(context)
-        val controller = OpenId4VpController(orchestrator, StubEventStore())
+        val controller = OpenId4VpController(orchestrator, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
         val response = controller.consent(
             ConsentSubmission(
                 sessionId = context.sessionMeta.sessionId.toString(),

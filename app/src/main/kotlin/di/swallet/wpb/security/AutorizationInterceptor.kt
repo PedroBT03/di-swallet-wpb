@@ -7,7 +7,9 @@ import di.swallet.wpb.service.Fido2Service
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
+import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.HandlerInterceptor
 import java.util.Base64
 
@@ -64,15 +66,25 @@ class AuthorizationInterceptor(
                 val encodedJson = authHeader.removePrefix("fido2-assertion:")
                 val json = String(Base64.getUrlDecoder().decode(encodedJson))
                 val assertionMap = objectMapper.readValue(json, Map::class.java)
+                val userId = assertionMap["userId"] as? String
 
-                if (fido2Service.verifyStandardAssertion(
-                    userId = assertionMap["userId"] as String,
+                if (userId.isNullOrBlank()) {
+                    wpbMetrics.recordFido2Failure("missing_user_id")
+                } else if (fido2Service.verifyStandardAssertion(
+                    userId = userId,
                     credentialId = assertionMap["id"] as String,
                     clientDataJSON = assertionMap["clientDataJSON"] as String,
                     authenticatorData = assertionMap["authenticatorData"] as String,
                     signature = assertionMap["signature"] as String
-                )) return true
-                wpbMetrics.recordFido2Failure("verification_failed")
+                )) {
+                    request.setAttribute(WalletSecurityAttributes.AUTHENTICATED_HOLDER_ID, userId)
+                    enforceRequestedHolderBinding(request, userId)
+                    return true
+                } else {
+                    wpbMetrics.recordFido2Failure("verification_failed")
+                }
+            } catch (e: ResponseStatusException) {
+                throw e
             } catch (e: Exception) {
                 logger.warn("SecurityPolicy: Failed to parse standard FIDO2 assertion: ${e.message}")
                 wpbMetrics.recordFido2Failure("parse_error")
@@ -83,5 +95,23 @@ class AuthorizationInterceptor(
 
         logger.warn("SecurityPolicy: Unauthorized access attempt to ${request.requestURI}")
         throw UnauthorizedWalletException("Invalid or expired FIDO2 authorization context")
+    }
+
+    private fun enforceRequestedHolderBinding(request: HttpServletRequest, authenticatedHolderId: String) {
+        val queryHolderId = request.getParameter("holderId")?.takeIf { it.isNotBlank() }
+        if (queryHolderId != null && queryHolderId != authenticatedHolderId) {
+            throw ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "holderId does not match authenticated user",
+            )
+        }
+
+        val pathHolderId = WalletPathHolderExtractor.extractHolderId(request.requestURI, request.method)
+        if (pathHolderId != null && pathHolderId != authenticatedHolderId) {
+            throw ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Resource holder does not match authenticated user",
+            )
+        }
     }
 }

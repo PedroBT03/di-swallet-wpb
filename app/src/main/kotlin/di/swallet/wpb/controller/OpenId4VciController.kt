@@ -8,6 +8,7 @@ import di.swallet.wpb.observability.IssuanceEventStore
 import di.swallet.wpb.openid4vci.protocol.IssuanceConsentSubmission
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
+import di.swallet.wpb.security.AuthenticatedHolderGuard
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.GetMapping
@@ -32,6 +33,7 @@ import java.util.UUID
 class OpenId4VciController(
     private val orchestrator: IssuanceFlowOrchestrator,
     private val eventStore: IssuanceEventStore,
+    private val authenticatedHolderGuard: AuthenticatedHolderGuard,
 ) {
 
     @PostMapping("/offer/resolve")
@@ -99,8 +101,10 @@ class OpenId4VciController(
 
     @PostMapping("/consent")
     @Operation(summary = "Approve or reject credential storage (requires FIDO2)")
-    fun submitConsent(@RequestBody request: IssuanceConsentSubmission): IssuanceContext =
-        orchestrator.submitIssuanceConsent(UUID.fromString(request.sessionId), request)
+    fun submitConsent(@RequestBody request: IssuanceConsentSubmission): IssuanceContext {
+        authenticatedHolderGuard.requireSelf(request.holderId)
+        return orchestrator.submitIssuanceConsent(UUID.fromString(request.sessionId), request)
+    }
 
     @GetMapping("/session/{id}")
     @Operation(

@@ -22,6 +22,7 @@ import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.UserDevice
+import di.swallet.wpb.security.AuthenticatedHolderGuard
 import di.swallet.wpb.security.ChallengeService
 import di.swallet.wpb.service.KeyBindingRuntimeService
 import di.swallet.wpb.service.LegacySdJwtIssuanceSupport
@@ -90,6 +91,7 @@ class WalletController(
     private val walletRevocationService: WalletRevocationService,
     private val transactionLogger: TransactionLogger,
     private val walletCredentialDeletionService: WalletCredentialDeletionService,
+    private val authenticatedHolderGuard: AuthenticatedHolderGuard,
 ) {
 
     // --- SECTION 1: AUTHENTICATION & ONBOARDING ---
@@ -154,6 +156,7 @@ class WalletController(
     @PostMapping("/auth/dpop/bind")
     @Operation(summary = "Bind DPoP device key to wallet")
     fun bindDpop(@RequestBody request: DpopBindRequest): Map<String, Any> {
+        authenticatedHolderGuard.requireWalletUnitOwned(request.walletId)
         val result = deviceBindingService.bindDpop(request.walletId, request.devicePubJwk)
         return mapOf(
             "walletId" to result.walletId,
@@ -166,6 +169,7 @@ class WalletController(
     @PostMapping("/auth/pid_key/bind")
     @Operation(summary = "Bind PID key to wallet")
     fun bindPidKey(@RequestBody request: PidKeyBindRequest): Map<String, Any> {
+        authenticatedHolderGuard.requireWalletUnitOwned(request.walletId)
         val result = deviceBindingService.bindPidKey(request.walletId, request.pidPubJwk)
         return mapOf(
             "walletId" to result.walletId,
@@ -183,6 +187,7 @@ class WalletController(
     @PostMapping("/keys/{userId}")
     @Operation(summary = "Generate Hardware-backed Key", description = "Creates an EC KeyPair inside the Remote HSM for the user")
     fun createKey(@PathVariable userId: String): WalletKey {
+        authenticatedHolderGuard.requireSelf(userId)
         return hsmService.generateKeyForUser(userId)
     }
 
@@ -192,6 +197,7 @@ class WalletController(
     @GetMapping("/keys/{userId}")
     @Operation(summary = "Get Wallet Metadata", description = "Retrieves the public key and status of a user's wallet")
     fun getKey(@PathVariable userId: String): WalletKey {
+        authenticatedHolderGuard.requireSelf(userId)
         return hsmService.getUserKey(userId)
     }
 
@@ -201,6 +207,7 @@ class WalletController(
     @PostMapping("/keys/{userId}/revoke")
     @Operation(summary = "Revoke Key", description = "Sets the revocation bit to 1 for this user's key index.")
     fun revokeKey(@PathVariable userId: String): Map<String, String> {
+        authenticatedHolderGuard.requireSelf(userId)
         val key = hsmService.getUserKey(userId)
         statusListService.revoke(key.revocationIndex)
         return mapOf("status" to "REVOKED", "index" to key.revocationIndex.toString())
@@ -218,6 +225,7 @@ class WalletController(
         @PathVariable userId: String,
         @RequestParam credentialType: String = "PID"
     ): Map<String, Any> {
+        authenticatedHolderGuard.requireSelf(userId)
         val userData = mockIssuerService.fetchUserData(userId)
         
         val claims = JWTClaimsSet.Builder()
@@ -248,6 +256,7 @@ class WalletController(
     @PostMapping("/credentials/issue-sd/{userId}")
     @Operation(summary = "Issue and Store SD-JWT", description = "Generates an SD-JWT and persists it in the database.")
     fun issueSdCredential(@PathVariable userId: String): WalletCredential {
+        authenticatedHolderGuard.requireSelf(userId)
         val walletKey = hsmService.getUserKey(userId)
         legacySdJwtIssuanceSupport.ensureKaForHolderKey(userId, walletKey.keyAlias, walletKey.publicKeyBase64)
         val userData = mockIssuerService.fetchUserData(userId)
@@ -297,6 +306,7 @@ class WalletController(
     @DeleteMapping("/credentials/{credentialId}")
     @Operation(summary = "Delete credential from wallet", description = "User-initiated deletion (DASH_05a), distinct from revocation.")
     fun deleteCredential(@PathVariable credentialId: Long): Map<String, Any> {
+        authenticatedHolderGuard.requireCredentialOwned(credentialId)
         walletCredentialDeletionService.deleteCredential(credentialId)
         return mapOf("credentialId" to credentialId, "status" to "DELETED")
     }
@@ -304,6 +314,7 @@ class WalletController(
     @PostMapping("/credentials/{credentialId}/revoke")
     @Operation(summary = "Revoke WP-managed credential", description = "Sets the credential status bit and marks it REVOKED.")
     fun revokeCredential(@PathVariable credentialId: Long): Map<String, Any> {
+        authenticatedHolderGuard.requireCredentialOwned(credentialId)
         walletRevocationService.revokeCredential(credentialId)
         return mapOf("credentialId" to credentialId, "status" to "REVOKED")
     }
@@ -311,6 +322,7 @@ class WalletController(
     @PostMapping("/units/{walletId}/revoke")
     @Operation(summary = "Revoke wallet unit", description = "Revokes WIA/KA indexes, wallet keys, and WP-managed credentials.")
     fun revokeWalletUnit(@PathVariable walletId: String): Map<String, Any> {
+        authenticatedHolderGuard.requireWalletUnitOwned(walletId)
         walletRevocationService.revokeWalletUnit(walletId)
         return mapOf("walletId" to walletId, "status" to "REVOKED")
     }
@@ -326,6 +338,7 @@ class WalletController(
         @PathVariable credentialId: Long,
         @RequestBody request: PresentationRequest
     ): Map<String, Any> {
+        authenticatedHolderGuard.requireCredentialOwned(credentialId)
         val credential = credentialRepository.findById(credentialId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Credential not found") }
 
@@ -371,6 +384,7 @@ class WalletController(
         @PathVariable userId: String, 
         @RequestBody request: SignRequest
     ): Map<String, String> {
+        authenticatedHolderGuard.requireSelf(userId)
         val key = hsmService.getUserKey(userId)
 
         // Validate key state before cryptographic execution
@@ -402,6 +416,7 @@ class WalletController(
     @GetMapping("/credentials/{userId}")
     @Operation(summary = "List User Credentials", description = "Retrieves all issued credentials for the user.")
     fun getCredentials(@PathVariable userId: String): List<WalletCredential> {
+        authenticatedHolderGuard.requireSelf(userId)
         return credentialRepository.findByUserId(userId)
     }
 }

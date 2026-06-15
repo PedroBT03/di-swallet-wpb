@@ -1,5 +1,6 @@
 package di.swallet.wpb.pseudonym
 
+import di.swallet.wpb.security.AuthenticatedHolderGuard
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.DeleteMapping
@@ -18,17 +19,24 @@ import java.util.UUID
 @Tag(name = "Pseudonyms", description = "WebAuthn passkey pseudonyms for Relying Parties (Topic 11 / Use Case A)")
 class PseudonymController(
     private val service: PseudonymService,
+    private val authenticatedHolderGuard: AuthenticatedHolderGuard,
 ) {
     @GetMapping
     @Operation(summary = "List pseudonyms for a holder, optionally filtered by rpId")
     fun list(
         @RequestParam holderId: String,
         @RequestParam(required = false) rpId: String?,
-    ): List<PseudonymView> = service.list(holderId, rpId)
+    ): List<PseudonymView> {
+        authenticatedHolderGuard.requireSelf(holderId)
+        return service.list(holderId, rpId)
+    }
 
     @PostMapping
     @Operation(summary = "Create a pseudonym slot for an RP")
-    fun create(@RequestBody request: CreatePseudonymRequest): PseudonymView = service.create(request)
+    fun create(@RequestBody request: CreatePseudonymRequest): PseudonymView {
+        authenticatedHolderGuard.requireSelf(request.holderId)
+        return service.create(request)
+    }
 
     @PatchMapping("/{id}/alias")
     @Operation(summary = "Update the user-friendly alias for a pseudonym")
@@ -36,7 +44,10 @@ class PseudonymController(
         @PathVariable id: UUID,
         @RequestParam holderId: String,
         @RequestBody request: UpdatePseudonymAliasRequest,
-    ): PseudonymView = service.updateAlias(id, holderId, request.alias)
+    ): PseudonymView {
+        authenticatedHolderGuard.requireSelf(holderId)
+        return service.updateAlias(id, holderId, request.alias)
+    }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a pseudonym and its HSM key material")
@@ -44,6 +55,7 @@ class PseudonymController(
         @PathVariable id: UUID,
         @RequestParam holderId: String,
     ) {
+        authenticatedHolderGuard.requireSelf(holderId)
         service.delete(id, holderId)
     }
 
@@ -52,26 +64,38 @@ class PseudonymController(
     fun registrationOptions(
         @PathVariable id: UUID,
         @RequestBody request: RegistrationOptionsRequest,
-    ): RegistrationOptionsResponse = service.registrationOptions(id, request.holderId, request)
+    ): RegistrationOptionsResponse {
+        authenticatedHolderGuard.requireSelf(request.holderId)
+        return service.registrationOptions(id, request.holderId, request)
+    }
 
     @PostMapping("/{id}/registration/finish")
     @Operation(summary = "Complete WebAuthn registration and log PseudonymGeneration")
     fun finishRegistration(
         @PathVariable id: UUID,
         @RequestBody request: RegistrationFinishRequest,
-    ): RegistrationFinishResponse = service.finishRegistration(id, request.holderId, request)
+    ): RegistrationFinishResponse {
+        authenticatedHolderGuard.requireSelf(request.holderId)
+        return service.finishRegistration(id, request.holderId, request)
+    }
 
     @PostMapping("/{id}/authentication/options")
     @Operation(summary = "Begin WebAuthn authentication ceremony")
     fun authenticationOptions(
         @PathVariable id: UUID,
         @RequestBody request: AuthenticationOptionsRequest,
-    ): AuthenticationOptionsResponse = service.authenticationOptions(id, request.holderId, request)
+    ): AuthenticationOptionsResponse {
+        authenticatedHolderGuard.requireSelf(request.holderId)
+        return service.authenticationOptions(id, request.holderId, request)
+    }
 
     @PostMapping("/{id}/authentication/finish")
     @Operation(summary = "Complete WebAuthn authentication and log PseudonymousAuthentication")
     fun finishAuthentication(
         @PathVariable id: UUID,
         @RequestBody request: AuthenticationFinishRequest,
-    ): AuthenticationFinishResponse = service.finishAuthentication(id, request.holderId, request)
+    ): AuthenticationFinishResponse {
+        authenticatedHolderGuard.requireSelf(request.holderId)
+        return service.finishAuthentication(id, request.holderId, request)
+    }
 }

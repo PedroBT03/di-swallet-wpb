@@ -1,5 +1,6 @@
 package di.swallet.wpb.transactionlog.controller
 
+import di.swallet.wpb.security.AuthenticatedHolderGuard
 import di.swallet.wpb.transactionlog.domain.Ts10Transaction
 import di.swallet.wpb.transactionlog.service.TransactionLogService
 import di.swallet.wpb.transactionlog.service.TransactionLogSummary
@@ -34,18 +35,24 @@ data class MigrationExportRequest(
 @Tag(name = "Transaction Log", description = "TS10 transaction log dashboard and export")
 class TransactionLogController(
     private val transactionLogService: TransactionLogService,
+    private val authenticatedHolderGuard: AuthenticatedHolderGuard,
 ) {
     @GetMapping("/transactions")
     @Operation(summary = "List holder transaction log entries")
-    fun list(@RequestParam holderId: String): List<TransactionLogSummary> =
-        transactionLogService.list(holderId)
+    fun list(@RequestParam holderId: String): List<TransactionLogSummary> {
+        authenticatedHolderGuard.requireSelf(holderId)
+        return transactionLogService.list(holderId)
+    }
 
     @GetMapping("/transactions/{transactionId}")
     @Operation(summary = "Get a transaction log entry")
     fun get(
         @PathVariable transactionId: String,
         @RequestParam holderId: String,
-    ): Ts10Transaction = transactionLogService.get(holderId, transactionId)
+    ): Ts10Transaction {
+        authenticatedHolderGuard.requireSelf(holderId)
+        return transactionLogService.get(holderId, transactionId)
+    }
 
     @DeleteMapping("/transactions/{transactionId}")
     @Operation(summary = "Mark a transaction as deleted by user (DASH_06a)")
@@ -53,6 +60,7 @@ class TransactionLogController(
         @PathVariable transactionId: String,
         @RequestParam holderId: String,
     ): Map<String, String> {
+        authenticatedHolderGuard.requireSelf(holderId)
         transactionLogService.markDeletedByUser(holderId, transactionId)
         return mapOf("transactionId" to transactionId, "status" to "DELETED_BY_USER")
     }
@@ -60,6 +68,7 @@ class TransactionLogController(
     @PostMapping("/transactions/export")
     @Operation(summary = "Export selected transactions as TS10 JWE")
     fun exportTransactions(@RequestBody request: TransactionExportRequest): ResponseEntity<String> {
+        authenticatedHolderGuard.requireSelf(request.holderId)
         val jwe = transactionLogService.exportSelected(
             holderId = request.holderId,
             transactionIds = request.transactionIds,
@@ -73,6 +82,7 @@ class TransactionLogController(
     @PostMapping("/migration/export")
     @Operation(summary = "Export TS10 Migration Object as JWE")
     fun exportMigration(@RequestBody request: MigrationExportRequest): ResponseEntity<String> {
+        authenticatedHolderGuard.requireSelf(request.holderId)
         val jwe = transactionLogService.exportMigration(
             holderId = request.holderId,
             password = request.password.toCharArray(),

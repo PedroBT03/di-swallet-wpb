@@ -1,5 +1,6 @@
 package di.swallet.wpb.datadeletion
 
+import di.swallet.wpb.security.AuthenticatedHolderGuard
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.GetMapping
@@ -14,14 +15,19 @@ import org.springframework.web.bind.annotation.RestController
 @Tag(name = "Data Deletion", description = "GDPR Art. 17 data erasure requests to Relying Parties (TS7 / DATA_DLT)")
 class DataDeletionRequestController(
     private val service: DataDeletionRequestService,
+    private val authenticatedHolderGuard: AuthenticatedHolderGuard,
 ) {
     @GetMapping("/eligible")
     @Operation(summary = "List completed presentations eligible for data deletion requests")
-    fun listEligible(@RequestParam holderId: String): List<EligiblePresentation> =
-        service.listEligible(holderId)
+    fun listEligible(@RequestParam holderId: String): List<EligiblePresentation> {
+        authenticatedHolderGuard.requireSelf(holderId)
+        return service.listEligible(holderId)
+    }
 
     @PostMapping
     @Operation(summary = "Initiate a data deletion request and return actionable URIs")
-    fun initiate(@RequestBody request: DataDeletionInitiateRequest): DataDeletionInitiateResponse =
-        service.initiate(request)
+    fun initiate(@RequestBody request: DataDeletionInitiateRequest): DataDeletionInitiateResponse {
+        authenticatedHolderGuard.requireSelf(request.holderId)
+        return service.initiate(request)
+    }
 }

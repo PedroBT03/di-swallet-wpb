@@ -7,6 +7,7 @@ import di.swallet.wpb.openid4vp.protocol.AuthorizationStartRequest
 import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
 import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.orchestration.PresentationFlowOrchestrator
+import di.swallet.wpb.security.AuthenticatedHolderGuard
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.GetMapping
@@ -24,6 +25,7 @@ import java.util.UUID
 class OpenId4VpController(
     private val presentationFlowOrchestrator: PresentationFlowOrchestrator,
     private val eventStore: SessionEventStore,
+    private val authenticatedHolderGuard: AuthenticatedHolderGuard,
 ) {
 
     @PostMapping("/authorize")
@@ -48,6 +50,7 @@ class OpenId4VpController(
     @PostMapping("/consent")
     @Operation(summary = "Submit holder consent (requires FIDO2)")
     suspend fun consent(@RequestBody request: ConsentSubmission): PresentationContext {
+        authenticatedHolderGuard.requireSelf(request.holderId)
         return presentationFlowOrchestrator.submitConsent(
             sessionId = UUID.fromString(request.sessionId),
             decision = request,

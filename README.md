@@ -145,6 +145,8 @@ The WPB prototype intentionally stops short of full **LoA High** device assuranc
 
 `HsmPinStartupValidator` runs on **every** profile and rejects the known SoftHSM demo PIN (`1234`) unless `wpb.hsm.allow-known-weak-pin=true` is set explicitly. That opt-in is enabled only in `application-dev.properties` and `application-test.properties` (CI/local). Staging and production must set `HSM_PIN` to a non-default secret; `ProductionReadinessValidator` enforces the same rule again when `prod` is active. The PIN is still held in memory as a `String` for PKCS#11 — externalize via environment variables and restrict host access to the HSM socket.
 
+**Bundled signing keys (prod):** `ProductionReadinessValidator` rejects the dev classpath keys bundled in the JAR (`classpath:status-list/dev-signing-key.pem`, `classpath:mdoc/dev-issuer-key.pem`) and any `classpath:` PEM path. Provision external `file:` paths via `WPB_STATUS_LIST_SIGNING_KEY_PEM_PATH` and `WPB_MDOC_ISSUER_KEY_PEM_PATH`.
+
 ### Crypto secrets (all profiles)
 
 `CryptoSecretsStartupValidator` applies the same pattern to `wallet.disclosures.encryption-key`, `wpb.transaction-log.integrity-key`, and `wpb.transaction-log.encryption-key` (when `dek-mode=server`). Known weak defaults are rejected unless `wpb.security.allow-known-weak-crypto-secrets=true` (dev/test only). Base `application.properties` requires `WALLET_DISCLOSURES_ENCRYPTION_KEY` and `WPB_TRANSACTION_LOG_*` env vars; documented demo keys live in `application-dev.properties` only. `TransactionLogCrypto` rejects **blank** keys explicitly (no silent dev fallback).
@@ -228,7 +230,8 @@ either stubbed, partially implemented, or guarded by `demo-mode`.
 | **Verifier emulator** signs request objects with a shared HS256 secret rather than ES256 + JWKS. | It is a local development aid only. | Replaced by a real verifier in interop tests (Phase 17) |
 | **Sessions are stored in memory** (`InMemoryPresentationSessionRepository`) and the SDK adapter keeps `ResolvedRequestObject` in a per-instance `ConcurrentHashMap`. | A single instance is enough for Phase 1 protocol validation. | Phase 10 (durable transaction log) |
 | **Policy engine blocks server-side** (trust + registry intended-use); holder-facing minimisation warnings are in Phase 16 consent views. | Phase 6 enforced registry; Phase 16 adds WPI UX. | Phase 16 (implemented) |
-| **Consent submit requires FIDO2** on `POST /openid4vp/consent` and `POST /openid4vci/consent` (RPA_08). Other OID4 paths remain open for WPI session bootstrap. | Gate at approval moment, not at authorize. | Phase 16 (implemented) |
+| **Consent submit requires FIDO2** on `POST /openid4vp/consent` and `POST /openid4vci/consent` (RPA_08). | Gate at approval moment, not at authorize. | Phase 16 (implemented) |
+| **Session reads require FIDO2** on `GET /openid4vp/session/**` and `GET /openid4vci/session/**` (consent-view, session, events). Bootstrap POST paths (`/authorize`, `/offer/resolve`, …) stay open for WPI. | Holder-bound session data must not leak without SUA. | Implemented (audit A10) |
 | **WIA / KA / device binding** is not exercised inside the OpenID4VP flow. The credential's KB-JWT is signed by the holder's HSM key but no WIA is attached. | Roadmap defers WIA/KA to dedicated phases. | Phase 3 (WIA) and Phase 4 (KA) |
 | **Array-of-object paths** (wildcard/index into arrays of objects) depend on issuer structuring; only scalar arrays and key paths are matched. | PID rulebook often uses flat dot-notation or whole-array claims. | Real issuer credentials + interop (Phase 17) |
 | **Deeply nested SD-JWT** (objects within objects, each with `_sd`) is only supported for one nesting level in mock issuance. | Covers typical PID `address` object + Phase 1 DCQL paths. | Full recursive issuance with external issuers (Phase 2/17) |
@@ -931,10 +934,12 @@ wpb.trust-mark.allow-admin-refresh=false
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/openid4vp/session/{id}/consent-view?holderId=` | Optional | Presentation consent view (RPA_10, OIA_06/07) |
+| `GET` | `/openid4vp/session/{id}/consent-view?holderId=` | FIDO2 | Presentation consent view (RPA_10, OIA_06/07) |
 | `POST` | `/openid4vp/consent` | FIDO2 | Approve/deny presentation |
-| `GET` | `/openid4vci/session/{id}/consent-view?holderId=` | Optional | Issuance storage preview (ISSU_11) |
+| `GET` | `/openid4vci/session/{id}/consent-view?holderId=` | FIDO2 | Issuance storage preview (ISSU_11) |
 | `POST` | `/openid4vci/consent` | FIDO2 | Approve/deny credential storage |
+| `GET` | `/openid4vp/session/{id}` / `/events` | FIDO2 | Holder-bound session diagnostics |
+| `GET` | `/openid4vci/session/{id}` / `/events` | FIDO2 | Holder-bound session diagnostics |
 
 ### Configuration
 

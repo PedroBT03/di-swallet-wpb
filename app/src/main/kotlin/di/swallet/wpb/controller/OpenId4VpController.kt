@@ -8,6 +8,7 @@ import di.swallet.wpb.openid4vp.protocol.ConsentSubmission
 import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.orchestration.PresentationFlowOrchestrator
 import di.swallet.wpb.security.AuthenticatedHolderGuard
+import di.swallet.wpb.security.Oid4SessionAccessGuard
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.GetMapping
@@ -26,6 +27,7 @@ class OpenId4VpController(
     private val presentationFlowOrchestrator: PresentationFlowOrchestrator,
     private val eventStore: SessionEventStore,
     private val authenticatedHolderGuard: AuthenticatedHolderGuard,
+    private val oid4SessionAccessGuard: Oid4SessionAccessGuard,
 ) {
 
     @PostMapping("/authorize")
@@ -45,7 +47,10 @@ class OpenId4VpController(
     suspend fun getConsentView(
         @PathVariable id: UUID,
         @RequestParam holderId: String,
-    ): PresentationConsentView = presentationFlowOrchestrator.getConsentView(id, holderId)
+    ): PresentationConsentView {
+        oid4SessionAccessGuard.requireSessionHolder(holderId)
+        return presentationFlowOrchestrator.getConsentView(id, holderId)
+    }
 
     @PostMapping("/consent")
     @Operation(summary = "Submit holder consent (requires FIDO2)")
@@ -63,12 +68,16 @@ class OpenId4VpController(
         description = "Low-level lifecycle context. WPI consent UI should use GET /session/{id}/consent-view instead.",
     )
     suspend fun getSession(@PathVariable id: UUID): PresentationContext {
-        return presentationFlowOrchestrator.getSession(id)
+        val session = presentationFlowOrchestrator.getSession(id)
+        oid4SessionAccessGuard.requireSessionHolder(session.sessionMeta.holderId)
+        return session
     }
 
     @GetMapping("/session/{id}/events")
     @Operation(summary = "Get session events")
     suspend fun getSessionEvents(@PathVariable id: UUID): List<SessionEvent> {
+        val session = presentationFlowOrchestrator.getSession(id)
+        oid4SessionAccessGuard.requireSessionHolder(session.sessionMeta.holderId)
         return eventStore.getEvents(id)
     }
 }

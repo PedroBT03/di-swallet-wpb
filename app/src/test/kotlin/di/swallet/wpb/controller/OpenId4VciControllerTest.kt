@@ -100,7 +100,7 @@ class OpenId4VciControllerTest {
     @Test
     fun `getSession serialises issuance context as JSON`() {
         val produced = ctx(IssuanceState.AUTHORIZED)
-        val controller = OpenId4VciController(StubOrchestrator(produced), StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VciController(StubOrchestrator(produced), StubEventStore(), AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         val response = controller.getSession(produced.sessionMeta.sessionId)
         val json = mapper.writeValueAsString(response)
         assertTrue(json.contains("\"state\":\"AUTHORIZED\""))
@@ -111,7 +111,7 @@ class OpenId4VciControllerTest {
     fun `resolveOffer delegates to orchestrator`() {
         val produced = ctx()
         val orch = StubOrchestrator(produced)
-        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         controller.resolveOffer(OfferResolveRequest(offerUri = "openid-credential-offer://test", holderId = "h"))
         assertEquals(1, orch.resolveCalls)
     }
@@ -120,7 +120,7 @@ class OpenId4VciControllerTest {
     fun `prepareAuthorization forwards session id`() {
         val produced = ctx()
         val orch = StubOrchestrator(produced)
-        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         controller.prepareAuthorization(SessionScopedRequest(produced.sessionMeta.sessionId.toString()))
         assertEquals(1, orch.prepareCalls)
         assertEquals(produced.sessionMeta.sessionId, orch.lastSessionId)
@@ -130,7 +130,7 @@ class OpenId4VciControllerTest {
     fun `authorize code forwards code and state`() {
         val produced = ctx()
         val orch = StubOrchestrator(produced)
-        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         val ctxOut = controller.completeAuthorizationCode(
             AuthorizationCodeRequest(produced.sessionMeta.sessionId.toString(), "code-1", "state-1"),
         )
@@ -142,7 +142,7 @@ class OpenId4VciControllerTest {
     fun `pre-authorized forwards tx code`() {
         val produced = ctx()
         val orch = StubOrchestrator(produced)
-        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         controller.completePreAuthorized(PreAuthorizedRequest(produced.sessionMeta.sessionId.toString(), txCode = "1234"))
         assertEquals(1, orch.preAuthCalls)
     }
@@ -151,7 +151,7 @@ class OpenId4VciControllerTest {
     fun `credential request carries the request payload`() {
         val produced = ctx()
         val orch = StubOrchestrator(produced)
-        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         controller.requestCredential(
             CredentialRequest(
                 sessionId = produced.sessionMeta.sessionId.toString(),
@@ -169,7 +169,7 @@ class OpenId4VciControllerTest {
     fun `notify forwards event type and description`() {
         val produced = ctx(IssuanceState.CREDENTIAL_ISSUED)
         val orch = StubOrchestrator(produced)
-        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         controller.notify(
             NotifyRequest(produced.sessionMeta.sessionId.toString(), NotificationEvent.CREDENTIAL_ACCEPTED, "stored"),
         )
@@ -180,7 +180,7 @@ class OpenId4VciControllerTest {
     fun `queryDeferred forwards session id`() {
         val produced = ctx(IssuanceState.DEFERRED_PENDING)
         val orch = StubOrchestrator(produced)
-        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VciController(orch, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         val out = controller.queryDeferred(SessionScopedRequest(produced.sessionMeta.sessionId.toString()))
         assertEquals(IssuanceState.DEFERRED_ISSUED, out.state)
         assertEquals(1, orch.deferredCalls)
@@ -199,7 +199,7 @@ class OpenId4VciControllerTest {
                 state = produced.state,
             ),
         )
-        val controller = OpenId4VciController(StubOrchestrator(produced), store, AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VciController(StubOrchestrator(produced), store, AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         val events = controller.getSessionEvents(produced.sessionMeta.sessionId)
         assertEquals(1, events.size)
         assertEquals("offer.received", events.first().type)

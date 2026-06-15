@@ -9,6 +9,7 @@ import di.swallet.wpb.openid4vci.protocol.IssuanceConsentSubmission
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import di.swallet.wpb.security.AuthenticatedHolderGuard
+import di.swallet.wpb.security.Oid4SessionAccessGuard
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.GetMapping
@@ -34,6 +35,7 @@ class OpenId4VciController(
     private val orchestrator: IssuanceFlowOrchestrator,
     private val eventStore: IssuanceEventStore,
     private val authenticatedHolderGuard: AuthenticatedHolderGuard,
+    private val oid4SessionAccessGuard: Oid4SessionAccessGuard,
 ) {
 
     @PostMapping("/offer/resolve")
@@ -97,7 +99,10 @@ class OpenId4VciController(
     fun getConsentView(
         @PathVariable id: UUID,
         @RequestParam holderId: String,
-    ): IssuanceConsentView = orchestrator.getConsentView(id, holderId)
+    ): IssuanceConsentView {
+        oid4SessionAccessGuard.requireSessionHolder(holderId)
+        return orchestrator.getConsentView(id, holderId)
+    }
 
     @PostMapping("/consent")
     @Operation(summary = "Approve or reject credential storage (requires FIDO2)")
@@ -111,11 +116,19 @@ class OpenId4VciController(
         summary = "Get an issuance session",
         description = "Low-level lifecycle context. WPI storage consent UI should use GET /session/{id}/consent-view.",
     )
-    fun getSession(@PathVariable id: UUID): IssuanceContext = orchestrator.getSession(id)
+    fun getSession(@PathVariable id: UUID): IssuanceContext {
+        val session = orchestrator.getSession(id)
+        oid4SessionAccessGuard.requireSessionHolder(session.sessionMeta.holderId)
+        return session
+    }
 
     @GetMapping("/session/{id}/events")
     @Operation(summary = "Get issuance session events")
-    fun getSessionEvents(@PathVariable id: UUID): List<IssuanceEvent> = eventStore.getEvents(id)
+    fun getSessionEvents(@PathVariable id: UUID): List<IssuanceEvent> {
+        val session = orchestrator.getSession(id)
+        oid4SessionAccessGuard.requireSessionHolder(session.sessionMeta.holderId)
+        return eventStore.getEvents(id)
+    }
 }
 
 data class OfferResolveRequest(val offerUri: String, val holderId: String? = null)

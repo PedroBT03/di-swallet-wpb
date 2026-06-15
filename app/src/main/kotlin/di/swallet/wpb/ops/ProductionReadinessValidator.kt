@@ -1,8 +1,10 @@
 package di.swallet.wpb.ops
 
 import di.swallet.wpb.config.DpaReportProperties
+import di.swallet.wpb.config.MdocProperties
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.config.StatusListProperties
 import di.swallet.wpb.config.TransactionLogProperties
 import di.swallet.wpb.config.WalletProperties
 import org.slf4j.LoggerFactory
@@ -23,6 +25,8 @@ class ProductionReadinessValidator(
     private val openId4VciProperties: OpenId4VciProperties,
     private val walletProperties: WalletProperties,
     private val transactionLogProperties: TransactionLogProperties,
+    private val statusListProperties: StatusListProperties,
+    private val mdocProperties: MdocProperties,
     private val dpaReportProperties: DpaReportProperties,
 ) : ApplicationRunner {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -46,6 +50,13 @@ class ProductionReadinessValidator(
             transactionLogIntegrityKey = transactionLogProperties.integrityKey,
             dekMode = transactionLogProperties.resolvedDekMode(),
         ).map { "$it must be overridden in prod" }
+
+        violations += BundledSigningKeyPolicy.violations(
+            statusListSigningKeyPemPath = statusListProperties.signingKeyPemPath,
+            statusListAutoGenerate = statusListProperties.autoGenerateSigningKeyIfMissing,
+            mdocIssuerKeyPemPath = mdocProperties.issuerKeyPemPath,
+            mdocAutoGenerate = mdocProperties.autoGenerateIssuerKeyIfMissing,
+        ).map { "$it must point to an external production key (file:)" }
 
         val hsmPin = environment.getProperty("wpb.hsm.pin").orEmpty()
         if (hsmPin.isBlank() || hsmPin == WeakSecretDefaults.KNOWN_WEAK_HSM_PIN) {

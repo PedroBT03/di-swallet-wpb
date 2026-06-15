@@ -14,6 +14,8 @@ class WebConfig(private val authInterceptor: AuthorizationInterceptor) : WebMvcC
                 "/api/v1/wallet/**",
                 "/openid4vp/consent",
                 "/openid4vci/consent",
+                "/openid4vp/session/**",
+                "/openid4vci/session/**",
             )
     }
 }

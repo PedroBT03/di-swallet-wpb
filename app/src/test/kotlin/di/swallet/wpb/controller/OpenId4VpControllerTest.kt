@@ -33,6 +33,7 @@ class OpenId4VpControllerTest {
         return PresentationContext(
             sessionMeta = SessionMetadata(
                 sessionId = UUID.randomUUID(),
+                holderId = "holder-1",
                 correlationId = UUID.randomUUID().toString(),
                 createdAt = now,
                 updatedAt = now,
@@ -93,7 +94,7 @@ class OpenId4VpControllerTest {
     @Test
     fun `controller exposes lifecycle context as JSON`() = runBlocking {
         val context = newContext()
-        val controller = OpenId4VpController(StubOrchestrator(context), StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VpController(StubOrchestrator(context), StubEventStore(), AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         val response = controller.getSession(context.sessionMeta.sessionId)
 
         val json = mapper.writeValueAsString(response)
@@ -105,7 +106,7 @@ class OpenId4VpControllerTest {
     fun `controller maps consent submission and returns DISPATCHED`() = runBlocking {
         val context = newContext()
         val orchestrator = StubOrchestrator(context)
-        val controller = OpenId4VpController(orchestrator, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop())
+        val controller = OpenId4VpController(orchestrator, StubEventStore(), AuthenticatedHolderGuardTestSupport.noop(), AuthenticatedHolderGuardTestSupport.noopOid4SessionAccessGuard())
         val response = controller.consent(
             ConsentSubmission(
                 sessionId = context.sessionMeta.sessionId.toString(),

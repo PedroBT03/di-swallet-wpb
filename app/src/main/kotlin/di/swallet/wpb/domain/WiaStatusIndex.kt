@@ -1,3 +1,7 @@
+/**
+ * JPA entity mapping holders to Wallet Instance Attestation status-list bit indices.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.Column
@@ -9,7 +13,7 @@ import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
 
 /**
- * Durable mapping from holder (+ optional issuer scope) to a WIA status-list bit index.
+ * Durable holder-to-bit-index mapping for WIA status list entries, optionally scoped per issuer.
  */
 @Entity
 @Table(

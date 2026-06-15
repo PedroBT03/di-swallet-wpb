@@ -1,3 +1,7 @@
+/**
+ * Conversion between Java EC keys, PEM bundles, and COSE EC2 key material.
+ */
+
 package di.swallet.wpb.format.mdoc
 
 import com.authlete.cose.COSEEC2Key
@@ -13,7 +17,9 @@ import java.security.spec.PKCS8EncodedKeySpec
 import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
 
+/** Helpers for loading EC keys and representing them as COSE EC2 structures. */
 object MdocCoseKeyMaterial {
+    /** Builds a public-only COSE EC2 key from a Java EC public key. */
     fun toCoseEc2PublicKey(publicKey: ECPublicKey): COSEEC2Key {
         val x = toFixed(publicKey.w.affineX.toByteArray(), 32)
         val y = toFixed(publicKey.w.affineY.toByteArray(), 32)
@@ -25,6 +31,7 @@ object MdocCoseKeyMaterial {
             .buildEC2Key()
     }
 
+    /** Builds a full COSE EC2 key including private scalar `d`. */
     fun toCoseEc2Key(privateKey: ECPrivateKey, publicKey: ECPublicKey): COSEEC2Key {
         val x = toFixed(publicKey.w.affineX.toByteArray(), 32)
         val y = toFixed(publicKey.w.affineY.toByteArray(), 32)
@@ -38,12 +45,14 @@ object MdocCoseKeyMaterial {
             .buildEC2Key()
     }
 
+    /** Decodes a URL-safe base64 X.509 EC public key. */
     fun decodeEcPublicKey(publicKeyBase64: String): ECPublicKey {
         val bytes = Base64.getUrlDecoder().decode(publicKeyBase64.trim())
         val spec = X509EncodedKeySpec(bytes)
         return KeyFactory.getInstance("EC").generatePublic(spec) as ECPublicKey
     }
 
+    /** Loads an EC key pair and leaf certificate public key from a PEM bundle. */
     fun loadEcKeyPairFromPem(pemBundle: String): java.security.KeyPair {
         val privateKeyType = when {
             pemBundle.contains("-----BEGIN EC PRIVATE KEY-----") -> "EC PRIVATE KEY"
@@ -67,6 +76,7 @@ object MdocCoseKeyMaterial {
         return java.security.KeyPair(publicKey, privateKey)
     }
 
+    /** Parses a single PEM private key block into an EC private key. */
     private fun loadEcPrivateKeyFromPemBlock(type: String, b64Body: String): ECPrivateKey {
         val pem = buildString {
             append("-----BEGIN $type-----\n")
@@ -87,6 +97,7 @@ object MdocCoseKeyMaterial {
         }
     }
 
+    /** Extracts the base64 body of a PEM block, optionally trying an alternate label. */
     private fun extractPemBlock(pem: String, type: String, alternateType: String?): String? {
         val pattern = Regex("-----BEGIN $type-----([\\s\\S]*?)-----END $type-----")
         val match = pattern.find(pem) ?: alternateType?.let {
@@ -95,6 +106,7 @@ object MdocCoseKeyMaterial {
         return match?.groupValues?.get(1)?.replace("\\s".toRegex(), "")
     }
 
+    /** Normalizes coordinate bytes to a fixed width for COSE encoding. */
     private fun toFixed(raw: ByteArray, size: Int): ByteArray {
         if (raw.size == size) return raw
         if (raw.size > size) return raw.copyOfRange(raw.size - size, raw.size)

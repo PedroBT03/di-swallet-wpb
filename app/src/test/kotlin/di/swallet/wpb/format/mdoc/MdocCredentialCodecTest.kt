@@ -1,3 +1,7 @@
+/**
+ * Tests mdoc credential codec.
+ */
+
 package di.swallet.wpb.format.mdoc
 
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -9,6 +13,9 @@ class MdocCredentialCodecTest {
     private val binding = MdocTestSupport.holderBinding()
     private val codec = MdocTestSupport.stack(holderBindings = listOf(binding)).codec
 
+    /**
+     * PID document round-trips through encode/decode; issuerSigned validates and given_name claim is recovered.
+     */
     @Test
     fun `encodes and decodes PID vector`() {
         val doc = MdocCredentialDocument(
@@ -31,6 +38,9 @@ class MdocCredentialCodecTest {
         assertEquals("Alice", decoded.claims["eu.europa.ec.eudi.pid.1.given_name"])
     }
 
+    /**
+     * mDL document round-trips through encode/decode; driving_privileges list claim is preserved.
+     */
     @Test
     fun `encodes and decodes mDL vector`() {
         val doc = MdocCredentialDocument(

@@ -1,3 +1,7 @@
+/**
+ * JPA entity for persisted key attestation artifacts and their lifecycle state.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.Column
@@ -15,10 +19,7 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * Persisted Key Attestation (KA) as a first-class normative artifact.
- *
- * TS3 constraints such as one-time KA use and status maintenance apply at this
- * aggregate level, not only at key level.
+ * Stored key attestation JWT with status-list reference, expiry, and one-time consumption tracking.
  */
 @Entity
 @Table(name = "key_attestations")
@@ -63,6 +64,7 @@ class KeyAttestationRecord(
     val state: KeyAttestationState = KeyAttestationState.AVAILABLE,
 )
 
+/** Lifecycle state of a key attestation from issuance through consumption or revocation. */
 enum class KeyAttestationState {
     AVAILABLE,
     CONSUMED,

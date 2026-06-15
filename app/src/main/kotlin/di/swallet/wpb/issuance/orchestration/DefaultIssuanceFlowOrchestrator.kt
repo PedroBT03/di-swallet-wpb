@@ -1,3 +1,7 @@
+/**
+ * Default OID4VCI issuance orchestrator wiring trust, policy, WIA, KA, and storage.
+ */
+
 package di.swallet.wpb.issuance.orchestration
 
 import di.swallet.wpb.config.ConsentProperties
@@ -52,6 +56,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
+/** Coordinates the full issuance state machine from offer resolution through notification. */
 @Service
 class DefaultIssuanceFlowOrchestrator(
     private val gateway: OpenId4VciGateway,
@@ -78,6 +83,7 @@ class DefaultIssuanceFlowOrchestrator(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val sessionTtl: Duration get() = Duration.ofSeconds(properties.sessionTtlSeconds)
 
+    /** Resolves the offer URI, validates issuer trust and wallet policy, and persists progress. */
     override fun resolveOffer(offerUri: String, holderId: String?): IssuanceContext {
         if (!holderId.isNullOrBlank()) {
             wscaSciGrantService.grant(holderId)
@@ -132,6 +138,7 @@ class DefaultIssuanceFlowOrchestrator(
         return persisted
     }
 
+    /** Builds proof and WIA material, then asks the issuer to prepare authorization. */
     override fun prepareAuthorization(sessionId: UUID): IssuanceContext {
         val ctx = loadActive(sessionId)
         require(ctx.state == IssuanceState.OFFER_RESOLVED) {
@@ -174,6 +181,7 @@ class DefaultIssuanceFlowOrchestrator(
         return saved
     }
 
+    /** Exchanges the authorization code and verifies WIA cnf binding to the access token. */
     override fun completeAuthorizationCode(
         sessionId: UUID,
         authorizationCode: String,
@@ -215,6 +223,7 @@ class DefaultIssuanceFlowOrchestrator(
         return saved
     }
 
+    /** Completes pre-authorized issuance with optional tx_code and WIA validation. */
     override fun completePreAuthorizedCode(sessionId: UUID, txCode: String?): IssuanceContext {
         val ctx = loadActive(sessionId)
         require(ctx.state == IssuanceState.OFFER_RESOLVED) {
@@ -251,6 +260,7 @@ class DefaultIssuanceFlowOrchestrator(
         return saved
     }
 
+    /** Requests credentials, attaching key attestation when the configuration requires it. */
     override fun requestCredential(sessionId: UUID, request: IssuanceRequest): IssuanceContext {
         val ctx = loadActive(sessionId)
         require(ctx.state == IssuanceState.AUTHORIZED || ctx.state == IssuanceState.DEFERRED_PENDING) {
@@ -361,6 +371,7 @@ class DefaultIssuanceFlowOrchestrator(
         }
     }
 
+    /** Polls deferred issuance until credentials arrive, fail, or remain pending. */
     override fun queryDeferred(sessionId: UUID): IssuanceContext {
         val ctx = loadActive(sessionId)
         require(ctx.state == IssuanceState.DEFERRED_PENDING) {
@@ -390,12 +401,14 @@ class DefaultIssuanceFlowOrchestrator(
         }
     }
 
+    /** Returns the consent UI payload for credentials awaiting holder approval. */
     override fun getConsentView(sessionId: UUID, holderId: String): IssuanceConsentView {
         val ctx = loadConsentPending(sessionId)
         consentSessionGuard.requireHolderMatch(ctx.sessionMeta.holderId, holderId)
         return issuanceConsentViewBuilder.build(ctx)
     }
 
+    /** Persists or rejects staged credentials based on the holder's storage decision. */
     override fun submitIssuanceConsent(sessionId: UUID, decision: IssuanceConsentSubmission): IssuanceContext {
         val current = loadConsentPending(sessionId)
         consentSessionGuard.requireHolderMatch(current.sessionMeta.holderId, decision.holderId)
@@ -449,12 +462,14 @@ class DefaultIssuanceFlowOrchestrator(
         )
     }
 
+    /** Loads a session by id and expires consent windows that have timed out. */
     override fun getSession(sessionId: UUID): IssuanceContext {
         val session = repository.findById(sessionId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "session $sessionId not found")
         return expirePendingConsentIfNeeded(session.toContext())
     }
 
+    /** Notifies the issuer about issuance outcome and discards adapter session state. */
     override fun notify(sessionId: UUID, event: NotificationEvent, description: String?): IssuanceContext {
         val ctx = loadActive(sessionId)
         require(ctx.state == IssuanceState.CREDENTIAL_ISSUED || ctx.state == IssuanceState.DEFERRED_ISSUED) {
@@ -480,6 +495,7 @@ class DefaultIssuanceFlowOrchestrator(
     // Internals
     // ---------------------------------------------------------------
 
+    /** Stores issued credentials immediately or stages them for holder consent. */
     private fun handleIssuedCredentials(
         ctx: IssuanceContext,
         credentials: List<IssuedCredential>,
@@ -493,6 +509,7 @@ class DefaultIssuanceFlowOrchestrator(
         return persistIssued(ctx, credentials, terminalState = terminalState, keyAliasHint = keyAliasHint)
     }
 
+    /** Encrypts pending credentials and moves the session to consent-pending state. */
     private fun stageForIssuanceConsent(
         ctx: IssuanceContext,
         credentials: List<IssuedCredential>,
@@ -525,6 +542,7 @@ class DefaultIssuanceFlowOrchestrator(
         return saved
     }
 
+    /** Loads a session that must be awaiting issuance consent or throws HTTP 409. */
     private fun loadConsentPending(sessionId: UUID): IssuanceContext {
         val ctx = loadActive(sessionId)
         if (ctx.state != IssuanceState.ISSUANCE_CONSENT_PENDING) {
@@ -536,6 +554,7 @@ class DefaultIssuanceFlowOrchestrator(
         return expirePendingConsentIfNeeded(ctx)
     }
 
+    /** Expires consent-pending sessions whose encrypted payload TTL has elapsed. */
     private fun expirePendingConsentIfNeeded(ctx: IssuanceContext): IssuanceContext {
         if (ctx.state != IssuanceState.ISSUANCE_CONSENT_PENDING) return ctx
         val encrypted = ctx.pendingCredentialsEncrypted ?: return ctx
@@ -549,6 +568,7 @@ class DefaultIssuanceFlowOrchestrator(
         return expired
     }
 
+    /** Writes credentials to wallet storage and advances to a terminal issued state. */
     private fun persistIssued(
         ctx: IssuanceContext,
         credentials: List<IssuedCredential>,
@@ -582,6 +602,7 @@ class DefaultIssuanceFlowOrchestrator(
         return saved
     }
 
+    /** Creates a fresh context with session metadata and default WIA/KA sub-states. */
     private fun newContext(holderId: String?, now: Instant): IssuanceContext {
         val sessionId = UUID.randomUUID()
         val expires = now.plus(sessionTtl)
@@ -602,6 +623,7 @@ class DefaultIssuanceFlowOrchestrator(
         )
     }
 
+    /** Loads a non-terminal, non-expired session or throws an appropriate HTTP error. */
     private fun loadActive(sessionId: UUID): IssuanceContext {
         val session = repository.findById(sessionId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "session $sessionId not found")
@@ -619,20 +641,24 @@ class DefaultIssuanceFlowOrchestrator(
         return ctx
     }
 
+    /** Inserts a new session record into the repository. */
     private fun persistNew(ctx: IssuanceContext) {
         repository.create(ctx.toSession())
     }
 
+    /** Saves session changes and returns the updated runtime context. */
     private fun persistUpdate(ctx: IssuanceContext): IssuanceContext {
         val updated = repository.update(ctx.toSession())
         return updated.toContext()
     }
 
+    /** Validates a lifecycle transition, persists it, and returns the new context. */
     private fun transitionAndPersist(ctx: IssuanceContext, next: IssuanceState): IssuanceContext {
         val updatedState = transitionTo(ctx, next)
         return persistUpdate(updatedState)
     }
 
+    /** Returns a copy in the target state when the transition is allowed by the state machine. */
     private fun transitionTo(ctx: IssuanceContext, next: IssuanceState): IssuanceContext {
         if (ctx.state == next) return ctx
         require(ctx.state.canTransitionTo(next)) {
@@ -641,6 +667,7 @@ class DefaultIssuanceFlowOrchestrator(
         return ctx.copy(state = next)
     }
 
+    /** Records an error, moves to a terminal state, and discards adapter session state. */
     private fun fail(
         ctx: IssuanceContext,
         error: IssuanceError,
@@ -665,6 +692,7 @@ class DefaultIssuanceFlowOrchestrator(
         return saved
     }
 
+    /** Appends an observability event for the current session step. */
     private fun record(ctx: IssuanceContext, type: String, attributes: Map<String, String>) {
         eventStore.record(
             IssuanceEvent(
@@ -678,9 +706,11 @@ class DefaultIssuanceFlowOrchestrator(
         )
     }
 
+    /** Throws HTTP 400 with the given reason message. */
     private fun throwBadRequest(reason: String): Nothing =
         throw ResponseStatusException(HttpStatus.BAD_REQUEST, reason)
 
+    /** Issues a new WIA or reuses a still-valid attestation already on the session. */
     private fun issueOrReuseWia(ctx: IssuanceContext, issuerId: String?): di.swallet.wpb.issuance.domain.WalletInstanceAttestation {
         if (!properties.wia.enabled) {
             throwBadRequest("wia is disabled")
@@ -699,6 +729,7 @@ class DefaultIssuanceFlowOrchestrator(
         return issued
     }
 
+    /** Confirms WIA validity and that its cnf.jkt matches the access token binding. */
     private fun validateWiaBinding(ctx: IssuanceContext, authorized: di.swallet.wpb.openid4vci.protocol.AuthorizedContext): WiaContext {
         val wia = ctx.wia?.attestation ?: throw WiaValidationException("wia_missing", "WIA not attached to session")
         wiaValidationService.validateTechnical(wia)
@@ -710,6 +741,7 @@ class DefaultIssuanceFlowOrchestrator(
         )
     }
 
+    /** Maps authorization failures to recoverable WIA nonce or expiry retry handling. */
     private fun handleWiaAwareAuthorizationFailure(
         ctx: IssuanceContext,
         ex: Exception,
@@ -750,6 +782,7 @@ class DefaultIssuanceFlowOrchestrator(
         }
     }
 
+    /** Fails the session when WIA validation rejects the attached attestation. */
     private fun handleWiaValidationFailure(ctx: IssuanceContext, ex: WiaValidationException): IssuanceContext {
         return fail(
             ctx.copy(
@@ -762,6 +795,7 @@ class DefaultIssuanceFlowOrchestrator(
         )
     }
 
+    /** Returns true when issuer metadata or configuration requires key attestation. */
     private fun shouldRequireKa(
         metadata: di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata,
         configuration: di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor?,
@@ -772,6 +806,7 @@ class DefaultIssuanceFlowOrchestrator(
             configuration.proofTypesSupported.any { it.equals("attestation", ignoreCase = true) }
     }
 
+    /** Looks up the credential configuration descriptor implied by the issuance request. */
     private fun resolveRequestedConfiguration(
         ctx: IssuanceContext,
         request: IssuanceRequest,
@@ -783,6 +818,7 @@ class DefaultIssuanceFlowOrchestrator(
         return metadata.credentialConfigurations.firstOrNull { it.id == requestedId }
     }
 
+    /** Issues or reuses key attestation after validating trust and proof binding. */
     private fun issueOrReuseKa(
         ctx: IssuanceContext,
         metadata: di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata,
@@ -822,6 +858,7 @@ class DefaultIssuanceFlowOrchestrator(
         return attestation
     }
 
+    /** Maps credential request failures to KA-aware session errors when applicable. */
     private fun handleKaAwareFailure(ctx: IssuanceContext, ex: Exception): IssuanceContext {
         val message = ex.message ?: "credential request failed"
         return when (ex) {
@@ -848,6 +885,7 @@ class DefaultIssuanceFlowOrchestrator(
         }
     }
 
+    /** Converts a domain WIA envelope to the adapter transport DTO. */
     private fun di.swallet.wpb.issuance.domain.WalletInstanceAttestation.toTransport(): WalletAttestationTransport =
         WalletAttestationTransport(
             jwt = jwt,
@@ -856,6 +894,7 @@ class DefaultIssuanceFlowOrchestrator(
             expiresAt = tokenExpiresAt,
         )
 
+    /** Converts a domain key attestation envelope to the adapter transport DTO. */
     private fun di.swallet.wpb.issuance.domain.KeyAttestation.toTransport(): KeyAttestationTransport =
         KeyAttestationTransport(
             jwt = jwt,

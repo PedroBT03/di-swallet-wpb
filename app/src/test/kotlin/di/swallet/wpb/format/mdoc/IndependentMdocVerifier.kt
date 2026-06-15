@@ -1,3 +1,7 @@
+/**
+ * Tests independent mdoc verifier.
+ */
+
 package di.swallet.wpb.format.mdoc
 
 import COSE.Attribute
@@ -16,10 +20,13 @@ import java.util.Base64
  * It uses cose-java + upokecenter CBOR to assert cross-implementation interoperability.
  */
 class IndependentMdocVerifier {
+    /** Decodes a base64url-encoded CBOR IssuerSigned structure into a CBORObject tree. */
     fun decodeIssuerSigned(rawB64Url: String): CBORObject = parseCborB64(rawB64Url)
 
+    /** Decodes a base64url-encoded CBOR DeviceResponse into a CBORObject tree. */
     fun decodeDeviceResponse(rawB64Url: String): CBORObject = parseCborB64(rawB64Url)
 
+    /** Validates issuerAuth COSE_Sign1 inside IssuerSigned using the x5c leaf certificate public key. */
     fun verifyIssuerAuth(rawIssuerSignedB64Url: String): Boolean {
         val issuerSigned = decodeIssuerSigned(rawIssuerSignedB64Url)
         val issuerAuth = issuerSigned.get("issuerAuth") ?: return false
@@ -28,6 +35,7 @@ class IndependentMdocVerifier {
         return sign1.validate(verifierKey)
     }
 
+    /** Returns a short diagnostic string describing issuerAuth decode success, key presence, and payload size. */
     fun debugIssuerAuth(rawIssuerSignedB64Url: String): String {
         val issuerSigned = decodeIssuerSigned(rawIssuerSignedB64Url)
         val issuerAuth = issuerSigned.get("issuerAuth") ?: return "issuerAuth missing"
@@ -37,6 +45,7 @@ class IndependentMdocVerifier {
         return "issuerAuthDecoded=true key=${key != null} payload=${payload?.size ?: -1}"
     }
 
+    /** Verifies issuerAuth on the embedded issuerSigned document and the deviceSignature using the MSO device key. */
     fun verifyDeviceResponse(rawDeviceResponseB64Url: String): Boolean {
         val deviceResponse = decodeDeviceResponse(rawDeviceResponseB64Url)
         val document = deviceResponse.get("documents")?.get(0) ?: return false
@@ -58,6 +67,7 @@ class IndependentMdocVerifier {
         return deviceSign1.validate(deviceOneKey)
     }
 
+    /** Extracts the raw MSO bytes from issuerAuth inside a standalone IssuerSigned artifact. */
     fun extractIssuerAuthPayload(rawIssuerSignedB64Url: String): ByteArray {
         val issuerSigned = decodeIssuerSigned(rawIssuerSignedB64Url)
         val issuerAuth = issuerSigned.get("issuerAuth")
@@ -68,6 +78,7 @@ class IndependentMdocVerifier {
             ?: throw IllegalArgumentException("issuerAuth payload missing")
     }
 
+    /** Extracts the MSO payload from issuerAuth nested under documents[0].issuerSigned in a DeviceResponse. */
     fun extractIssuerAuthPayloadFromDeviceResponse(rawDeviceResponseB64Url: String): ByteArray {
         val deviceResponse = decodeDeviceResponse(rawDeviceResponseB64Url)
         val document = deviceResponse.get("documents")?.get(0)
@@ -80,6 +91,7 @@ class IndependentMdocVerifier {
             ?: throw IllegalArgumentException("issuerAuth payload missing in DeviceResponse")
     }
 
+    /** Looks up a string claim value by namespace and element identifier inside IssuerSigned nameSpaces. */
     fun extractIssuerSignedClaim(
         rawIssuerSignedB64Url: String,
         namespace: String,
@@ -102,6 +114,7 @@ class IndependentMdocVerifier {
         return null
     }
 
+    /** Reads a presented claim string from deviceSigned.nameSpaces inside the first DeviceResponse document. */
     fun extractPresentedClaim(
         rawDeviceResponseB64Url: String,
         namespace: String,
@@ -120,14 +133,17 @@ class IndependentMdocVerifier {
         return namespaces.get(namespace)?.get(claim)?.AsString()
     }
 
+    /** Base64url-decodes [rawB64Url] with padding correction and parses the bytes as CBOR. */
     private fun parseCborB64(rawB64Url: String): CBORObject {
         val bytes = Base64.getUrlDecoder().decode(padBase64Url(rawB64Url))
         return CBORObject.DecodeFromBytes(bytes)
     }
 
+    /** Appends '=' padding so base64url strings whose length is not a multiple of four decode correctly. */
     private fun padBase64Url(value: String): String =
         value + "=".repeat((4 - value.length % 4) % 4)
 
+    /** If [value] wraps nested CBOR as a byte string or tagged byte string, decodes it; otherwise returns [value]. */
     private fun unwrapEmbeddedCbor(value: CBORObject): CBORObject {
         val maybeBytes = when {
             value.getType() == com.upokecenter.cbor.CBORType.ByteString -> value.GetByteString()
@@ -137,12 +153,14 @@ class IndependentMdocVerifier {
         return runCatching { CBORObject.DecodeFromBytes(maybeBytes) }.getOrDefault(value)
     }
 
+    /** Attempts to decode [obj] as a COSE Sign1 message, returning null when the bytes are not Sign1. */
     private fun decodeSign1(obj: CBORObject): Sign1Message? {
         return runCatching {
             Message.DecodeFromBytes(obj.EncodeToBytes(), MessageTag.Sign1) as Sign1Message
         }.getOrNull()
     }
 
+    /** Extracts the issuer verification OneKey from the x5c (33) unprotected or protected header attribute. */
     private fun issuerVerifierKey(sign1: Sign1Message): OneKey? {
         val x5 = sign1.findAttribute(CBORObject.FromObject(33), Attribute.UNPROTECTED)
             ?: sign1.findAttribute(CBORObject.FromObject(33), Attribute.PROTECTED)

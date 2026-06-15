@@ -1,3 +1,7 @@
+/**
+ * End-to-end tests for open id4 vci ka.
+ */
+
 package di.swallet.wpb.ka
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -38,6 +42,9 @@ class OpenId4VciKaE2ETest : BaseIntegrationTest() {
     @Autowired
     lateinit var walletUnitRepository: WalletUnitRepository
 
+    /**
+     * Bootstrapped holder completes pid_jwt issuance; KA reaches VALIDATED and ka.generated/attached/validated events are recorded.
+     */
     @Test
     @ConformanceScenario("vci_ka_binding_e2e")
     fun `device bound issuance performs KA generation attachment and validation`() {

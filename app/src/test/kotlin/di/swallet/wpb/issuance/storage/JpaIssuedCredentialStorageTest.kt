@@ -1,3 +1,7 @@
+/**
+ * Tests jpa issued credential storage.
+ */
+
 package di.swallet.wpb.issuance.storage
 
 import di.swallet.wpb.config.WalletProperties
@@ -25,11 +29,15 @@ import org.mockito.Mockito.`when`
 
 class JpaIssuedCredentialStorageTest {
 
+    /** Returns a disclosure cipher configured with standard test wallet properties. */
     private fun cipher() = DisclosureCipherService(testWalletProperties())
     private val binding = MdocTestSupport.holderBinding()
     private val mdocCodec = MdocTestSupport.stack(holderBindings = listOf(binding)).codec
     private val mdocRegistry = MdocDocTypeRegistry()
 
+    /**
+     * SD-JWT payload with two disclosures is split into JWT body plus encrypted disclosure blob; decrypt round-trips the original list.
+     */
     @Test
     fun `splits SD-JWT VC into encoded data and encrypted disclosures`() {
         val repo = mock(WalletCredentialRepository::class.java)
@@ -73,6 +81,9 @@ class JpaIssuedCredentialStorageTest {
         assertEquals(listOf("disclosure1", "disclosure2"), disclosures)
     }
 
+    /**
+     * Encoded mDL issuerSigned bytes are stored and retrieved unchanged and pass validateIssuerSigned.
+     */
     @Test
     fun `valid mdoc payload is preserved byte-identical in storage and retrieval`() {
         val repo = mock(WalletCredentialRepository::class.java)
@@ -131,6 +142,9 @@ class JpaIssuedCredentialStorageTest {
         assertTrue(mdocCodec.validateIssuerSigned(saved.encodedData))
     }
 
+    /**
+     * Non-CBOR rawPayload for mdoc format throws IllegalArgumentException instead of being silently rebuilt.
+     */
     @Test
     fun `invalid mdoc payload is rejected instead of silently rebuilt`() {
         val repo = mock(WalletCredentialRepository::class.java)

@@ -1,3 +1,7 @@
+/**
+ * Tests credential choice grouper.
+ */
+
 package di.swallet.wpb.consent
 
 import di.swallet.wpb.presentation.domain.CredentialCandidate
@@ -10,6 +14,10 @@ class CredentialChoiceGrouperTest {
 
     private val grouper = CredentialChoiceGrouper()
 
+    /**
+     * Supplies one credential candidate for a query and expects requiresExplicitSelection
+     * to return false because the holder has no competing choice.
+     */
     @Test
     fun `single candidate does not require explicit selection`() {
         val candidates = listOf(
@@ -18,6 +26,10 @@ class CredentialChoiceGrouperTest {
         assertFalse(grouper.requiresExplicitSelection(candidates))
     }
 
+    /**
+     * Supplies two PID candidates for the same query and expects explicit selection to be
+     * required, with the grouped result flagged as requiresUserSelection.
+     */
     @Test
     fun `duplicate pid candidates require explicit selection`() {
         val candidates = listOf(
@@ -29,6 +41,10 @@ class CredentialChoiceGrouperTest {
         assertTrue(groups.single().requiresUserSelection)
     }
 
+    /**
+     * Builds a PID SD-JWT CredentialCandidate with the given ids for grouper selection
+     * and grouping tests.
+     */
     private fun candidate(
         id: String,
         queryId: String,

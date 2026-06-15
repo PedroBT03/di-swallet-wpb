@@ -1,3 +1,7 @@
+/**
+ * OpenID4VP protocol models shared by adapters, controllers, and orchestration.
+ */
+
 package di.swallet.wpb.openid4vp.protocol
 
 import di.swallet.wpb.presentation.domain.CredentialFormat
@@ -5,9 +9,7 @@ import di.swallet.wpb.presentation.domain.PresentationRequirements
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
-/**
- * Normalized response mode values used inside the application.
- */
+/** Application-level response mode values normalized from OpenID4VP requests. */
 enum class PresentationResponseMode {
     DIRECT_POST,
     DIRECT_POST_JWT,
@@ -17,6 +19,7 @@ enum class PresentationResponseMode {
     FRAGMENT_JWT,
     ;
 
+    /** Returns the wire value used in authorization and dispatch requests. */
     fun wireValue(): String = when (this) {
         DIRECT_POST -> "direct_post"
         DIRECT_POST_JWT -> "direct_post.jwt"
@@ -28,8 +31,8 @@ enum class PresentationResponseMode {
 }
 
 /**
- * Public representation of the verifier request resolved by the SDK adapter.
- * The requestToken is opaque and only meaningful inside the adapter boundary.
+ * Normalized authorization request produced by the OpenID4VP adapter.
+ * [requestToken] is opaque and only meaningful inside the adapter boundary.
  */
 data class ResolvedAuthorizationRequest(
     val requestToken: String,
@@ -46,9 +49,7 @@ data class ResolvedAuthorizationRequest(
     val verifierInfoJson: String? = null,
 )
 
-/**
- * Dispatch details exposed to the application for observability.
- */
+/** Dispatch target details exposed for observability and error handling. */
 data class DispatchDetails(
     val responseMode: PresentationResponseMode,
     val nonce: String?,
@@ -58,9 +59,7 @@ data class DispatchDetails(
     val redirectUri: String? = null,
 )
 
-/**
- * Error envelope returned by the adapter when the SDK rejects an authorization request.
- */
+/** Adapter error returned when the SDK rejects an authorization request. */
 data class AuthorizationRequestErrorEnvelope(
     val errorToken: String,
     val errorCode: String,
@@ -68,18 +67,16 @@ data class AuthorizationRequestErrorEnvelope(
     val dispatchDetails: DispatchDetails? = null,
 )
 
-/**
- * Resolution result from the adapter.
- */
+/** Result of resolving a verifier request URI through the adapter. */
 sealed interface AuthorizationRequestResolution {
+    /** Authorization request parsed successfully. */
     data class Success(val request: ResolvedAuthorizationRequest) : AuthorizationRequestResolution
 
+    /** Authorization request was invalid and may include dispatchable error details. */
     data class Invalid(val error: AuthorizationRequestErrorEnvelope) : AuthorizationRequestResolution
 }
 
-/**
- * Submission request used by controllers and orchestration.
- */
+/** Holder consent submission sent from controllers into orchestration. */
 @Serializable
 data class ConsentSubmission(
     val sessionId: String,
@@ -89,16 +86,12 @@ data class ConsentSubmission(
     val reason: String? = null,
 )
 
-/**
- * Session start request used by controllers.
- */
+/** Request to start a presentation session from a verifier request URI. */
 @Serializable
 data class AuthorizationStartRequest(
     val requestUri: String,
     val holderId: String? = null,
 )
 
-/**
- * Simple helper for obtaining a list of requested formats from the application layer.
- */
+/** Pass-through helper for requested credential formats in the application layer. */
 fun requestedFormatsFrom(values: Set<CredentialFormat>): Set<CredentialFormat> = values

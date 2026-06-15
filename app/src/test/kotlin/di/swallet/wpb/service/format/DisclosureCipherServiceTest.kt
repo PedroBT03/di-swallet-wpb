@@ -1,3 +1,7 @@
+/**
+ * Tests disclosure cipher service.
+ */
+
 package di.swallet.wpb.service.format
 
 import di.swallet.wpb.config.WalletProperties
@@ -14,6 +18,9 @@ class DisclosureCipherServiceTest {
     )
     private val service = DisclosureCipherService(props)
 
+    /**
+     * encrypt then decrypt on a three-item disclosure list returns the original strings.
+     */
     @Test
     fun `should encrypt and decrypt disclosures losslessly`() {
         val disclosures = listOf("disc-a", "disc-b", "disc-c")
@@ -24,6 +31,9 @@ class DisclosureCipherServiceTest {
         assertEquals(disclosures, decrypted)
     }
 
+    /**
+     * Two encrypt calls with identical input produce different ciphertext (non-deterministic encryption).
+     */
     @Test
     fun `should produce different ciphertext for same input`() {
         val disclosures = listOf("disc-a", "disc-b")

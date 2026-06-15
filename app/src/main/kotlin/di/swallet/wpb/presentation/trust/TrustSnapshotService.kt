@@ -1,3 +1,7 @@
+/**
+ * Loads, caches, and refreshes verifier trust snapshots from local and remote sources.
+ */
+
 package di.swallet.wpb.presentation.trust
 
 import di.swallet.wpb.ka.trust.CertificateChainValidator
@@ -20,6 +24,9 @@ import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
+/**
+ * Resolves LoTE trust snapshots from file, remote, or hybrid configuration.
+ */
 @Component
 class TrustSnapshotService(
     private val properties: OpenId4VpProperties,
@@ -32,8 +39,10 @@ class TrustSnapshotService(
     private val refreshInProgress = AtomicBoolean(false)
     private val consecutiveRefreshFailures = java.util.concurrent.atomic.AtomicInteger(0)
 
+    /** Returns the currently cached trust snapshot, if any. */
     fun cachedSnapshot(): TrustSnapshot? = cacheRef.get()
 
+    /** Builds actuator health information from cache age and refresh failures. */
     fun health(): TrustSnapshotHealth {
         val snapshot = cacheRef.get()
         val failures = consecutiveRefreshFailures.get()
@@ -67,6 +76,7 @@ class TrustSnapshotService(
         )
     }
 
+    /** Returns a valid cached snapshot or refreshes when the cache is missing or expired. */
     override fun currentAvailability(): TrustSnapshotAvailability {
         val current = cacheRef.get()
         if (current == null) {
@@ -87,6 +97,7 @@ class TrustSnapshotService(
         }
     }
 
+    /** Reloads trust material and updates the cache when loading succeeds. */
     fun refresh(): TrustSnapshotAvailability {
         if (!refreshInProgress.compareAndSet(false, true)) {
             val cached = cacheRef.get()
@@ -144,6 +155,7 @@ class TrustSnapshotService(
         }
     }
 
+    /** Triggers a refresh when remote or hybrid trust mode is configured. */
     fun refreshRemoteIfConfigured() {
         val mode = properties.trust.sourceModeNormalized()
         if (mode == "remote" || mode == "hybrid") {
@@ -154,6 +166,7 @@ class TrustSnapshotService(
         }
     }
 
+    /** Loads a trust snapshot according to the configured source mode. */
     private fun loadSnapshot(): TrustSnapshot? {
         val mode = properties.trust.sourceModeNormalized()
         val now = Instant.now()
@@ -176,6 +189,7 @@ class TrustSnapshotService(
         }
     }
 
+    /** Loads trust anchors and entities from local LoTE files and PEM paths. */
     private fun loadLocalSnapshot(now: Instant): TrustSnapshot? {
         val localVerifiersPath = properties.trust.localVerifiersPath.trim()
         val localAnchorPaths = properties.trust.localTrustAnchorPemPaths()
@@ -195,6 +209,7 @@ class TrustSnapshotService(
         )
     }
 
+    /** Downloads and parses a remote LoTE trust document. */
     private fun loadRemoteSnapshot(now: Instant): TrustSnapshot? {
         val url = properties.trust.remoteTrustUrl.trim()
         if (url.isBlank()) return null
@@ -209,6 +224,7 @@ class TrustSnapshotService(
         )
     }
 
+    /** Merges local and remote snapshots, with remote entries overriding duplicates. */
     private fun mergeSnapshots(
         local: TrustSnapshot?,
         remote: TrustSnapshot?,
@@ -238,6 +254,7 @@ class TrustSnapshotService(
         )
     }
 
+    /** Downloads remote trust JSON after validating URL policy. */
     private fun fetchRemote(url: String): String {
         validateRemoteUrlPolicy(url)
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -253,6 +270,7 @@ class TrustSnapshotService(
         conn.inputStream.bufferedReader().use { return it.readText() }
     }
 
+    /** Returns true when the configured remote refresh interval has elapsed. */
     private fun shouldRefreshRemote(snapshot: TrustSnapshot): Boolean {
         val mode = properties.trust.sourceModeNormalized()
         if (mode != "remote" && mode != "hybrid") return false
@@ -260,6 +278,7 @@ class TrustSnapshotService(
         return snapshot.loadedAt.plus(refreshInterval).isBefore(Instant.now())
     }
 
+    /** Returns true when the snapshot exceeded max age or its valid-until timestamp. */
     private fun isSnapshotExpired(snapshot: TrustSnapshot): Boolean {
         val maxAge = Duration.ofSeconds(properties.trust.maxSnapshotAgeSeconds.coerceAtLeast(1))
         if (snapshot.loadedAt.plus(maxAge).isBefore(Instant.now())) {
@@ -269,9 +288,11 @@ class TrustSnapshotService(
         return validUntil.isBefore(Instant.now())
     }
 
+    /** Returns true when the snapshot contains no entities and no trust anchors. */
     private fun isEffectivelyEmpty(snapshot: TrustSnapshot): Boolean =
         snapshot.entities.isEmpty() && snapshot.trustAnchors.isEmpty()
 
+    /** Removes duplicate trust anchor certificates while preserving order. */
     private fun dedupeAnchors(certs: List<X509Certificate>): List<X509Certificate> {
         val unique = LinkedHashMap<String, X509Certificate>()
         certs.forEach { cert ->
@@ -281,6 +302,7 @@ class TrustSnapshotService(
         return unique.values.toList()
     }
 
+    /** Enforces HTTPS and host allow-list rules for remote trust URLs. */
     private fun validateRemoteUrlPolicy(rawUrl: String) {
         val uri = runCatching { URI(rawUrl) }.getOrElse {
             throw IllegalArgumentException("remote trust URL is invalid: ${it.message}")

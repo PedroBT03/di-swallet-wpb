@@ -1,3 +1,7 @@
+/**
+ * Tests in memory issuance session repository.
+ */
+
 package di.swallet.wpb.issuance.persistence
 
 import di.swallet.wpb.issuance.domain.IssuanceSession
@@ -14,6 +18,7 @@ import java.util.UUID
 
 class InMemoryIssuanceSessionRepositoryTest {
 
+    /** Creates a session with a random id, default holder, and configurable state and optimistic-lock version. */
     private fun newSession(state: IssuanceState = IssuanceState.OFFER_RECEIVED, version: Long = 0L): IssuanceSession {
         val now = Instant.now()
         return IssuanceSession(
@@ -30,6 +35,9 @@ class InMemoryIssuanceSessionRepositoryTest {
         )
     }
 
+    /**
+     * Fresh in-memory repo stores a new OFFER_RECEIVED session; findById returns the same session and state.
+     */
     @Test
     fun `create and findById round-trip`() {
         val repo = InMemoryIssuanceSessionRepository()
@@ -40,12 +48,18 @@ class InMemoryIssuanceSessionRepositoryTest {
         assertEquals(IssuanceState.OFFER_RECEIVED, found?.state)
     }
 
+    /**
+     * Empty repo queried with a random session id; lookup returns null.
+     */
     @Test
     fun `findById returns null for unknown id`() {
         val repo = InMemoryIssuanceSessionRepository()
         assertNull(repo.findById(UUID.randomUUID()))
     }
 
+    /**
+     * Session created at version 0 is updated to OFFER_RESOLVED; the returned copy carries version 1.
+     */
     @Test
     fun `update bumps version optimistically`() {
         val repo = InMemoryIssuanceSessionRepository()
@@ -56,6 +70,9 @@ class InMemoryIssuanceSessionRepositoryTest {
         assertEquals(IssuanceState.OFFER_RESOLVED, updated.state)
     }
 
+    /**
+     * Inserting the same session id twice throws IllegalArgumentException with an already-exists message.
+     */
     @Test
     fun `create rejects duplicate session id`() {
         val repo = InMemoryIssuanceSessionRepository()
@@ -65,6 +82,9 @@ class InMemoryIssuanceSessionRepositoryTest {
         assertTrue(ex.message!!.contains("already exists"))
     }
 
+    /**
+     * A stale version-0 copy after one successful update triggers a version conflict; a follow-up with the current version reaches version 2.
+     */
     @Test
     fun `update rejects version mismatch`() {
         val repo = InMemoryIssuanceSessionRepository()
@@ -81,6 +101,9 @@ class InMemoryIssuanceSessionRepositoryTest {
         assertEquals(2L, next.sessionMeta.version)
     }
 
+    /**
+     * Updating a session that was never created throws NoSuchElementException.
+     */
     @Test
     fun `update throws when session missing`() {
         val repo = InMemoryIssuanceSessionRepository()

@@ -1,3 +1,7 @@
+/**
+ * Key Attestation (KA) validation: technical, trust, and proof binding checks.
+ */
+
 package di.swallet.wpb.ka.validation
 
 import com.nimbusds.jose.crypto.ECDSAVerifier
@@ -16,27 +20,36 @@ import di.swallet.wpb.service.StatusListService
 import org.springframework.stereotype.Component
 import java.time.Instant
 
+/** Raised when key attestation technical, trust, or binding validation fails. */
 class KeyAttestationValidationException(
     val code: String,
     message: String,
 ) : RuntimeException(message)
 
+/** Validates KA freshness, trust chain, issuer claims, and proof key binding. */
 interface KeyAttestationValidationService {
+    /** Checks token and status expiry, key storage policy, and revocation state. */
     fun validateTechnical(attestation: KeyAttestation, configuration: CredentialConfigurationDescriptor)
+
+    /** Verifies JWT claims, signature, x5c chain, and optional PKIX trust anchors. */
     fun validateTrust(
         attestation: KeyAttestation,
         configuration: CredentialConfigurationDescriptor? = null,
         metadata: ResolvedIssuerMetadata? = null,
     )
+
+    /** Ensures the attested jkt matches the proof-of-possession public key. */
     fun validateBinding(attestation: KeyAttestation, proof: ProofMaterial)
 }
 
+/** Default KA validator combining status list, x5c, and configured trust policy. */
 @Component
 class DefaultKeyAttestationValidationService(
     private val properties: OpenId4VciProperties,
     private val statusListService: StatusListService,
     private val certificateChainValidator: CertificateChainValidator,
 ) : KeyAttestationValidationService {
+    /** Rejects expired tokens, mismatched key storage, or revoked status indices. */
     override fun validateTechnical(attestation: KeyAttestation, configuration: CredentialConfigurationDescriptor) {
         if (attestation.tokenExpiresAt.isBefore(Instant.now())) {
             throw KeyAttestationValidationException("ka_expired", "Key attestation token has expired")
@@ -55,6 +68,7 @@ class DefaultKeyAttestationValidationService(
         }
     }
 
+    /** Validates issuer, audience, configuration claims, signature, and trust anchors. */
     override fun validateTrust(
         attestation: KeyAttestation,
         configuration: CredentialConfigurationDescriptor?,
@@ -125,6 +139,7 @@ class DefaultKeyAttestationValidationService(
         }
     }
 
+    /** Compares RFC 7638 thumbprints of attested and proof public keys. */
     override fun validateBinding(attestation: KeyAttestation, proof: ProofMaterial) {
         val proofJkt = Rfc7638JwkThumbprint.fromEcPublicKey(proof.publicKey)
         if (attestation.attestedJkt.isBlank() || proofJkt.isBlank()) {
@@ -135,6 +150,7 @@ class DefaultKeyAttestationValidationService(
         }
     }
 
+    /** Reads x5c from JWT header fields or falls back to attestation metadata. */
     private fun resolveX5c(parsed: SignedJWT, attestation: KeyAttestation): List<String> {
         val header = parsed.header
         return header.x509CertChain?.map { it.toString() }
@@ -142,6 +158,7 @@ class DefaultKeyAttestationValidationService(
             ?: attestation.x5c
     }
 
+    /** Rejects leaf certificates whose SHA-256 fingerprint is not in the configured allow-list. */
     private fun enforceFingerprintAllowList(leaf: java.security.cert.X509Certificate) {
         val allowed = properties.ka.allowedX5cFingerprints()
             .map { it.trim().uppercase() }

@@ -1,3 +1,7 @@
+/**
+ * Tests trust mark view assembly for enabled and disabled configurations.
+ */
+
 package di.swallet.wpb.trustmark
 
 import di.swallet.wpb.config.TrustMarkProperties
@@ -14,6 +18,7 @@ class TrustMarkServiceTest {
     private val stubProvider = StubTrustMarkResourceProvider()
     private lateinit var service: TrustMarkService
 
+    /** Enables trust mark properties and wires TrustMarkService with a stub resource provider before each test. */
     @BeforeEach
     fun setUp() {
         properties.enabled = true
@@ -31,6 +36,10 @@ class TrustMarkServiceTest {
         )
     }
 
+    /**
+     * Trust mark feature is disabled in properties before getView is called.
+     * Returned view must have enabled=false and include a user notice.
+     */
     @Test
     fun `returns disabled view when not configured`() {
         properties.enabled = false
@@ -39,6 +48,10 @@ class TrustMarkServiceTest {
         assertNotNull(view.userNotice)
     }
 
+    /**
+     * Feature is enabled with a stub resource provider and a French language request.
+     * View must be enabled with two actions, French localized text, and an absolute image URL resolved from a relative path.
+     */
     @Test
     fun `returns enabled view with actions and localized resource`() {
         val view = service.getView("fr")
@@ -50,6 +63,7 @@ class TrustMarkServiceTest {
     }
 
     private class StubTrustMarkResourceProvider : TrustMarkResourceProvider {
+        /** Returns a cached French/English trust mark payload with a relative logo path for URL resolution tests. */
         override fun getResource(forceRefresh: Boolean): CachedTrustMarkResource =
             CachedTrustMarkResource(
                 payload = TrustMarkResourcePayload(
@@ -66,6 +80,7 @@ class TrustMarkServiceTest {
                 expiresAt = Instant.parse("2025-07-29T10:00:00Z"),
             )
 
+        /** No-op cache invalidation for the stub provider. */
         override fun invalidate() = Unit
     }
 }

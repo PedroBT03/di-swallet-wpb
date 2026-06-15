@@ -1,3 +1,7 @@
+/**
+ * JPA entity and status enum for per-RP pseudonym passkey credentials stored in the wallet.
+ */
+
 package di.swallet.wpb.pseudonym
 
 import jakarta.persistence.Column
@@ -9,6 +13,9 @@ import jakarta.persistence.Table
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * Persisted pseudonym passkey linking a holder to a relying party with optional HSM-backed keys.
+ */
 @Entity
 @Table(name = "pseudonym_credentials")
 class PseudonymCredential(
@@ -47,6 +54,7 @@ class PseudonymCredential(
     var lastUsedAt: Instant? = null,
 )
 
+/** Lifecycle state of a pseudonym credential from creation through WebAuthn registration. */
 enum class PseudonymStatus {
     PENDING,
     REGISTERED,

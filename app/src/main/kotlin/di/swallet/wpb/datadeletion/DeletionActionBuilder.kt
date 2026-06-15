@@ -1,3 +1,7 @@
+/**
+ * Builds web, email, and phone action URIs for GDPR deletion requests to relying parties.
+ */
+
 package di.swallet.wpb.datadeletion
 
 import di.swallet.wpb.config.DataDeletionRequestProperties
@@ -6,21 +10,25 @@ import org.springframework.stereotype.Component
 import org.springframework.web.util.UriUtils
 import java.nio.charset.StandardCharsets
 
+/** Supported channels for contacting a relying party about data deletion. */
 enum class DeletionActionChannel {
     WEB,
     EMAIL,
     PHONE,
 }
 
+/** One actionable deletion contact with its launch URI. */
 data class DeletionAction(
     val channel: DeletionActionChannel,
     val uri: String,
 )
 
+/** Fills mailto templates with RP name, presentation time, and selected claims. */
 @Component
 class DeletionMailTemplateBuilder(
     private val properties: DataDeletionRequestProperties,
 ) {
+    /** Builds a mailto URI with configured deletion request subject and body. */
     fun buildMailto(
         email: String,
         rpName: String,
@@ -35,6 +43,7 @@ class DeletionMailTemplateBuilder(
         return "mailto:$email?subject=$encodedSubject&body=$encodedBody"
     }
 
+    /** Chooses the all-claims or per-claim mail body template and substitutes placeholders. */
     private fun buildBody(
         rpName: String,
         presentationTime: String?,
@@ -58,10 +67,12 @@ class DeletionMailTemplateBuilder(
     }
 }
 
+/** Converts parsed deletion contacts into ordered web, email, and phone actions. */
 @Component
 class DeletionActionBuilder(
     private val mailTemplateBuilder: DeletionMailTemplateBuilder,
 ) {
+    /** Builds all actionable URIs for the given contacts and claim selection. */
     fun buildAll(
         contacts: ParsedDeletionContacts,
         rpName: String,
@@ -97,6 +108,7 @@ class DeletionActionBuilder(
         return actions
     }
 
+    /** Defines presentation order for deletion contact channels. */
     private fun channelOrder(channel: DeletionContactChannel): Int = when (channel) {
         DeletionContactChannel.WEB -> 0
         DeletionContactChannel.EMAIL -> 1

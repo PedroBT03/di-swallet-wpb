@@ -1,11 +1,14 @@
+/**
+ * JPA entity for HSM-backed wallet holder keys and their revocation bit index.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
 /**
- * Entity representing a hardware key. 
- * Status is managed via a bitstring index (0 = ACTIVE, 1 = REVOKED).
+ * Metadata for a holder's EC key stored in the HSM, including its status-list revocation index.
  */
 @Entity
 @Table(name = "wallet_keys")

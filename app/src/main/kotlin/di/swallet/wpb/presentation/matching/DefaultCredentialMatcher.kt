@@ -1,3 +1,7 @@
+/**
+ * Default credential matching against verifier DCQL queries.
+ */
+
 package di.swallet.wpb.presentation.matching
 
 import di.swallet.wpb.domain.WalletCredentialRepository
@@ -15,13 +19,8 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 
 /**
- * Matches wallet credentials against the verifier DCQL queries.
- *
- *  - Only the SD-JWT format is supported at runtime. MDOC queries are matched
- *    only when synthetic demo data is allowed.
- *  - Type hints (`vct_values`) are used as a soft filter when present.
- *  - Per-query requested claim names are attached to each candidate so the VP
- *    builder can filter selective disclosures accordingly.
+ * Matches stored wallet credentials to verifier DCQL queries.
+ * SD-JWT and mdoc formats are supported; demo mode may add synthetic candidates.
  */
 @Service
 class DefaultCredentialMatcher(
@@ -34,6 +33,9 @@ class DefaultCredentialMatcher(
     private val credentialRevocationGuard: CredentialRevocationGuard,
 ) : CredentialMatcher {
 
+    /**
+     * Parses DCQL queries, searches the wallet, and attaches matching candidates to the context.
+     */
     override fun match(context: PresentationContext): PresentationContext {
         val requirements = context.authorizationRequest?.requirements
         val parsedQueries = requirements?.credentialQueries?.takeIf { it.isNotEmpty() }
@@ -60,6 +62,7 @@ class DefaultCredentialMatcher(
         )
     }
 
+    /** Matches one DCQL query against all wallet credentials for the relevant format. */
     private fun matchQueryAgainstWallet(
         query: CredentialQuery,
         wallet: List<di.swallet.wpb.domain.WalletCredential>,
@@ -70,6 +73,7 @@ class DefaultCredentialMatcher(
         }
     }
 
+    /** Finds SD-JWT credentials whose disclosures can satisfy the requested claim paths. */
     private fun matchSdJwt(
         query: CredentialQuery,
         wallet: List<di.swallet.wpb.domain.WalletCredential>,
@@ -97,6 +101,7 @@ class DefaultCredentialMatcher(
             .toList()
     }
 
+    /** Returns true when the credential disclosures cover all requested claim paths. */
     private fun sdJwtCredentialSatisfiesQuery(
         credential: di.swallet.wpb.domain.WalletCredential,
         query: CredentialQuery,
@@ -106,6 +111,7 @@ class DefaultCredentialMatcher(
         return sdJwtDisclosureSelector.canSatisfy(disclosures, query.requestedClaimPaths)
     }
 
+    /** Loads SD-JWT disclosures from inline payload data or encrypted storage. */
     private fun loadStoredDisclosures(credential: di.swallet.wpb.domain.WalletCredential): List<String> {
         if (credential.encodedData.contains('~')) {
             return credential.encodedData.split('~').drop(1).filter { it.isNotBlank() }
@@ -114,6 +120,7 @@ class DefaultCredentialMatcher(
         return disclosureCipherService.decrypt(credential.encryptedDisclosures)
     }
 
+    /** Finds mdoc credentials whose doc type and available claims satisfy the query. */
     private fun matchMdoc(
         query: CredentialQuery,
         wallet: List<di.swallet.wpb.domain.WalletCredential>,
@@ -150,6 +157,7 @@ class DefaultCredentialMatcher(
             .toList()
     }
 
+    /** Returns one synthetic candidate per query when demo mode is enabled. */
     private fun syntheticCandidate(query: CredentialQuery, holderId: String?): List<CredentialCandidate> {
         if (!demoMode) return emptyList()
         return listOf(

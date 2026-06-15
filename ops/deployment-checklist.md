@@ -13,12 +13,12 @@ Use this checklist before exposing the Wallet Provider Backend to holders or eco
 - [ ] `wpb.openid4vp.demo-mode=false` and `wpb.openid4vci.demo-mode=false`
 - [ ] `wallet.allow-untrusted-attestation=false`
 - [ ] `wallet.rp.id` and `wallet.origins` — production HTTPS domain only
-- [ ] `wpb.dpa-reporting.provider-fallback-dpa.*` — at least one of `email`, `phone`, or `form-uri` (RPT_DPA_01; enforced by `ProductionReadinessValidator`)
+- [ ] `wpb.dpa-reporting.provider-fallback-dpa.*` — at least one of `email`, `phone`, or `form-uri` (enforced by `ProductionReadinessValidator`)
 
 ## Trust and registry
 
 - [ ] LoTE / trust snapshot source configured (`wpb.openid4vp.trust.*`)
-- [ ] TS5 registry URL and verification keys when registry is enabled
+- [ ] RP registry URL and verification keys when registry is enabled
 - [ ] Remote host allow-lists reviewed (`remote-allowed-hosts`)
 
 ## Network and edge

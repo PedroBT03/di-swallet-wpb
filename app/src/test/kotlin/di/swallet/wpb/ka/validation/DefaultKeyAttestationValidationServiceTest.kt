@@ -1,3 +1,7 @@
+/**
+ * Tests default key attestation validation service.
+ */
+
 package di.swallet.wpb.ka.validation
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -27,6 +31,7 @@ class DefaultKeyAttestationValidationServiceTest {
     private val certificateChainValidator = Mockito.mock(CertificateChainValidator::class.java)
     private val service = DefaultKeyAttestationValidationService(properties, statusListService, certificateChainValidator)
 
+    /** Generates ES256 proof material whose attestedJkt can be matched against a KeyAttestation stub. */
     private fun proof(): ProofMaterial {
         val kp = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
@@ -38,6 +43,7 @@ class DefaultKeyAttestationValidationServiceTest {
         )
     }
 
+    /** Builds a KeyAttestation whose attestedJkt matches [proof], with optional token expiry in the past. */
     private fun attestation(proof: ProofMaterial, expired: Boolean = false): KeyAttestation {
         val now = Instant.now()
         return KeyAttestation(
@@ -57,6 +63,9 @@ class DefaultKeyAttestationValidationServiceTest {
         )
     }
 
+    /**
+     * Non-expired attestation with matching proof key passes validateTechnical and validateBinding.
+     */
     @Test
     fun `valid technical and binding checks pass`() {
         val proof = proof()
@@ -72,6 +81,9 @@ class DefaultKeyAttestationValidationServiceTest {
         }
     }
 
+    /**
+     * Attestation with tokenExpiresAt in the past fails validateTechnical.
+     */
     @Test
     fun `expired token fails technical validation`() {
         val proof = proof()
@@ -85,6 +97,9 @@ class DefaultKeyAttestationValidationServiceTest {
         }
     }
 
+    /**
+     * Attestation bound to proof A fails validateBinding when proof B is supplied.
+     */
     @Test
     fun `mismatched proof key fails binding`() {
         val proofA = proof()
@@ -94,6 +109,9 @@ class DefaultKeyAttestationValidationServiceTest {
         }
     }
 
+    /**
+     * StatusListService reporting revoked for the attestation index fails validateTechnical.
+     */
     @Test
     fun `revoked status fails technical validation`() {
         val revokedStatus = Mockito.mock(StatusListService::class.java).also {

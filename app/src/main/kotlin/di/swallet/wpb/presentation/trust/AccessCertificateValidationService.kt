@@ -1,3 +1,7 @@
+/**
+ * Verifier access certificate validation against LoTE trust snapshots.
+ */
+
 package di.swallet.wpb.presentation.trust
 
 import di.swallet.wpb.ka.trust.CertificateChainValidator
@@ -8,13 +12,22 @@ import java.security.cert.TrustAnchor
 import java.security.cert.X509Certificate
 import javax.security.auth.x500.X500Principal
 
+/** Result of validating a verifier access certificate. */
 sealed interface AccessCertificateValidationResult {
+    /** Certificate chain and identity bindings matched the trust snapshot. */
     data object Trusted : AccessCertificateValidationResult
 
+    /** Certificate validation failed with a human-readable reason. */
     data class Rejected(val reason: String) : AccessCertificateValidationResult
 }
 
+/**
+ * Validates verifier certificate chains and identity bindings from the trust snapshot.
+ */
 interface AccessCertificateValidationService {
+    /**
+     * Validates [material] for [requestClientId] against anchors and bindings in [snapshot].
+     */
     fun validate(
         requestClientId: String,
         material: VerifierCertificateMaterial,
@@ -22,10 +35,16 @@ interface AccessCertificateValidationService {
     ): AccessCertificateValidationResult
 }
 
+/**
+ * PKIX-based access certificate validation with LoTE identity binding checks.
+ */
 @Component
 class PkixAccessCertificateValidationService(
     private val certificateChainValidator: CertificateChainValidator,
 ) : AccessCertificateValidationService {
+    /**
+     * Validates the certificate chain and checks configured client_id and SAN bindings.
+     */
     override fun validate(
         requestClientId: String,
         material: VerifierCertificateMaterial,
@@ -105,11 +124,13 @@ class PkixAccessCertificateValidationService(
         return AccessCertificateValidationResult.Trusted
     }
 
+    /** Returns the uppercase SHA-256 fingerprint of certificate DER bytes. */
     private fun sha256Hex(value: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(value)
         return digest.joinToString("") { "%02X".format(it) }
     }
 
+    /** Extracts SAN values of the given GeneralName type from the certificate. */
     private fun extractSanValues(cert: X509Certificate, type: Int): Set<String> =
         cert.subjectAlternativeNames
             ?.mapNotNull { san -> san.getOrNull(0) to san.getOrNull(1) }
@@ -119,6 +140,7 @@ class PkixAccessCertificateValidationService(
             ?.toSet()
             .orEmpty()
 
+    /** Returns the common name from the certificate subject, if present. */
     private fun extractSubjectCn(cert: X509Certificate): String? {
         val principal = X500Principal(cert.subjectX500Principal.name)
         return principal.name

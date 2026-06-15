@@ -1,3 +1,7 @@
+/**
+ * Builds TS10 data deletion request transactions for the transaction log.
+ */
+
 package di.swallet.wpb.datadeletion
 
 import di.swallet.wpb.transactionlog.domain.Ts10ClaimInfo
@@ -11,8 +15,10 @@ import org.springframework.stereotype.Component
 import java.time.Instant
 import java.util.UUID
 
+/** Maps deletion request details into a completed TS10 transaction payload. */
 @Component
 class DataDeletionRequestMapper {
+    /** Creates a DataDeletionRequest TS10 transaction for the selected claims and RP metadata. */
     fun toTransaction(
         rpIdentifier: String?,
         rpName: String?,

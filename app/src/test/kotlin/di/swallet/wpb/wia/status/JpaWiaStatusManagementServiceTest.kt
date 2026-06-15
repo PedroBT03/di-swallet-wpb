@@ -1,3 +1,7 @@
+/**
+ * Tests jpa wia status management service.
+ */
+
 package di.swallet.wpb.wia.status
 
 import di.swallet.wpb.domain.WiaStatusIndexRepository
@@ -16,6 +20,7 @@ class JpaWiaStatusManagementServiceTest {
     private lateinit var service: JpaWiaStatusManagementService
 
     @BeforeEach
+    /** Wires mocked repository and status list collaborators into JpaWiaStatusManagementService. */
     fun setUp() {
         repository = mock(WiaStatusIndexRepository::class.java)
         statusListService = mock(StatusListService::class.java)
@@ -23,6 +28,9 @@ class JpaWiaStatusManagementServiceTest {
         service = JpaWiaStatusManagementService(repository, statusListService)
     }
 
+    /**
+     * First call persists index 21; second lookup reuses it and getNextRevocationIndex runs only once.
+     */
     @Test
     fun `reuses persisted index for same holder and issuer scope`() {
         `when`(statusListService.getNextRevocationIndex()).thenReturn(21)
@@ -39,6 +47,9 @@ class JpaWiaStatusManagementServiceTest {
         verify(statusListService, org.mockito.Mockito.times(1)).getNextRevocationIndex()
     }
 
+    /**
+     * revokeHolder for holder-2 calls statusListService.revoke for each persisted WIA index.
+     */
     @Test
     fun `revoke holder revokes all persisted indexes`() {
         `when`(repository.findAllByHolderId("holder-2")).thenReturn(
@@ -54,9 +65,11 @@ class JpaWiaStatusManagementServiceTest {
         verify(statusListService).revoke(12)
     }
 
+    /** Wraps a persisted WiaStatusIndex entity in an Optional for repository stub return values. */
     private fun persisted(holderId: String, issuerScope: String, index: Int) =
         java.util.Optional.of(persistedEntity(holderId, issuerScope, index))
 
+    /** Builds a WiaStatusIndex row for the given holder, issuer scope, and status index. */
     private fun persistedEntity(holderId: String, issuerScope: String, index: Int) =
         di.swallet.wpb.domain.WiaStatusIndex(
             holderId = holderId,

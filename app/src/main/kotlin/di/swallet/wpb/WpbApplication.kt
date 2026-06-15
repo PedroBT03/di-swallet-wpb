@@ -1,3 +1,7 @@
+/**
+ * Spring Boot entry point and configuration property registration for the WPB service.
+ */
+
 package di.swallet.wpb
 
 import di.swallet.wpb.config.ConsentProperties
@@ -21,6 +25,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 import org.springframework.scheduling.annotation.EnableScheduling
 
+/** Main Spring Boot application for the Wallet Provider Backend. */
 @SpringBootApplication
 @EnableScheduling
 @EnableConfigurationProperties(
@@ -43,6 +48,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 )
 class WpbApplication
 
+/** Starts the WPB Spring Boot application. */
 fun main(args: Array<String>) {
     runApplication<WpbApplication>(*args)
 }

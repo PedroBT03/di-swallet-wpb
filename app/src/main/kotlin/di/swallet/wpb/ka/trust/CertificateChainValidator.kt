@@ -1,3 +1,7 @@
+/**
+ * PKIX certificate chain parsing and validation for key attestation trust.
+ */
+
 package di.swallet.wpb.ka.trust
 
 import org.springframework.core.io.ResourceLoader
@@ -12,10 +16,12 @@ import java.security.cert.TrustAnchor
 import java.security.cert.X509Certificate
 import java.util.Base64
 
+/** Parses PEM/DER x5c chains and validates them against configured trust anchors. */
 @Component
 class CertificateChainValidator(
     private val resourceLoader: ResourceLoader,
 ) {
+    /** Decodes a list of base64 DER certificates into X509Certificate instances. */
     fun parseDerBase64Chain(x5c: List<String>): List<X509Certificate> {
         val certFactory = CertificateFactory.getInstance("X.509")
         return x5c.map { raw ->
@@ -28,12 +34,14 @@ class CertificateChainValidator(
         }
     }
 
+    /** Validates [chain] against trust anchors loaded from configured PEM paths. */
     fun validatePkix(chain: List<X509Certificate>, trustAnchorPaths: List<String>) {
         require(chain.isNotEmpty()) { "x5c chain is required for PKIX validation" }
         val anchors = loadTrustAnchors(trustAnchorPaths)
         validatePkix(chain, anchors, "strict trust mode requires configured trust anchors")
     }
 
+    /** Validates [chain] against an explicit set of PKIX trust anchors. */
     fun validatePkix(
         chain: List<X509Certificate>,
         anchors: Set<TrustAnchor>,
@@ -46,6 +54,7 @@ class CertificateChainValidator(
         CertPathValidator.getInstance("PKIX").validate(certPath, params)
     }
 
+    /** Loads trust anchors from classpath or filesystem PEM paths. */
     fun loadTrustAnchors(paths: List<String>): Set<TrustAnchor> {
         return paths.flatMap { path ->
             val pem = readPath(path)
@@ -53,6 +62,7 @@ class CertificateChainValidator(
         }.map { TrustAnchor(it, null) }.toSet()
     }
 
+    /** Reads PEM text from a classpath or filesystem location. */
     fun readPath(path: String): String {
         return when {
             path.startsWith("classpath:") -> {
@@ -63,6 +73,7 @@ class CertificateChainValidator(
         }
     }
 
+    /** Parses one or more PEM-encoded certificates from a string blob. */
     fun parsePemCertificates(content: String): List<X509Certificate> {
         val certFactory = CertificateFactory.getInstance("X.509")
         val pemRegex = Regex("-----BEGIN CERTIFICATE-----([\\s\\S]*?)-----END CERTIFICATE-----")

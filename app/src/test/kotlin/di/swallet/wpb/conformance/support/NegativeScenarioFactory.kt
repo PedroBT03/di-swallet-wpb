@@ -1,3 +1,7 @@
+/**
+ * Builds invalid authorization requests for negative conformance scenarios.
+ */
+
 package di.swallet.wpb.conformance.support
 
 import di.swallet.wpb.config.OpenId4VpProperties
@@ -32,6 +36,7 @@ enum class RegistryScenario {
 
 object NegativeScenarioFactory {
 
+    /** Builds OpenId4VpProperties with demo mode and trust allow-list tuned for conformance negative scenarios. */
     fun trustProperties(
         allowedClientId: String = "verifier-demo-client",
         demoMode: Boolean = false,
@@ -41,6 +46,10 @@ object NegativeScenarioFactory {
         trust.allowFailOpenInDemoMode = false
     }
 
+    /**
+     * Returns a DefaultTrustValidator wired with a stub snapshot resolver and always-trusted
+     * certificate validation, optionally swapping the allow-list for UNTRUSTED_CLIENT.
+     */
     fun trustValidator(
         properties: OpenId4VpProperties,
         scenario: TrustScenario,
@@ -64,16 +73,19 @@ object NegativeScenarioFactory {
             loadedAt = Instant.now(),
         )
         val resolver = object : TrustSnapshotResolver {
+            /** Supplies a fixed conformance trust snapshot regardless of refresh state. */
             override fun currentAvailability(): TrustSnapshotAvailability =
                 TrustSnapshotAvailability.Available(snapshot)
         }
         val extractor: VerifierCertificateExtractor = object : VerifierCertificateExtractor {
+            /** Returns a mocked leaf certificate chain so trust validation can proceed without real x5c material. */
             override fun extract(request: di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest): VerifierCertificateMaterial? {
                 val cert = mock(X509Certificate::class.java)
                 return VerifierCertificateMaterial(chain = listOf(cert), leaf = cert)
             }
         }
         val certValidator: AccessCertificateValidationService = object : AccessCertificateValidationService {
+            /** Always reports the verifier certificate as trusted, bypassing real PKIX checks. */
             override fun validate(
                 requestClientId: String,
                 material: VerifierCertificateMaterial,
@@ -88,7 +100,9 @@ object NegativeScenarioFactory {
         )
     }
 
+    /** Returns a RegistryValidator that accepts or rejects based on the given registry scenario enum. */
     fun registryValidator(scenario: RegistryScenario): RegistryValidator = object : RegistryValidator {
+        /** Sets registryDecision.accepted according to the ACCEPTED or REJECTED scenario enum value. */
         override fun validate(context: PresentationContext): PresentationContext {
             val accepted = scenario == RegistryScenario.ACCEPTED
             return context.copy(

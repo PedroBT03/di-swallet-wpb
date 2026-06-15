@@ -1,3 +1,7 @@
+/**
+ * Tests issuer signed metadata validator.
+ */
+
 package di.swallet.wpb.issuance.trust
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -10,10 +14,14 @@ import java.util.Date
 
 class IssuerSignedMetadataValidatorTest {
 
+    /** IssuerSignedMetadataValidator configured with the given sdk.metadataPolicy string. */
     private fun validator(policy: String) = IssuerSignedMetadataValidator(
         OpenId4VciProperties().apply { sdk.metadataPolicy = policy },
     )
 
+    /**
+     * preferSigned policy accepts metadata without a JWT; the reason mentions preferSigned.
+     */
     @Test
     fun `preferSigned accepts unsigned metadata`() {
         val result = validator("preferSigned").validate(
@@ -23,6 +31,9 @@ class IssuerSignedMetadataValidatorTest {
         assertTrue(result.reason!!.contains("preferSigned"))
     }
 
+    /**
+     * requireSigned policy rejects issuer metadata that lacks a signed JWT.
+     */
     @Test
     fun `requireSigned rejects unsigned metadata`() {
         val result = validator("requireSigned").validate(
@@ -31,6 +42,9 @@ class IssuerSignedMetadataValidatorTest {
         assertFalse(result.acceptable)
     }
 
+    /**
+     * ignoreSigned policy accepts metadata even when signedMetadataJwt is malformed.
+     */
     @Test
     fun `ignoreSigned skips validation even when jwt is invalid`() {
         val result = validator("ignoreSigned").validate(
@@ -42,6 +56,9 @@ class IssuerSignedMetadataValidatorTest {
         assertTrue(result.acceptable)
     }
 
+    /**
+     * A properly signed JWT for the matching issuer passes requireSigned validation.
+     */
     @Test
     fun `valid signed metadata is accepted`() {
         val issuer = "https://issuer.example"
@@ -57,6 +74,9 @@ class IssuerSignedMetadataValidatorTest {
         assertTrue(result.acceptable)
     }
 
+    /**
+     * JWT signed for a different issuer is rejected when credentialIssuerId does not match.
+     */
     @Test
     fun `signed metadata with issuer mismatch is rejected`() {
         val signing = SignedIssuerMetadataTestSupport.generateIssuerSigningMaterial()
@@ -71,6 +91,9 @@ class IssuerSignedMetadataValidatorTest {
         assertTrue(result.reason!!.contains("does not match"))
     }
 
+    /**
+     * JWT with exp in the past is rejected with an expired reason.
+     */
     @Test
     fun `expired signed metadata is rejected`() {
         val issuer = "https://issuer.example"

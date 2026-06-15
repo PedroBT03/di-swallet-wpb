@@ -1,3 +1,7 @@
+/**
+ * Orchestrates DPA report eligibility checks, contact resolution, and transaction logging.
+ */
+
 package di.swallet.wpb.dpareport
 
 import di.swallet.wpb.transactionlog.domain.Ts10Transaction
@@ -9,6 +13,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 
+/** Summary of a presentation that can be reported to a DPA. */
 data class EligibleDpaReportPresentation(
     val presentationTransactionId: String,
     val transactionResult: String,
@@ -18,17 +23,20 @@ data class EligibleDpaReportPresentation(
     val hasStoredDpaContacts: Boolean,
 )
 
+/** Request to start a DPA report from a stored presentation transaction. */
 data class DpaReportInitiateRequest(
     val holderId: String,
     val presentationTransactionId: String,
     val consentRegistryLookup: Boolean = false,
 )
 
+/** One actionable DPA contact channel returned to the wallet UI. */
 data class DpaReportActionResponse(
     val channel: String,
     val uri: String,
 )
 
+/** Result of initiating a DPA report, including substantiation and available contact actions. */
 data class DpaReportInitiateResponse(
     val transactionId: String?,
     val sourcePresentationTransactionId: String,
@@ -44,6 +52,7 @@ data class DpaReportInitiateResponse(
     val substantiationDocument: Ts10Transaction,
 )
 
+/** Resolves DPA contacts, builds report actions, and records DPA report transactions. */
 @Service
 class DpaReportService(
     private val transactionLogService: TransactionLogService,
@@ -52,6 +61,7 @@ class DpaReportService(
     private val mapper: DpaReportMapper,
     private val transactionLogger: TransactionLogger,
 ) {
+    /** Lists completed presentations that reference an interacting party and may have DPA contacts. */
     fun listEligible(holderId: String): List<EligibleDpaReportPresentation> =
         transactionLogService.list(holderId)
             .asSequence()
@@ -59,6 +69,7 @@ class DpaReportService(
             .mapNotNull { summary -> toEligible(holderId, summary) }
             .toList()
 
+    /** Resolves DPA contacts for a presentation, logs a report transaction, and returns actionable URIs. */
     fun initiate(request: DpaReportInitiateRequest): DpaReportInitiateResponse {
         if (request.holderId.isBlank()) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "holderId is required")
@@ -104,6 +115,7 @@ class DpaReportService(
         )
     }
 
+    /** Maps a presentation summary to an eligible DPA report entry when party reference data exists. */
     private fun toEligible(holderId: String, summary: TransactionLogSummary): EligibleDpaReportPresentation? {
         val transaction = runCatching {
             transactionLogService.get(holderId, summary.transactionId)
@@ -120,6 +132,7 @@ class DpaReportService(
         )
     }
 
+    /** Returns true when the presentation stores an RP identifier or registrar URL. */
     private fun hasPartyRef(presentation: di.swallet.wpb.transactionlog.domain.Ts10Presentation): Boolean =
         !presentation.interactingPartyIdentifier?.identifier.isNullOrBlank() ||
             !presentation.registrarURL.isNullOrBlank()

@@ -1,3 +1,7 @@
+/**
+ * Parses LoTE and TS 119602 trust list payloads into neutral trust-core models.
+ */
+
 package di.swallet.wpb.trust.lote
 
 import com.fasterxml.jackson.databind.JsonNode
@@ -13,13 +17,7 @@ import java.security.cert.X509Certificate
 import java.time.Instant
 import java.util.Base64
 
-/**
- * LoTE parser/adapter.
- *
- * Responsibility is intentionally limited to translation from LoTE-like
- * payloads into neutral trust-core models. No trust decisions or binding
- * policy decisions are applied here.
- */
+/** Translates LoTE-like payloads into neutral trust-core models without applying trust policy. */
 @Component
 class LoteTrustParser {
     private val mapper = jacksonObjectMapper().findAndRegisterModules()
@@ -40,6 +38,7 @@ class LoteTrustParser {
     private val activeStatusMarkers = setOf("granted")
     private val inactiveStatusMarkers = setOf("withdrawn", "revoked", "suspended", "deprecated", "historical", "history", "inactive")
 
+    /** Parses a LoTE JSON document in legacy or TS 119602 TrustedEntitiesList format. */
     fun parseDocument(payload: String): LoteTrustDocument {
         val root = mapper.readTree(payload)
         if (root["TrustedEntitiesList"]?.isArray == true) {
@@ -68,6 +67,7 @@ class LoteTrustParser {
         )
     }
 
+    /** Converts a parsed LoTE document into a protocol-agnostic trust snapshot. */
     fun toTrustSnapshot(
         document: LoteTrustDocument,
         source: LoteTrustSource,
@@ -110,6 +110,7 @@ class LoteTrustParser {
         )
     }
 
+    /** Parses a TS 119602 TrustedEntitiesList document root node. */
     private fun parseTs119602Document(root: JsonNode): LoteTrustDocument {
         val listInfo = root["ListAndSchemeInformation"]
         val sequenceNumber = listInfo?.get("LoTESequenceNumber")?.asText()
@@ -144,6 +145,7 @@ class LoteTrustParser {
         )
     }
 
+    /** Parses one TS 119602 trusted entity with active services and certificate bindings. */
     private fun parseTsEntity(
         node: JsonNode,
         sequenceNumber: String?,
@@ -201,6 +203,7 @@ class LoteTrustParser {
         )
     }
 
+    /** Parses one legacy or simplified LoTE entity node. */
     private fun parseEntity(node: JsonNode): LoteTrustEntityDocument? {
         val explicitEntityId = node["entityId"]?.asText()?.trim()?.takeIf { it.isNotBlank() }
         val legacyClientId = node["clientId"]?.asText()?.trim()?.takeIf { it.isNotBlank() }
@@ -228,11 +231,13 @@ class LoteTrustParser {
         )
     }
 
+    /** Reads string values from a JSON array node, skipping blanks. */
     private fun readTextArray(node: JsonNode?): List<String> {
         if (node == null || !node.isArray) return emptyList()
         return node.mapNotNull { it.asText()?.trim()?.ifBlank { null } }
     }
 
+    /** Parsed ETSI service entry with certificates extracted from digital identity. */
     private data class ActiveService(
         val serviceType: String?,
         val serviceStatus: String?,
@@ -240,6 +245,7 @@ class LoteTrustParser {
         val certificates: List<X509Certificate>,
     )
 
+    /** Parses one service node and keeps it only when the ETSI status is active. */
     private fun parseActiveService(serviceNode: JsonNode): ActiveService? {
         val info = serviceNode["ServiceInformation"] ?: serviceNode
         val status = info["ServiceStatus"]?.asText()?.trim()
@@ -261,12 +267,14 @@ class LoteTrustParser {
         )
     }
 
+    /** Returns true when the ETSI service status is granted and not explicitly inactive. */
     private fun isStatusActive(status: String?): Boolean {
         val raw = status?.trim()?.lowercase() ?: return false
         if (inactiveStatusMarkers.any { raw.contains(it) }) return false
         return activeStatusMarkers.any { raw == it || raw.contains("/$it") || raw.endsWith(":$it") }
     }
 
+    /** Extracts X.509 certificates from a ServiceDigitalIdentity node. */
     private fun extractServiceCertificates(digitalIdentity: JsonNode?): List<X509Certificate> {
         if (digitalIdentity == null || digitalIdentity.isNull) return emptyList()
         val certNodes = digitalIdentity["X509Certificates"]?.takeIf { it.isArray } ?: return emptyList()
@@ -283,6 +291,7 @@ class LoteTrustParser {
         }
     }
 
+    /** Reads URI values from textual nodes or uriValue object entries. */
     private fun readUriValues(node: JsonNode?): List<String> {
         if (node == null) return emptyList()
         if (!node.isArray) return emptyList()
@@ -295,16 +304,19 @@ class LoteTrustParser {
         }
     }
 
+    /** Parses an ISO-8601 instant string, returning null on invalid input. */
     private fun parseInstant(raw: String?): Instant? {
         val normalized = raw?.trim()?.takeIf { it.isNotBlank() } ?: return null
         return runCatching { Instant.parse(normalized) }.getOrNull()
     }
 
+    /** Returns the uppercase SHA-256 fingerprint of a certificate DER encoding. */
     private fun fingerprint(cert: X509Certificate): String =
         MessageDigest.getInstance("SHA-256")
             .digest(cert.encoded)
             .joinToString("") { "%02X".format(it) }
 
+    /** Extracts subject alternative names of the given SAN type from a certificate. */
     private fun extractSan(cert: X509Certificate, type: Int): List<String> =
         cert.subjectAlternativeNames
             ?.mapNotNull { san -> san.getOrNull(0) to san.getOrNull(1) }
@@ -314,6 +326,7 @@ class LoteTrustParser {
             ?.filter { it.isNotBlank() }
             .orEmpty()
 
+    /** Extracts the common name from an X.509 subject distinguished name. */
     private fun extractSubjectCn(cert: X509Certificate): String? {
         val dn = cert.subjectX500Principal.name
         return dn.split(',')

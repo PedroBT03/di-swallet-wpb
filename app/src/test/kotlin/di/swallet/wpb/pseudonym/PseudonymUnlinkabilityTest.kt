@@ -1,3 +1,7 @@
+/**
+ * Tests pseudonym unlinkability.
+ */
+
 package di.swallet.wpb.pseudonym
 
 import di.swallet.wpb.conformance.ConformanceScenario
@@ -29,6 +33,7 @@ class PseudonymUnlinkabilityTest {
     private val keyPairA = Fido2TestHelper.generateDeviceKeyPair()
     private val keyPairB = Fido2TestHelper.generateDeviceKeyPair()
 
+    /** Rebuilds PseudonymService and stubs zero existing pseudonyms per RP before each test. */
     @BeforeEach
     fun setUp() {
         service = PseudonymService(
@@ -44,6 +49,10 @@ class PseudonymUnlinkabilityTest {
         `when`(repository.countByHolderIdAndRpId(anyString(), anyString())).thenReturn(0L)
     }
 
+    /**
+     * Same holder completes pseudonym registration against two different RPs with distinct HSM key pairs.
+     * User handles, credential IDs, COSE public keys, and per-credential key aliases must all differ.
+     */
     @Test
     @ConformanceScenario("pseudonym_unlinkability")
     fun `same holder different rps produce unlinkable passkeys`() {
@@ -77,6 +86,7 @@ class PseudonymUnlinkabilityTest {
         assertEquals("pseudonym-$idB", credB.keyAlias)
     }
 
+    /** Creates a PENDING pseudonym credential stub with the given id, holder, RP, and user handle. */
     private fun pendingCredential(id: UUID, holderId: String, rpId: String, userHandle: String): PseudonymCredential =
         PseudonymCredential(
             id = id,
@@ -85,6 +95,7 @@ class PseudonymUnlinkabilityTest {
             userHandle = userHandle,
         )
 
+    /** Completes the WebAuthn registration flow for a pending pseudonym and returns the finish response. */
     private fun register(id: UUID, holderId: String, rpId: String): RegistrationFinishResponse {
         val origin = "https://$rpId"
         val options = service.registrationOptions(id, holderId, RegistrationOptionsRequest(holderId, origin))

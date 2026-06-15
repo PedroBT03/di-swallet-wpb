@@ -1,3 +1,7 @@
+/**
+ * Tests in memory ka status management service.
+ */
+
 package di.swallet.wpb.ka.status
 
 import di.swallet.wpb.revocation.RevocationTestSupport
@@ -18,6 +22,7 @@ class InMemoryKaStatusManagementServiceTest {
     private lateinit var service: InMemoryKaStatusManagementService
 
     @BeforeEach
+    /** Initializes status list service with a mock repository and constructs the in-memory KA status allocator. */
     fun setup() {
         statusListService = StatusListService(repository, RevocationTestSupport.statusListProperties())
         val mockList = StatusList(
@@ -32,6 +37,9 @@ class InMemoryKaStatusManagementServiceTest {
         service = InMemoryKaStatusManagementService(statusListService)
     }
 
+    /**
+     * Repeated getOrAllocateStatus for the same holder, issuer, and fingerprint returns the same index.
+     */
     @Test
     fun `same holder issuer and attestation reuses index`() {
         val a = service.getOrAllocateStatus("holder-1", "issuer-a", "fp-1")
@@ -39,6 +47,9 @@ class InMemoryKaStatusManagementServiceTest {
         assertEquals(a.index, b.index)
     }
 
+    /**
+     * Same holder and issuer with a different attestation fingerprint receives a new index.
+     */
     @Test
     fun `different attestation fingerprint allocates new index`() {
         val a = service.getOrAllocateStatus("holder-1", "issuer-a", "fp-1")

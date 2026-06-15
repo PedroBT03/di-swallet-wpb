@@ -1,3 +1,7 @@
+/**
+ * Shared test helpers for mdoc.
+ */
+
 package di.swallet.wpb.format.mdoc
 
 import com.authlete.cose.COSEEC2Key
@@ -17,6 +21,7 @@ import java.util.Base64
 import java.util.Optional
 
 object MdocTestSupport {
+    /** MdocProperties pointing at the dev issuer PEM with configurable session transcript mode. */
     fun properties(transcriptMode: String = "legacy-aud-nonce"): MdocProperties =
         MdocProperties().apply {
             issuerKeyPemPath = "classpath:mdoc/dev-issuer-key.pem"
@@ -32,6 +37,7 @@ object MdocTestSupport {
         val proof: ProofMaterial,
     )
 
+    /** Generates an EC holder key pair and bundles wallet key, COSE public key, and proof material under [alias]. */
     fun holderBinding(alias: String = "mdoc-holder-key"): HolderKeyBinding {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
@@ -52,6 +58,7 @@ object MdocTestSupport {
         )
     }
 
+    /** Mockito WalletKeyRepository that resolves each supplied key by alias. */
     fun walletKeyRepository(keys: Collection<WalletKey>): WalletKeyRepository {
         val repository = mock(WalletKeyRepository::class.java)
         keys.forEach { key ->
@@ -68,6 +75,7 @@ object MdocTestSupport {
         val walletKeyRepository: WalletKeyRepository,
     )
 
+    /** Assembles a full mdoc test stack with in-memory device signer, issuer key store, and optional holder bindings. */
     fun stack(
         transcriptMode: String = "legacy-aud-nonce",
         holderBindings: Collection<HolderKeyBinding> = emptyList(),
@@ -99,6 +107,7 @@ object MdocTestSupport {
         )
     }
 
+    /** OpenID4VP handover inputs with defaults for client id, nonce, and optional response URI. */
     fun handover(
         clientId: String = "verifier-demo-client",
         nonce: String = "nonce-123",

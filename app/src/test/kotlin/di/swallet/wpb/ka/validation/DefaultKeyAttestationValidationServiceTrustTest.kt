@@ -1,3 +1,7 @@
+/**
+ * Tests key attestation validation against trust policies and certificate chains.
+ */
+
 package di.swallet.wpb.ka.validation
 
 import com.nimbusds.jose.JOSEObjectType
@@ -37,12 +41,14 @@ import java.util.Date
 
 class DefaultKeyAttestationValidationServiceTrustTest {
 
+    /** OpenId4VciProperties with ka issuer, trust mode, and optional trust-anchor PEM paths preset for trust tests. */
     private fun properties(mode: String, anchors: String = "") = OpenId4VciProperties().apply {
         ka.issuer = "did:web:test.wpb"
         ka.trustMode = mode
         ka.trustAnchorPemPaths = anchors
     }
 
+    /** Validation service with mocked non-revoked status list and a real certificate chain validator. */
     private fun service(properties: OpenId4VciProperties): DefaultKeyAttestationValidationService {
         val status = Mockito.mock(StatusListService::class.java).also {
             Mockito.`when`(it.isRevoked(Mockito.anyInt())).thenReturn(false)
@@ -54,6 +60,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         )
     }
 
+    /**
+     * Self-signed x5c chain with valid ES256 JWT passes validateTrust under relaxed mode without configured anchors.
+     */
     @Test
     fun `relaxed trust mode accepts self signed chain with valid JWS`() {
         val kp = keyPair()
@@ -66,6 +75,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertDoesNotThrow { service.validateTrust(att, config, metadata) }
     }
 
+    /**
+     * Strict mode without trust anchor PEM paths rejects the same self-signed attestation.
+     */
     @Test
     fun `strict trust mode requires configured trust anchors`() {
         val kp = keyPair()
@@ -80,6 +92,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         }
     }
 
+    /**
+     * Strict mode with leaf certificate written to a temp anchor PEM file accepts validateTrust.
+     */
     @Test
     fun `strict trust mode accepts chain when trust anchor is configured`() {
         val kp = keyPair()
@@ -98,6 +113,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertDoesNotThrow { service.validateTrust(att, config, metadata) }
     }
 
+    /**
+     * JWT iss claim does not match configured ka.issuer; validateTrust throws ka_iss_invalid.
+     */
     @Test
     fun `trust validation fails on issuer mismatch`() {
         val kp = keyPair()
@@ -114,6 +132,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_iss_invalid")
     }
 
+    /**
+     * JWT credential_configuration_id does not match the requested configuration; throws ka_configuration_mismatch.
+     */
     @Test
     fun `trust validation fails on credential configuration mismatch`() {
         val kp = keyPair()
@@ -127,6 +148,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_configuration_mismatch")
     }
 
+    /**
+     * JWT aud claim does not match issuer metadata credentialIssuerId; throws ka_aud_invalid.
+     */
     @Test
     fun `trust validation fails on audience mismatch`() {
         val kp = keyPair()
@@ -140,6 +164,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_aud_invalid")
     }
 
+    /**
+     * Flipping a signature byte invalidates the JWS; validateTrust throws ka_signature_invalid.
+     */
     @Test
     fun `trust validation fails when signature is tampered`() {
         val kp = keyPair()
@@ -159,6 +186,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_signature_invalid")
     }
 
+    /**
+     * JWT signed without x5c header and empty attestation x5c list; validateTrust throws ka_x5c_missing.
+     */
     @Test
     fun `trust validation fails when x5c is missing`() {
         val kp = keyPair()
@@ -175,6 +205,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_x5c_missing")
     }
 
+    /**
+     * JWT iat set 600 seconds in the future; validateTrust throws ka_iat_invalid.
+     */
     @Test
     fun `trust validation fails when iat is in the future`() {
         val kp = keyPair()
@@ -191,6 +224,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_iat_invalid")
     }
 
+    /**
+     * Malformed attestation JWT string; validateTrust throws ka_jwt_invalid.
+     */
     @Test
     fun `trust validation fails for malformed JWT`() {
         val props = properties(mode = "relaxed")
@@ -202,6 +238,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_jwt_invalid")
     }
 
+    /**
+     * JWT payload omits iat; validateTrust throws ka_iat_missing.
+     */
     @Test
     fun `trust validation fails when iat is missing`() {
         val kp = keyPair()
@@ -225,6 +264,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_iat_missing")
     }
 
+    /**
+     * JWT payload omits exp; validateTrust throws ka_exp_missing.
+     */
     @Test
     fun `trust validation fails when exp is missing`() {
         val kp = keyPair()
@@ -248,6 +290,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_exp_missing")
     }
 
+    /**
+     * allowedX5cFingerprints contains the leaf cert SHA-256; validateTrust succeeds under relaxed mode.
+     */
     @Test
     fun `fingerprint allow-list accepts matching leaf certificate`() {
         val kp = keyPair()
@@ -263,6 +308,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertDoesNotThrow { service.validateTrust(att, config, metadata) }
     }
 
+    /**
+     * allowedX5cFingerprints does not match the leaf cert; validateTrust throws ka_x5c_untrusted.
+     */
     @Test
     fun `fingerprint allow-list rejects unknown leaf certificate`() {
         val kp = keyPair()
@@ -280,6 +328,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_x5c_untrusted")
     }
 
+    /**
+     * Non-demo profile with enforceProductionTrustPolicy upgrades relaxed to strict; self-signed chain throws ka_pkix_untrusted.
+     */
     @Test
     fun `production profile upgrades relaxed trust to strict without anchors`() {
         val kp = keyPair()
@@ -300,6 +351,9 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_pkix_untrusted")
     }
 
+    /**
+     * JWT header carries invalid x5c encoding; validateTrust throws ka_x5c_invalid.
+     */
     @Test
     fun `trust validation fails on invalid x5c encoding`() {
         val kp = keyPair()
@@ -324,6 +378,7 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         assertTrue(ex.code == "ka_x5c_invalid")
     }
 
+    /** Wraps [jwt] and [x5c] into a KeyAttestation with placeholder metadata and one-hour validity windows. */
     private fun attestation(jwt: String, x5c: List<String>): KeyAttestation {
         val now = Instant.now()
         return KeyAttestation(
@@ -340,6 +395,7 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         )
     }
 
+    /** Signs a keyattestation+jwt with standard iss/sub/aud/iat/exp and credential_configuration_id claims for [properties]. */
     private fun signedJwt(
         keyPair: KeyPair,
         certB64: String,
@@ -365,6 +421,7 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         )
     }
 
+    /** Signs an ES256 keyattestation+jwt from arbitrary [claims], optionally embedding x5c in the header. */
     private fun signedJwtWithClaims(
         keyPair: KeyPair,
         certB64: String?,
@@ -385,11 +442,13 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         return jws.serialize()
     }
 
+    /** Generates a secp256r1 EC key pair for signing test KA JWTs. */
     private fun keyPair(): KeyPair =
         KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
         }.generateKeyPair()
 
+    /** Decodes a standard Base64 DER certificate into an X509Certificate. */
     private fun parseCertificate(base64Der: String): java.security.cert.X509Certificate {
         val certFactory = java.security.cert.CertificateFactory.getInstance("X.509")
         return certFactory.generateCertificate(
@@ -397,6 +456,7 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         ) as java.security.cert.X509Certificate
     }
 
+    /** Issues a self-signed EC certificate for [keyPair] and returns its DER encoding as standard Base64. */
     private fun certBase64(keyPair: KeyPair): String {
         val subject = X500Name("CN=KA-Test")
         val now = Date()
@@ -413,6 +473,7 @@ class DefaultKeyAttestationValidationServiceTrustTest {
         return java.util.Base64.getEncoder().encodeToString(cert.encoded)
     }
 
+    /** Clones ka trust settings from this properties instance while overriding ka.issuer to [issuer]. */
     private fun OpenId4VciProperties.copyForIssuer(issuer: String): OpenId4VciProperties =
         OpenId4VciProperties().also {
             it.ka.issuer = issuer

@@ -1,3 +1,7 @@
+/**
+ * Loads and caches the EC key pair and certificate used to sign status list JWTs.
+ */
+
 package di.swallet.wpb.revocation
 
 import di.swallet.wpb.config.StatusListProperties
@@ -19,6 +23,9 @@ import java.security.interfaces.ECPrivateKey
 import java.security.spec.ECGenParameterSpec
 import java.util.Date
 
+/**
+ * Provides signing material for status list JWTs from a configured PEM bundle or dev auto-generation.
+ */
 @Component
 class StatusListSigningKeyStore(
     private val properties: StatusListProperties,
@@ -28,10 +35,16 @@ class StatusListSigningKeyStore(
     @Volatile
     private var cached: SigningMaterial? = null
 
+    /**
+     * Returns the cached signing key pair and certificate, loading from disk on first access.
+     */
     fun material(): SigningMaterial = cached ?: synchronized(this) {
         cached ?: loadMaterial().also { cached = it }
     }
 
+    /**
+     * Reads the PEM bundle from classpath or filesystem, optionally generating a dev key if missing.
+     */
     private fun loadMaterial(): SigningMaterial {
         val path = properties.signingKeyPemPath.trim()
         require(path.isNotBlank()) { "wpb.status-list.signing-key-pem-path must be configured" }
@@ -49,6 +62,9 @@ class StatusListSigningKeyStore(
         return SigningMaterial(keyPair, certificate, keyPair.private as ECPrivateKey)
     }
 
+    /**
+     * Reads PEM text from a classpath resource or filesystem path, returning null if absent.
+     */
     private fun readPem(path: String): String? = runCatching {
         when {
             path.startsWith("classpath:") -> {
@@ -64,12 +80,18 @@ class StatusListSigningKeyStore(
         }
     }.getOrNull()
 
+    /**
+     * Writes a PEM bundle to the configured filesystem path, creating parent directories as needed.
+     */
     private fun writePem(path: String, pem: String) {
         val file = File(path)
         file.parentFile?.mkdirs()
         Files.writeString(file.toPath(), pem)
     }
 
+    /**
+     * Extracts and parses the X.509 certificate block from a PEM bundle.
+     */
     private fun parseCertificateFromPem(pem: String): X509Certificate {
         val certB64 = Regex("-----BEGIN CERTIFICATE-----([\\s\\S]*?)-----END CERTIFICATE-----")
             .find(pem)?.groupValues?.get(1)?.replace("\\s".toRegex(), "")
@@ -79,6 +101,9 @@ class StatusListSigningKeyStore(
         return factory.generateCertificate(der.inputStream()) as X509Certificate
     }
 
+    /**
+     * Generates a self-signed EC key pair and certificate for local development signing.
+     */
     private fun generateDevPemBundle(): String {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
@@ -96,6 +121,9 @@ class StatusListSigningKeyStore(
         """.trimIndent() + "\n"
     }
 
+    /**
+     * Builds a one-year self-signed X.509 certificate for the given EC key pair.
+     */
     private fun selfSignedCertificate(keyPair: KeyPair, subjectDn: String): X509Certificate {
         val subject = X500Name(subjectDn)
         val now = Date()
@@ -111,6 +139,7 @@ class StatusListSigningKeyStore(
         return JcaX509CertificateConverter().getCertificate(builder.build(signer))
     }
 
+    /** EC private key, key pair, and publisher certificate used to sign status list JWTs. */
     data class SigningMaterial(
         val keyPair: KeyPair,
         val certificate: X509Certificate,

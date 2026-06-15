@@ -1,3 +1,7 @@
+/**
+ * Tests presentation service.
+ */
+
 package di.swallet.wpb.service.format
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -15,7 +19,7 @@ class PresentationServiceTest {
     )
 
     /**
-     * Verifies that the presentation only includes requested disclosures.
+     * Selective presentation of country from a two-disclosure SD-JWT keeps JWT and country disclosure, drops name disclosure.
      */
     @Test
     fun `should filter disclosures for selective presentation`() {

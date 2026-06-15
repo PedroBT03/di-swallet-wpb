@@ -1,3 +1,7 @@
+/**
+ * Secure Cryptographic Interface guard between wallet logic and HSM operations.
+ */
+
 package di.swallet.wpb.security
 
 import di.swallet.wpb.config.WscaSciProperties
@@ -19,6 +23,9 @@ class WscaAccessGuard(
     private val walletKeyRepository: WalletKeyRepository,
     private val pseudonymCredentialRepository: PseudonymCredentialRepository,
 ) {
+    /**
+     * Requires SCI authorization before HSM use on behalf of the given holder.
+     */
     fun requireSciForHolder(holderId: String) {
         if (!properties.enforceSciBoundary || holderId.isBlank()) return
         if (WscaSciBootstrap.isActive()) return
@@ -31,6 +38,9 @@ class WscaAccessGuard(
         )
     }
 
+    /**
+     * Resolves the holder for a wallet key alias and applies SCI checks.
+     */
     fun requireSciForWalletKeyAlias(keyAlias: String) {
         val walletKey = walletKeyRepository.findByKeyAlias(keyAlias).orElse(null)
         if (walletKey != null) {
@@ -40,6 +50,9 @@ class WscaAccessGuard(
         requireSciForDedicatedAlias(keyAlias)
     }
 
+    /**
+     * Applies SCI checks for dedicated pseudonym HSM aliases.
+     */
     fun requireSciForDedicatedAlias(alias: String) {
         if (!properties.enforceSciBoundary) return
         if (WscaSciBootstrap.isActive()) return
@@ -54,6 +67,9 @@ class WscaAccessGuard(
         requireSciForHolder(credential.holderId)
     }
 
+    /**
+     * Requires any authorized holder context before a generic HSM operation proceeds.
+     */
     fun requireSciAuthorization() {
         if (!properties.enforceSciBoundary) return
         if (WscaSciBootstrap.isActive()) return

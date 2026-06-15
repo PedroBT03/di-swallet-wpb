@@ -1,3 +1,7 @@
+/**
+ * Spring beans wiring the EUDI OpenID4VP SDK client and configuration.
+ */
+
 package di.swallet.wpb.config
 
 import eu.europa.ec.eudi.openid4vp.ErrorDispatchPolicy
@@ -20,11 +24,17 @@ import java.security.cert.X509Certificate
 import com.nimbusds.jose.JWEAlgorithm
 import com.nimbusds.jose.EncryptionMethod
 
+/**
+ * Creates the OpenID4VP SDK HTTP client, config, and facade bean from WPB properties.
+ */
 @Configuration
 class OpenId4VpIntegrationConfig(
     private val openId4VpProperties: OpenId4VpProperties,
 ) {
 
+    /**
+     * Shared Ktor HTTP client used by the OpenID4VP SDK for remote metadata and dispatch.
+     */
     @Bean(destroyMethod = "close")
     fun openId4VpHttpClient(): HttpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
@@ -33,6 +43,9 @@ class OpenId4VpIntegrationConfig(
         expectSuccess = true
     }
 
+    /**
+     * Builds the OpenID4VP SDK configuration from demo mode and supported format settings.
+     */
     @Bean
     fun openId4VpConfig(): OpenId4VPConfig = OpenId4VPConfig(
         supportedClientIdPrefixes = buildList {
@@ -64,6 +77,9 @@ class OpenId4VpIntegrationConfig(
         errorDispatchPolicy = ErrorDispatchPolicy.AllClients,
     )
 
+    /**
+     * Exposes the configured OpenID4VP SDK facade as a Spring bean.
+     */
     @Bean
     fun openId4Vp(openId4VpConfig: OpenId4VPConfig, openId4VpHttpClient: HttpClient): OpenId4Vp =
         OpenId4Vp(openId4VpConfig, openId4VpHttpClient)

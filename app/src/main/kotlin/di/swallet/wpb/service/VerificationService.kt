@@ -1,3 +1,7 @@
+/**
+ * Verifies SD-JWT presentation signatures and validates disclosed claims against signed hashes.
+ */
+
 package di.swallet.wpb.service.verification
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -13,8 +17,7 @@ import java.security.spec.X509EncodedKeySpec
 import java.util.*
 
 /**
- * Service representing a Relying Party's verification logic.
- * Validates SD-JWT signatures and ensures disclosures match the signed hashes.
+ * Acts as relying-party verification logic for SD-JWT signatures and selective disclosure integrity.
  */
 @Service
 class VerificationService(
@@ -24,8 +27,7 @@ class VerificationService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Verifies an SD-JWT presentation.
-     * Validates the JWS signature and confirms that each disclosure is linked to a hash in the JWT.
+     * Verifies the JWS signature and returns claim values whose disclosure hashes appear in the JWT.
      */
     fun verifyPresentation(sdJwt: String, publicKeyBase64: String): Map<String, Any> {
         val parts = sdJwt.split("~")
@@ -65,7 +67,7 @@ class VerificationService(
     }
 
     /**
-     * Decodes a Base64 encoded public key into an ECPublicKey.
+     * Decodes a Base64URL-encoded EC public key for JWS signature verification.
      */
     private fun decodePublicKey(base64Key: String): ECPublicKey {
         val keyBytes = Base64.getUrlDecoder().decode(base64Key.trim())

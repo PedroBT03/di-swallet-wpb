@@ -1,3 +1,7 @@
+/**
+ * Default Key Attestation (KA) JWT issuer for device-bound issuance.
+ */
+
 package di.swallet.wpb.ka.attestation
 
 import com.nimbusds.jose.JOSEObjectType
@@ -19,6 +23,7 @@ import java.security.interfaces.ECPublicKey
 import java.time.Instant
 import java.util.Base64
 
+/** Builds and signs key attestation JWTs with status list and attested key claims. */
 @Component
 class DefaultKeyAttestationProvider(
     private val walletKeyRepository: WalletKeyRepository,
@@ -27,6 +32,7 @@ class DefaultKeyAttestationProvider(
     private val signingCertificateResolver: KaSigningCertificateResolver,
     private val properties: OpenId4VciProperties,
 ) : KeyAttestationProvider {
+    /** Issues a KA JWT with attested_keys, key_storage_status, and signing x5c chain. */
     override fun issue(
         holderId: String,
         issuerId: String?,
@@ -100,6 +106,7 @@ class DefaultKeyAttestationProvider(
         )
     }
 
+    /** Signs a KA JWT with ES256 and embeds the resolved x5c certificate chain. */
     private fun signJwt(
         walletKey: di.swallet.wpb.domain.WalletKey,
         typ: String,
@@ -114,12 +121,14 @@ class DefaultKeyAttestationProvider(
         return jwsSigningService.signJws(walletKey, header, payload)
     }
 
+    /** Derives a stable URL-safe fingerprint for status list reuse per attestation context. */
     private fun fingerprint(holderId: String, issuerId: String?, configurationId: String, attestedJkt: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val material = "$holderId|${issuerId ?: "*"}|$configurationId|$attestedJkt"
         return Base64.getUrlEncoder().withoutPadding().encodeToString(digest.digest(material.toByteArray()))
     }
 
+    /** Builds a minimal RFC 7638 EC public JWK map for attested_keys claims. */
     private fun rfc7638PublicJwk(publicKey: ECPublicKey): Map<String, String> {
         val fieldSize = (publicKey.params.curve.field.fieldSize + 7) / 8
         val encoder = Base64.getUrlEncoder().withoutPadding()
@@ -131,6 +140,7 @@ class DefaultKeyAttestationProvider(
         )
     }
 
+    /** Left-pads or truncates an EC coordinate to the P-256 field width. */
     private fun publicKeyCoordinate(value: java.math.BigInteger, size: Int): ByteArray {
         val rawInput = value.toByteArray()
         val raw = if (rawInput.size > size) rawInput.copyOfRange(rawInput.size - size, rawInput.size) else rawInput

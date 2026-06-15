@@ -1,3 +1,7 @@
+/**
+ * Tests sd jwt service.
+ */
+
 package di.swallet.wpb.service.format
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -11,7 +15,7 @@ class SdJwtServiceTest {
     private val sdJwtService = SdJwtService(ObjectMapper())
 
     /**
-     * Verifies that a disclosure is a valid Base64URL encoded JSON array.
+     * createDisclosure output decodes to a Base64URL JSON array containing the claim name and value.
      */
     @Test
     fun `should create valid disclosure format`() {
@@ -29,7 +33,7 @@ class SdJwtServiceTest {
     }
 
     /**
-     * Verifies that two disclosures for the same claim have different salts.
+     * Two disclosures for the same claim name and value differ because salts are random.
      */
     @Test
     fun `should produce unique disclosures for same claim due to random salts`() {
@@ -39,6 +43,9 @@ class SdJwtServiceTest {
         assertNotEquals(disclosure1, disclosure2)
     }
 
+    /**
+     * createNestedObjectDisclosures for address/locality yields two disclosures and digests; parent disclosure references _sd.
+     */
     @Test
     fun `nested object issuance includes parent and child disclosures`() {
         val issued = sdJwtService.createNestedObjectDisclosures(
@@ -52,6 +59,9 @@ class SdJwtServiceTest {
         assertTrue(decoded.contains("address"))
     }
 
+    /**
+     * disclosuresFromClaimMap on scalar plus nested map produces three disclosures and matching digests.
+     */
     @Test
     fun `disclosuresFromClaimMap nests maps and flattens scalars`() {
         val issued = sdJwtService.disclosuresFromClaimMap(

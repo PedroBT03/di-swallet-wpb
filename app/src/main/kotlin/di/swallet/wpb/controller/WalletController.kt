@@ -1,3 +1,7 @@
+/**
+ * HTTP endpoints for wallet keys, credentials, and signatures.
+ */
+
 package di.swallet.wpb.controller
 
 import io.swagger.v3.oas.annotations.Operation
@@ -40,6 +44,7 @@ data class PresentationRequest(
     val claimsToDisclose: List<String>
 )
 
+/** Request body for wallet unit initialization and bootstrap key binding. */
 data class WalletInitRequest(
     val holderId: String? = null,
     val platform: String,
@@ -48,11 +53,13 @@ data class WalletInitRequest(
     val userDeviceId: Long? = null,
 )
 
+/** Request body for binding a DPoP device key to an existing wallet unit. */
 data class DpopBindRequest(
     val walletId: String,
     val devicePubJwk: String,
 )
 
+/** Request body for binding a PID key to an existing wallet unit. */
 data class PidKeyBindRequest(
     val walletId: String,
     val pidPubJwk: String,
@@ -119,6 +126,9 @@ class WalletController(
         )
     }
 
+    /**
+     * Creates a wallet unit and binds bootstrap device and optional PID keys.
+     */
     @PostMapping("/init")
     @Operation(summary = "Initialize wallet unit and bind bootstrap keys")
     fun walletInit(@RequestBody request: WalletInitRequest): Map<String, Any> {
@@ -139,6 +149,9 @@ class WalletController(
         )
     }
 
+    /**
+     * Binds a DPoP public key to the authenticated holder's wallet unit.
+     */
     @PostMapping("/auth/dpop/bind")
     @Operation(summary = "Bind DPoP device key to wallet")
     fun bindDpop(@RequestBody request: DpopBindRequest): Map<String, Any> {
@@ -152,6 +165,9 @@ class WalletController(
         )
     }
 
+    /**
+     * Binds a PID public key to the authenticated holder's wallet unit.
+     */
     @PostMapping("/auth/pid_key/bind")
     @Operation(summary = "Bind PID key to wallet")
     fun bindPidKey(@RequestBody request: PidKeyBindRequest): Map<String, Any> {
@@ -201,6 +217,9 @@ class WalletController(
 
     // --- SECTION 3: CREDENTIAL MANAGEMENT ---
 
+    /**
+     * Permanently removes a credential from the wallet at the holder's request.
+     */
     @DeleteMapping("/credentials/{credentialId}")
     @Operation(summary = "Delete credential from wallet", description = "User-initiated deletion (DASH_05a), distinct from revocation.")
     fun deleteCredential(@PathVariable credentialId: Long): Map<String, Any> {
@@ -209,6 +228,9 @@ class WalletController(
         return mapOf("credentialId" to credentialId, "status" to "DELETED")
     }
 
+    /**
+     * Revokes a WP-managed credential by setting its status list bit.
+     */
     @PostMapping("/credentials/{credentialId}/revoke")
     @Operation(summary = "Revoke WP-managed credential", description = "Sets the credential status bit and marks it REVOKED.")
     fun revokeCredential(@PathVariable credentialId: Long): Map<String, Any> {
@@ -217,6 +239,9 @@ class WalletController(
         return mapOf("credentialId" to credentialId, "status" to "REVOKED")
     }
 
+    /**
+     * Revokes an entire wallet unit including keys and WP-managed credentials.
+     */
     @PostMapping("/units/{walletId}/revoke")
     @Operation(summary = "Revoke wallet unit", description = "Revokes WIA/KA indexes, wallet keys, and WP-managed credentials.")
     fun revokeWalletUnit(@PathVariable walletId: String): Map<String, Any> {

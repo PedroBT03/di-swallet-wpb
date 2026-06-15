@@ -1,3 +1,7 @@
+/**
+ * Tests default issuance policy.
+ */
+
 package di.swallet.wpb.issuance.policy
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -15,10 +19,12 @@ import java.util.UUID
 
 class DefaultIssuancePolicyTest {
 
+    /** OpenId4Vci properties with only the mdoc allow flag toggled for policy evaluation tests. */
     private fun props(allowMdoc: Boolean = false): OpenId4VciProperties = OpenId4VciProperties().apply {
         policy.allowMdoc = allowMdoc
     }
 
+    /** Builds an OFFER_RESOLVED context requesting [requested] ids against optional [advertised] issuer metadata. */
     private fun ctx(
         requested: List<String>,
         advertised: List<CredentialConfigurationDescriptor> = emptyList(),
@@ -47,12 +53,18 @@ class DefaultIssuancePolicyTest {
         )
     }
 
+    /**
+     * Evaluation with an empty requested configuration list returns allowed=false.
+     */
     @Test
     fun `empty configuration list is rejected`() {
         val decision = DefaultIssuancePolicy(props()).evaluate(ctx(requested = emptyList()))
         assertFalse(decision.allowed)
     }
 
+    /**
+     * Requesting "unknown" when only pid_jwt is advertised is denied with an unsupported reason.
+     */
     @Test
     fun `requested but not advertised configuration is rejected`() {
         val advertised = listOf(
@@ -63,6 +75,9 @@ class DefaultIssuancePolicyTest {
         assertTrue(decision.reason!!.contains("unsupported"))
     }
 
+    /**
+     * An advertised mDL configuration is denied while allowMdoc remains false.
+     */
     @Test
     fun `mdoc rejected by default policy`() {
         val advertised = listOf(
@@ -74,6 +89,9 @@ class DefaultIssuancePolicyTest {
                 decision.reason!!.contains("not allowed", ignoreCase = true))
     }
 
+    /**
+     * The same mDL request is allowed once allowMdoc is enabled.
+     */
     @Test
     fun `mdoc allowed when policy flag set`() {
         val advertised = listOf(
@@ -83,6 +101,9 @@ class DefaultIssuancePolicyTest {
         assertTrue(decision.allowed)
     }
 
+    /**
+     * A requested pid_jwt SD-JWT configuration that is advertised passes by default.
+     */
     @Test
     fun `sd-jwt configuration is allowed by default`() {
         val advertised = listOf(
@@ -92,6 +113,9 @@ class DefaultIssuancePolicyTest {
         assertTrue(decision.allowed)
     }
 
+    /**
+     * With issuer metadata still null, a pid_jwt request is allowed pending resolution.
+     */
     @Test
     fun `policy is permissive when metadata is not yet resolved`() {
         val decision = DefaultIssuancePolicy(props()).evaluate(ctx(listOf("pid_jwt")))

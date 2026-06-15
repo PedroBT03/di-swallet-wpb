@@ -1,3 +1,7 @@
+/**
+ * Non-production mock relying party endpoint for verifying SD-JWT presentations.
+ */
+
 package di.swallet.wpb.controller
 
 import di.swallet.wpb.service.verification.VerificationService
@@ -7,11 +11,15 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.context.annotation.Profile
 import org.springframework.web.bind.annotation.*
 
+/** Request body containing an SD-JWT presentation and the holder whose key should verify it. */
 data class VerificationRequest(
     val sdJwt: String,
     val userId: String // The Verifier needs to know whose key to check
 )
 
+/**
+ * Simulates an external verifier that checks SD-JWT signatures and disclosed claims.
+ */
 @RestController
 @RequestMapping("/api/v1/mock-rp")
 @Profile("!prod")
@@ -21,6 +29,9 @@ class MockRpController(
     private val hsmService: HsmService
 ) {
 
+    /**
+     * Verifies the presentation signature and returns the disclosed claim values.
+     */
     @PostMapping("/verify")
     @Operation(summary = "Verify Presentation", description = "Acts as an RP to verify the signature and disclosures of an SD-JWT.")
     fun verify(@RequestBody request: VerificationRequest): Map<String, Any> {

@@ -1,3 +1,7 @@
+/**
+ * Tests pseudonym web authn codec.
+ */
+
 package di.swallet.wpb.pseudonym
 
 import di.swallet.wpb.security.Fido2TestHelper
@@ -7,6 +11,10 @@ import org.junit.jupiter.api.Test
 import java.util.Base64
 
 class PseudonymWebAuthnCodecTest {
+    /**
+     * Builds registration authData from an EC device key and credential id, then wraps it in an attestation object.
+     * Attestation CBOR must be non-empty and encode the "none" format.
+     */
     @Test
     fun `registration attestation object uses none format`() {
         val keyPair = Fido2TestHelper.generateDeviceKeyPair()
@@ -23,6 +31,10 @@ class PseudonymWebAuthnCodecTest {
         assertTrue(attestationText.contains("none"))
     }
 
+    /**
+     * Builds client data JSON for webauthn.create, base64url-encodes it, then decodes it back.
+     * Parsed challenge and type must match the originals.
+     */
     @Test
     fun `client data roundtrip`() {
         val challenge = "abc123"

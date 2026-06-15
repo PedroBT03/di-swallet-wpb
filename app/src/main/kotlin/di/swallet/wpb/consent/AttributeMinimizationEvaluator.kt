@@ -1,3 +1,7 @@
+/**
+ * Holder-facing attribute minimization warnings for presentation consent screens.
+ */
+
 package di.swallet.wpb.consent
 
 import di.swallet.wpb.config.OpenId4VpProperties
@@ -14,6 +18,9 @@ class AttributeMinimizationEvaluator(
     private val openId4VpProperties: OpenId4VpProperties,
 ) {
 
+    /**
+     * Builds holder-facing warnings when requested claims may exceed the RP's registered intended use.
+     */
     fun evaluate(context: PresentationContext): MinimizationAssessment {
         val warnings = mutableListOf<ConsentWarning>()
 

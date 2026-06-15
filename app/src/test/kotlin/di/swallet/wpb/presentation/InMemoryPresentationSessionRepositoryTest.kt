@@ -1,3 +1,7 @@
+/**
+ * Tests in memory presentation session repository.
+ */
+
 package di.swallet.wpb.presentation
 
 import di.swallet.wpb.presentation.domain.PresentationSession
@@ -12,6 +16,7 @@ import java.util.UUID
 
 class InMemoryPresentationSessionRepositoryTest {
 
+    /** Builds a PresentationSession in RECEIVED state with a fresh UUID and one-minute expiry. */
     private fun newSession(): PresentationSession {
         val now = Instant.now()
         val meta = SessionMetadata(
@@ -24,6 +29,10 @@ class InMemoryPresentationSessionRepositoryTest {
         return PresentationSession(sessionMeta = meta, state = PresentationState.RECEIVED)
     }
 
+    /**
+     * A new session is created then updated with a new state.
+     * Version starts at 0 and increments to 1 on update.
+     */
     @Test
     fun `create and update bumps version`() {
         val repo = InMemoryPresentationSessionRepository()
@@ -34,6 +43,10 @@ class InMemoryPresentationSessionRepositoryTest {
         assertEquals(1, updated.sessionMeta.version)
     }
 
+    /**
+     * One copy of the session is updated while another retains the original version.
+     * The stale update throws IllegalArgumentException.
+     */
     @Test
     fun `optimistic locking rejects stale update`() {
         val repo = InMemoryPresentationSessionRepository()

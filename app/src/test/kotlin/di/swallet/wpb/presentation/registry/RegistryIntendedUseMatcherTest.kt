@@ -1,3 +1,7 @@
+/**
+ * Tests registry intended use matcher.
+ */
+
 package di.swallet.wpb.presentation.registry
 
 import di.swallet.wpb.presentation.domain.ClaimPath
@@ -12,6 +16,10 @@ import org.junit.jupiter.api.Test
 
 class RegistryIntendedUseMatcherTest {
 
+    /**
+     * Registry record lists given_name and family_name for dc+sd-jwt; query asks only for given_name.
+     * coversQueries returns true.
+     */
     @Test
     fun `covers matching format and claim paths`() {
         val record = record(claimPaths = listOf("given_name", "family_name"))
@@ -25,6 +33,10 @@ class RegistryIntendedUseMatcherTest {
         assertTrue(RegistryIntendedUseMatcher.coversQueries(record, queries))
     }
 
+    /**
+     * Registry record registers only family_name but the query requests given_name.
+     * coversQueries returns false.
+     */
     @Test
     fun `rejects claim outside registered intended use`() {
         val record = record(claimPaths = listOf("family_name"))
@@ -38,6 +50,7 @@ class RegistryIntendedUseMatcherTest {
         assertFalse(RegistryIntendedUseMatcher.coversQueries(record, queries))
     }
 
+    /** Builds a minimal RpRegistryRecord with dc+sd-jwt intended-use credentials for the given claim paths. */
     private fun record(claimPaths: List<String>): RpRegistryRecord = RpRegistryRecord(
         identifier = "rp-123",
         intendedUses = listOf(

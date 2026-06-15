@@ -1,3 +1,7 @@
+/**
+ * Tests issuance flow orchestration, policy gates, and error handling.
+ */
+
 package di.swallet.wpb.issuance.orchestration
 
 import di.swallet.wpb.config.ConsentProperties
@@ -57,6 +61,8 @@ class DefaultIssuanceFlowOrchestratorTest {
     private class StubIssuedCredentialStorage : IssuedCredentialStorage {
         val stored = mutableListOf<IssuedCredential>()
         private val seq = java.util.concurrent.atomic.AtomicLong()
+
+        /** Appends the credential to [stored] and returns a monotonically increasing fake persistence id. */
         override fun store(
             holderId: String,
             issued: IssuedCredential,
@@ -72,18 +78,23 @@ class DefaultIssuanceFlowOrchestratorTest {
     private class StubWiaStatusManagementService : WiaStatusManagementService {
         private val map = mutableMapOf<String, Int>()
         private var seq = 200
+
+        /** Allocates a stable status index per holder–issuer pair, reusing the same index on repeat lookups. */
         override fun getOrAllocateStatus(holderId: String, issuerId: String?) =
             di.swallet.wpb.issuance.domain.WiaStatusReference(
                 listId = "PRIMARY_LIST",
                 index = map.getOrPut("$holderId::${issuerId ?: "*"}") { seq++ },
                 uri = "/api/v1/wallet/status-lists/PRIMARY_LIST",
             )
+
+        /** No-op; revocation is not exercised in these orchestrator tests. */
         override fun revokeHolder(holderId: String) = Unit
     }
 
     private class StubWalletAttestationProvider(
         private val statusManagementService: WiaStatusManagementService,
     ) : WalletAttestationProvider {
+        /** Builds a synthetic WIA with placeholder JWTs, a cnfJkt derived from the holder id, and a freshly allocated client status. */
         override fun issue(
             holderId: String,
             walletInstanceId: String,
@@ -108,6 +119,7 @@ class DefaultIssuanceFlowOrchestratorTest {
     }
 
     private class StubKeyAttestationProvider : KeyAttestationProvider {
+        /** Returns a fixed ES256 KA JWT whose attestedJkt is the RFC 7638 thumbprint of the supplied proof public key. */
         override fun issue(
             holderId: String,
             issuerId: String?,
@@ -137,6 +149,10 @@ class DefaultIssuanceFlowOrchestratorTest {
         }
     }
 
+    /**
+     * Wires a fully stubbed orchestrator with simulated gateway, in-memory session repo, and optional KA revocation simulation.
+     * Returns the orchestrator together with its credential storage stub for post-condition assertions.
+     */
     private fun orchestrator(
         properties: OpenId4VciProperties = OpenId4VciProperties(),
         kaRevoked: Boolean = false,
@@ -145,18 +161,21 @@ class DefaultIssuanceFlowOrchestratorTest {
     ): Pair<DefaultIssuanceFlowOrchestrator, StubIssuedCredentialStorage> {
         val wiaStatus = StubWiaStatusManagementService()
         val validationService = object : KeyAttestationValidationService {
+            /** Throws ka_revoked when [kaRevoked] is true; otherwise passes technical checks. */
             override fun validateTechnical(attestation: KeyAttestation, configuration: CredentialConfigurationDescriptor) {
                 if (kaRevoked) {
                     throw KeyAttestationValidationException("ka_revoked", "key attestation status is revoked")
                 }
             }
 
+            /** Always succeeds; trust chain validation is out of scope for orchestrator unit tests. */
             override fun validateTrust(
                 attestation: KeyAttestation,
                 configuration: CredentialConfigurationDescriptor?,
                 metadata: di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata?,
             ) = Unit
 
+            /** Always succeeds; proof-to-KA binding is not exercised here. */
             override fun validateBinding(attestation: KeyAttestation, proof: di.swallet.wpb.issuance.proof.ProofMaterial) = Unit
         }
         val pendingStore = ConsentTestSupport.pendingCredentialStore()
@@ -196,6 +215,7 @@ class DefaultIssuanceFlowOrchestratorTest {
         return orchestrator to storage
     }
 
+    /** Submits granted issuance consent when the session is waiting at ISSUANCE_CONSENT_PENDING; otherwise returns the context unchanged. */
     private fun approveStorage(
         orch: DefaultIssuanceFlowOrchestrator,
         ctx: di.swallet.wpb.issuance.domain.IssuanceContext,
@@ -218,6 +238,9 @@ class DefaultIssuanceFlowOrchestratorTest {
     private val preAuthOffer =
         """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"],"grants":{"urn:ietf:params:oauth:grant-type:pre-authorized_code":{"tx_code":{"length":4}}}}"""
 
+    /**
+     * Full authorization_code flow from offer resolution through consent approval ends in NOTIFIED with KA lifecycle events.
+     */
     @Test
     fun `authorization_code happy path goes to NOTIFIED`() {
         val (orch, _) = orchestrator()
@@ -253,6 +276,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertEquals(IssuanceState.NOTIFIED, ctx.state)
     }
 
+    /**
+     * KA validation stub reports revoked status; credential request fails with ka_revoked and emits ka.revoked.
+     */
     @Test
     fun `revoked key attestation fails issuance and emits ka revoked event`() {
         val (orch, _) = orchestrator(kaRevoked = true)
@@ -266,6 +292,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertTrue(orchEvents(orch, failed.sessionMeta.sessionId).contains("ka.revoked"))
     }
 
+    /**
+     * Pre-authorized offer resolved without tx_code fails with pre_authorized_failed.
+     */
     @Test
     fun `pre-authorized_code path requires tx_code`() {
         val (orch, _) = orchestrator()
@@ -276,6 +305,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertEquals("pre_authorized_failed", failed.error?.code)
     }
 
+    /**
+     * Pre-authorized offer with tx_code reaches AUTHORIZED and, after consent, CREDENTIAL_ISSUED.
+     */
     @Test
     fun `pre-authorized_code path with tx_code completes`() {
         val (orch, _) = orchestrator()
@@ -289,6 +321,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertEquals(IssuanceState.CREDENTIAL_ISSUED, ctx.state)
     }
 
+    /**
+     * academic_card configuration is not device-bound; issuance succeeds with KaState NOT_REQUIRED and no ka.generated event.
+     */
     @Test
     fun `non-device bound configuration does not require KA`() {
         val offer =
@@ -307,6 +342,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertFalse(orchEvents(orch, ctx.sessionMeta.sessionId).contains("ka.generated"))
     }
 
+    /**
+     * Simulator always defers; polling twice reaches consent, then deferred issuance completes through NOTIFIED.
+     */
     @Test
     fun `deferred path persists transaction id and resumes issuance`() {
         val (orch, _) = orchestrator(OpenId4VciProperties().apply {
@@ -336,6 +374,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertEquals(IssuanceState.NOTIFIED, ctx.state)
     }
 
+    /**
+     * Issuer not on the allow-list stops at REJECTED with trustDecision.trusted=false.
+     */
     @Test
     fun `untrusted issuer rejects with REJECTED terminal`() {
         val (orch, _) = orchestrator(OpenId4VciProperties().apply {
@@ -347,6 +388,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertFalse(ctx.trustDecision!!.trusted)
     }
 
+    /**
+     * mDL offer with allowMdoc=false yields policyDecision.allowed=false at resolution.
+     */
     @Test
     fun `mdoc policy block rejects offer`() {
         val (orch, _) = orchestrator(OpenId4VciProperties().apply {
@@ -358,6 +402,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertFalse(ctx.policyDecision!!.allowed)
     }
 
+    /**
+     * requestCredential immediately after offer resolution throws mentioning AUTHORIZED state.
+     */
     @Test
     fun `cannot request credential before authorization`() {
         val (orch, _) = orchestrator()
@@ -368,6 +415,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertTrue(ex.message!!.contains("AUTHORIZED"))
     }
 
+    /**
+     * prepareAuthorization on a pre-authorized offer fails with invalid_flow.
+     */
     @Test
     fun `cannot prepare authorization for pre-authorized offer`() {
         val (orch, _) = orchestrator()
@@ -377,6 +427,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertEquals("invalid_flow", ctx.error?.code)
     }
 
+    /**
+     * getSession for a random unknown id throws ResponseStatusException (404-equivalent).
+     */
     @Test
     fun `getSession returns null-equivalent via 404 for unknown id`() {
         val (orch, _) = orchestrator()
@@ -385,6 +438,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         }
     }
 
+    /**
+     * Denied issuance consent moves to REJECTED and leaves stub storage empty.
+     */
     @Test
     fun `rejecting issuance consent does not persist credential`() {
         val storage = StubIssuedCredentialStorage()
@@ -408,6 +464,9 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertTrue(stubStorage.stored.isEmpty())
     }
 
+    /**
+     * getSession after resolveOffer returns the same session id, state, and no error.
+     */
     @Test
     fun `getSession returns persisted snapshot`() {
         val (orch, _) = orchestrator()
@@ -418,6 +477,7 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertNull(snap.error)
     }
 
+    /** Reflects into the orchestrator's in-memory event store and returns the ordered event type strings for a session. */
     private fun orchEvents(
         orchestrator: DefaultIssuanceFlowOrchestrator,
         sessionId: java.util.UUID,

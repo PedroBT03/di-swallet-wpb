@@ -1,3 +1,7 @@
+/**
+ * Signs OpenID4VCI proof JWTs with wallet-held keys.
+ */
+
 package di.swallet.wpb.openid4vci.adapter
 
 import com.nimbusds.jose.JOSEObjectType
@@ -13,7 +17,13 @@ import org.springframework.stereotype.Component
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * Signs issuer-facing proof JWTs used during credential issuance.
+ */
 interface ProofJwtSigner {
+    /**
+     * Builds and signs a proof JWT for the given audience and optional c_nonce.
+     */
     fun sign(
         proof: ProofMaterial,
         audience: String,
@@ -21,10 +31,16 @@ interface ProofJwtSigner {
     ): String
 }
 
+/**
+ * Signs proof JWTs through the wallet HSM using the holder's bound key.
+ */
 @Component
 class HsmProofJwtSigner(
     private val hsmService: HsmService,
 ) : ProofJwtSigner {
+    /**
+     * Creates an ES256 proof JWT and signs it with the wallet key referenced by [proof].
+     */
     override fun sign(
         proof: ProofMaterial,
         audience: String,
@@ -57,6 +73,7 @@ class HsmProofJwtSigner(
         return "${header.toBase64URL()}.${jws.payload.toBase64URL()}.$signature"
     }
 
+    /** Parses the holder user id embedded in a wallet key alias such as `key-user-1`. */
     private fun extractUserIdFromKeyAlias(keyAlias: String): String {
         val regex = Regex("^key-(.+)-\\d+$")
         val match = regex.matchEntire(keyAlias)

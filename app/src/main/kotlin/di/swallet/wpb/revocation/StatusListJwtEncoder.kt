@@ -1,3 +1,7 @@
+/**
+ * Signs and publishes the wallet provider status list as a compressed Token Status List JWT.
+ */
+
 package di.swallet.wpb.revocation
 
 import com.nimbusds.jose.JWSAlgorithm
@@ -16,7 +20,7 @@ import java.util.zip.Deflater
 import java.util.zip.DeflaterOutputStream
 
 /**
- * Encodes a Token Status List JWT per IETF draft-ietf-oauth-status-list.
+ * Encodes the current revocation bitstring into a signed Token Status List JWT per IETF draft.
  */
 @Component
 class StatusListJwtEncoder(
@@ -24,6 +28,9 @@ class StatusListJwtEncoder(
     private val signingKeyStore: StatusListSigningKeyStore,
     private val properties: StatusListProperties,
 ) {
+    /**
+     * Builds a signed JWT containing the compressed status list bitstring and publisher metadata.
+     */
     fun encode(): String {
         val now = Instant.now()
         val exp = now.plusSeconds(properties.jwtTtlSeconds)
@@ -47,6 +54,9 @@ class StatusListJwtEncoder(
         return signedJwt.serialize()
     }
 
+    /**
+     * Compresses the raw bitstring bytes with DEFLATE for inclusion in the JWT `lst` claim.
+     */
     private fun compress(input: ByteArray): ByteArray {
         val output = ByteArrayOutputStream()
         DeflaterOutputStream(output, Deflater(Deflater.BEST_COMPRESSION, true)).use { it.write(input) }

@@ -1,3 +1,7 @@
+/**
+ * Issuer signing key and certificate material for mdoc simulation and dev issuance.
+ */
+
 package di.swallet.wpb.format.mdoc
 
 import com.authlete.cose.COSEEC2Key
@@ -20,6 +24,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 import java.math.BigInteger
 import java.util.Date
 
+/** Loads and caches issuer EC key, certificate, and COSE key material from PEM configuration. */
 @Component
 class MdocIssuerKeyStore(
     private val properties: MdocProperties,
@@ -29,10 +34,12 @@ class MdocIssuerKeyStore(
     @Volatile
     private var cached: IssuerMaterial? = null
 
+    /** Returns cached issuer material, loading from PEM on first access. */
     fun material(): IssuerMaterial = cached ?: synchronized(this) {
         cached ?: loadMaterial().also { cached = it }
     }
 
+    /** Reads PEM from classpath or filesystem, optionally auto-generating a dev bundle. */
     private fun loadMaterial(): IssuerMaterial {
         val path = properties.issuerKeyPemPath.trim()
         require(path.isNotBlank()) { "wpb.mdoc.issuer-key-pem-path must be configured" }
@@ -57,6 +64,7 @@ class MdocIssuerKeyStore(
         )
     }
 
+    /** Reads PEM text from a classpath or filesystem path, returning null when missing. */
     private fun readPem(path: String): String? = runCatching {
         when {
             path.startsWith("classpath:") -> {
@@ -72,12 +80,14 @@ class MdocIssuerKeyStore(
         }
     }.getOrNull()
 
+    /** Writes PEM text to a filesystem path, creating parent directories when needed. */
     private fun writePem(path: String, pem: String) {
         val file = File(path)
         file.parentFile?.mkdirs()
         Files.writeString(file.toPath(), pem)
     }
 
+    /** Extracts the first X.509 certificate from a PEM bundle. */
     private fun parseCertificateFromPem(pem: String): X509Certificate {
         val certB64 = Regex("-----BEGIN CERTIFICATE-----([\\s\\S]*?)-----END CERTIFICATE-----")
             .find(pem)?.groupValues?.get(1)?.replace("\\s".toRegex(), "")
@@ -87,6 +97,7 @@ class MdocIssuerKeyStore(
         return factory.generateCertificate(der.inputStream()) as X509Certificate
     }
 
+    /** Creates a self-signed dev issuer PEM bundle with a one-year certificate. */
     private fun generateDevPemBundle(): String {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
@@ -104,6 +115,7 @@ class MdocIssuerKeyStore(
         """.trimIndent() + "\n"
     }
 
+    /** Builds a short-lived self-signed EC certificate for local mdoc simulation. */
     private fun selfSignedCertificate(keyPair: KeyPair, subjectDn: String): X509Certificate {
         val subject = X500Name(subjectDn)
         val now = Date()
@@ -119,6 +131,7 @@ class MdocIssuerKeyStore(
         return JcaX509CertificateConverter().getCertificate(builder.build(signer))
     }
 
+    /** Issuer EC key pair, leaf certificate, and COSE representation. */
     data class IssuerMaterial(
         val keyPair: KeyPair,
         val certificate: X509Certificate,

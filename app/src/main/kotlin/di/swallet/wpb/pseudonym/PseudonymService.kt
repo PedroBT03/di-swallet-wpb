@@ -1,3 +1,7 @@
+/**
+ * Creates and manages per-RP pseudonym credentials with server-side WebAuthn registration and authentication.
+ */
+
 package di.swallet.wpb.pseudonym
 
 import di.swallet.wpb.config.PseudonymProperties
@@ -15,6 +19,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Base64
 import java.util.UUID
 
+/**
+ * Orchestrates pseudonym lifecycle, WebAuthn ceremonies, and HSM-backed signing for holder passkeys.
+ */
 @Service
 class PseudonymService(
     private val properties: PseudonymProperties,
@@ -29,12 +36,18 @@ class PseudonymService(
     private val random = SecureRandom()
     private val timeFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneOffset.UTC)
 
+    /**
+     * Rejects requests when pseudonym support is disabled in configuration.
+     */
     fun ensureEnabled() {
         if (!properties.enabled) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Pseudonym support is disabled")
         }
     }
 
+    /**
+     * Creates a pending pseudonym for a holder and relying party, enforcing per-RP limits.
+     */
     @Transactional
     fun create(request: CreatePseudonymRequest): PseudonymView {
         ensureEnabled()
@@ -56,6 +69,9 @@ class PseudonymService(
         return toView(credential)
     }
 
+    /**
+     * Lists pseudonyms for a holder, optionally filtered by relying party ID.
+     */
     fun list(holderId: String, rpId: String?): List<PseudonymView> {
         ensureEnabled()
         val items = if (rpId.isNullOrBlank()) {
@@ -66,6 +82,9 @@ class PseudonymService(
         return items.map(::toView)
     }
 
+    /**
+     * Updates the optional display alias on an existing pseudonym credential.
+     */
     @Transactional
     fun updateAlias(id: UUID, holderId: String, alias: String?): PseudonymView {
         ensureEnabled()
@@ -74,6 +93,9 @@ class PseudonymService(
         return toView(repository.save(credential))
     }
 
+    /**
+     * Deletes a pseudonym, removes its HSM key, and logs a TS10 deletion transaction.
+     */
     @Transactional
     fun delete(id: UUID, holderId: String) {
         ensureEnabled()
@@ -88,6 +110,9 @@ class PseudonymService(
         )
     }
 
+    /**
+     * Issues WebAuthn registration options with a fresh challenge for a pending pseudonym.
+     */
     fun registrationOptions(id: UUID, holderId: String, request: RegistrationOptionsRequest): RegistrationOptionsResponse {
         ensureEnabled()
         val credential = loadPending(id, holderId)
@@ -104,6 +129,9 @@ class PseudonymService(
         )
     }
 
+    /**
+     * Completes WebAuthn registration by generating an HSM key and marking the pseudonym as registered.
+     */
     @Transactional
     fun finishRegistration(id: UUID, holderId: String, request: RegistrationFinishRequest): RegistrationFinishResponse {
         ensureEnabled()
@@ -151,6 +179,9 @@ class PseudonymService(
         )
     }
 
+    /**
+     * Issues WebAuthn authentication options with a fresh challenge for a registered pseudonym.
+     */
     fun authenticationOptions(id: UUID, holderId: String, request: AuthenticationOptionsRequest): AuthenticationOptionsResponse {
         ensureEnabled()
         val credential = loadRegistered(id, holderId)
@@ -165,6 +196,9 @@ class PseudonymService(
         )
     }
 
+    /**
+     * Completes WebAuthn authentication by signing assertion data with the pseudonym HSM key.
+     */
     @Transactional
     fun finishAuthentication(id: UUID, holderId: String, request: AuthenticationFinishRequest): AuthenticationFinishResponse {
         ensureEnabled()
@@ -202,11 +236,17 @@ class PseudonymService(
         )
     }
 
+    /**
+     * Loads a pseudonym credential and verifies it belongs to the given holder.
+     */
     private fun loadForHolder(id: UUID, holderId: String): PseudonymCredential =
         repository.findById(id)
             .filter { it.holderId == holderId.trim() }
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Pseudonym not found") }
 
+    /**
+     * Loads a pseudonym that is still pending WebAuthn registration.
+     */
     private fun loadPending(id: UUID, holderId: String): PseudonymCredential {
         val credential = loadForHolder(id, holderId)
         if (credential.status != PseudonymStatus.PENDING) {
@@ -215,6 +255,9 @@ class PseudonymService(
         return credential
     }
 
+    /**
+     * Loads a pseudonym that has completed registration and has an HSM key alias.
+     */
     private fun loadRegistered(id: UUID, holderId: String): PseudonymCredential {
         val credential = loadForHolder(id, holderId)
         if (credential.status != PseudonymStatus.REGISTERED || credential.keyAlias.isNullOrBlank()) {
@@ -223,6 +266,9 @@ class PseudonymService(
         return credential
     }
 
+    /**
+     * Verifies that the request origin host matches the relying party ID or is a subdomain of it.
+     */
     private fun validateOriginForRp(origin: String, rpId: String) {
         val host = runCatching { URI(origin.trim()).host?.lowercase() }.getOrNull()
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid origin")
@@ -231,6 +277,9 @@ class PseudonymService(
         }
     }
 
+    /**
+     * Maps a stored credential entity to an API-facing view with formatted timestamps.
+     */
     private fun toView(credential: PseudonymCredential): PseudonymView =
         PseudonymView(
             id = credential.id,
@@ -243,12 +292,21 @@ class PseudonymService(
             lastUsedAt = credential.lastUsedAt?.let { timeFormatter.format(it) },
         )
 
+    /**
+     * Generates cryptographically random bytes and encodes them as a Base64URL string.
+     */
     private fun randomBase64Url(bytes: Int): String =
         Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes(bytes))
 
+    /**
+     * Fills a byte array with secure random data.
+     */
     private fun randomBytes(bytes: Int): ByteArray =
         ByteArray(bytes).also { random.nextBytes(it) }
 
+    /**
+     * Builds a placeholder COSE key value for pseudonyms deleted before registration completed.
+     */
     private fun encodePlaceholderValue(credential: PseudonymCredential): String =
         Base64.getUrlEncoder().withoutPadding().encodeToString("pending:${credential.id}".toByteArray())
 }

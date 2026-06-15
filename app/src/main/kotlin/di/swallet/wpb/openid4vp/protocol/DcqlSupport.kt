@@ -1,3 +1,7 @@
+/**
+ * Flexible DCQL parser for verifier credential queries.
+ */
+
 package di.swallet.wpb.openid4vp.protocol
 
 import di.swallet.wpb.presentation.domain.ClaimPath
@@ -16,12 +20,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Best-effort DCQL parser used both by the SDK adapter fallback path and by the
- * credential matcher.
- *
- * The parser is intentionally flexible: it accepts both the standard DCQL
- * shape used by the EUDI OpenID4VP SDK (`{ "credentials": [...] }`) and the
- * simplified shape produced by the local verifier emulator (`{ "query": [...] }`).
+ * Best-effort DCQL parser used by the SDK adapter fallback path and credential matcher.
+ * Accepts both standard `credentials[]` and emulator `query[]` shapes.
  */
 object DcqlSupport {
 
@@ -30,6 +30,7 @@ object DcqlSupport {
         coerceInputValues = true
     }
 
+    /** Parses DCQL JSON into credential queries, returning an empty list on failure. */
     fun parse(dcqlJson: String?): List<CredentialQuery> {
         if (dcqlJson.isNullOrBlank()) return emptyList()
         return try {
@@ -43,19 +44,19 @@ object DcqlSupport {
         }
     }
 
+    /** Reads credential query entries from supported DCQL root shapes. */
     private fun extractEntries(root: JsonElement): List<JsonElement> {
         if (root !is JsonObject) return emptyList()
-        // Standard DCQL: credentials[]
         root["credentials"]?.let { entries ->
             if (entries is JsonArray) return entries.toList()
         }
-        // Local emulator shape: query[]
         root["query"]?.let { entries ->
             if (entries is JsonArray) return entries.toList()
         }
         return emptyList()
     }
 
+    /** Converts one DCQL credential entry into a [CredentialQuery]. */
     private fun toCredentialQuery(index: Int, entry: JsonElement): CredentialQuery? {
         if (entry !is JsonObject) return null
         val id = entry["id"]?.jsonPrimitive?.contentOrNull ?: "query_$index"
@@ -70,12 +71,14 @@ object DcqlSupport {
         )
     }
 
+    /** Maps DCQL format strings to wallet [CredentialFormat] values. */
     private fun toFormat(raw: String): CredentialFormat = when (raw.lowercase()) {
         "vc+sd-jwt", "dc+sd-jwt", "sd-jwt", "sd_jwt" -> CredentialFormat.SD_JWT
         "mso_mdoc", "mdoc", "mso-mdoc" -> CredentialFormat.MDOC
         else -> CredentialFormat.SD_JWT
     }
 
+    /** Extracts vct and doctype hints from DCQL meta fields. */
     private fun extractTypeHints(entry: JsonObject): List<String> {
         val meta = entry["meta"] as? JsonObject ?: return emptyList()
         val vctValues = (meta["vct_values"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
@@ -84,6 +87,7 @@ object DcqlSupport {
         return (vctValues + docTypeValues + docTypeSingle).distinct()
     }
 
+    /** Extracts requested claim paths from `claims` or legacy `fields` arrays. */
     private fun extractClaimPaths(entry: JsonObject): List<ClaimPath> {
         val claimsArray = entry["claims"] as? JsonArray
         if (claimsArray != null) {
@@ -102,6 +106,7 @@ object DcqlSupport {
         return emptyList()
     }
 
+    /** Parses one DCQL claim path element into a [ClaimPath]. */
     private fun parseClaimPathElement(pathElement: JsonElement?): ClaimPath? {
         val segments = when (pathElement) {
             is JsonArray -> pathElement.mapNotNull { segment -> parsePathSegment(segment) }
@@ -112,6 +117,7 @@ object DcqlSupport {
         return ClaimPath.fromDcqlPath(segments ?: return null)
     }
 
+    /** Parses one DCQL path segment into a key, index, or wildcard segment. */
     private fun parsePathSegment(segment: JsonElement): ClaimPathSegment? = when (segment) {
         JsonNull -> ClaimPathSegment.Wildcard
         is JsonPrimitive -> when {

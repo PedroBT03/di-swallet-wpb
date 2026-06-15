@@ -1,3 +1,7 @@
+/**
+ * JPA-backed key attestation status list index allocation and revocation.
+ */
+
 package di.swallet.wpb.ka.status
 
 import di.swallet.wpb.domain.KaStatusIndex
@@ -8,6 +12,7 @@ import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
+/** Production KA status management backed by persistent holder-to-index mappings. */
 @Service
 @Primary
 class JpaKaStatusManagementService(
@@ -16,6 +21,7 @@ class JpaKaStatusManagementService(
 ) : KaStatusManagementService {
 
     @Transactional
+    /** Reuses a stored index or allocates the next slot for the attestation fingerprint. */
     override fun getOrAllocateStatus(
         holderId: String,
         issuerId: String?,
@@ -44,12 +50,14 @@ class JpaKaStatusManagementService(
     }
 
     @Transactional
+    /** Revokes every status index recorded for the holder across attestation fingerprints. */
     override fun revokeHolder(holderId: String) {
         repository.findAllByHolderId(holderId).forEach { entry ->
             statusListService.revoke(entry.statusIndex)
         }
     }
 
+    /** Maps a persisted index row to the key attestation status reference DTO. */
     private fun toReference(entry: KaStatusIndex): KaStatusReference =
         KaStatusReference(
             listId = entry.listId,

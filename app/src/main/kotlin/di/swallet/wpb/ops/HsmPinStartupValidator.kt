@@ -1,3 +1,7 @@
+/**
+ * Startup validator that rejects the default SoftHSM PIN outside dev and test.
+ */
+
 package di.swallet.wpb.ops
 
 import di.swallet.wpb.config.HsmProperties
@@ -17,6 +21,9 @@ class HsmPinStartupValidator(
 ) : ApplicationRunner {
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Fails startup when the configured HSM PIN is blank or a known weak default.
+     */
     override fun run(args: ApplicationArguments?) {
         if (!isWeakPin(hsmProperties.pin)) return
 
@@ -34,6 +41,9 @@ class HsmPinStartupValidator(
         )
     }
 
+    /**
+     * Returns true when the PIN is blank or matches the known SoftHSM demo value.
+     */
     private fun isWeakPin(pin: String): Boolean =
         pin.isBlank() || pin == WeakSecretDefaults.KNOWN_WEAK_HSM_PIN
 }

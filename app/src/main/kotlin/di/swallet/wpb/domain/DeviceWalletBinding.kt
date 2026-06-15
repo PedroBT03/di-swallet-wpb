@@ -1,3 +1,7 @@
+/**
+ * JPA entity for device public key thumbprints bound to wallet units.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.Column
@@ -14,9 +18,7 @@ import jakarta.persistence.Table
 import java.time.LocalDateTime
 
 /**
- * Canonical device-to-wallet binding.
- *
- * This aggregate is intentionally separated from credential holder-key binding.
+ * Records a DPoP or PID-key thumbprint bound to a wallet unit and optional FIDO2 device.
  */
 @Entity
 @Table(name = "device_wallet_bindings")
@@ -52,11 +54,13 @@ class DeviceWalletBinding(
     val userDevice: UserDevice? = null,
 )
 
+/** Whether a device-to-wallet binding is currently active or revoked. */
 enum class DeviceWalletBindingState {
     ACTIVE,
     REVOKED,
 }
 
+/** Type of device public key bound to the wallet unit. */
 enum class DeviceBindingType {
     DPOP,
     PID_KEY,

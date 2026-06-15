@@ -1,3 +1,7 @@
+/**
+ * Tests issued credential preview parser.
+ */
+
 package di.swallet.wpb.consent
 
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
@@ -12,6 +16,10 @@ class IssuedCredentialPreviewParserTest {
 
     private val parser = IssuedCredentialPreviewParser()
 
+    /**
+     * Feeds an SD-JWT payload with one base64 disclosure for given_name=Alice and expects
+     * parse to return a single preview entry with that claim name and value.
+     */
     @Test
     fun `parses sd-jwt disclosures into claim preview`() {
         val disclosure = Base64.getUrlEncoder().withoutPadding()
@@ -28,6 +36,10 @@ class IssuedCredentialPreviewParserTest {
         assertEquals("Alice", preview.single().value)
     }
 
+    /**
+     * Parses an MSO mdoc credential and expects the preview entry to mark previewAvailable
+     * as false because mdoc claim extraction is not supported yet.
+     */
     @Test
     fun `mdoc preview is unavailable in mvp`() {
         val issued = IssuedCredential(

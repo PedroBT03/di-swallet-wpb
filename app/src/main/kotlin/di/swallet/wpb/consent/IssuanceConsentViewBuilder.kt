@@ -1,3 +1,7 @@
+/**
+ * Builds the holder consent preview shown before storing issued credentials.
+ */
+
 package di.swallet.wpb.consent
 
 import di.swallet.wpb.config.ConsentProperties
@@ -7,6 +11,9 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
 
+/**
+ * Assembles issuer identity, format, and claim preview for issuance storage consent.
+ */
 @Component
 class IssuanceConsentViewBuilder(
     private val consentProperties: ConsentProperties,
@@ -14,6 +21,9 @@ class IssuanceConsentViewBuilder(
     private val previewParser: IssuedCredentialPreviewParser,
 ) {
 
+    /**
+     * Decrypts the pending credential payload and returns the consent view for the WPI.
+     */
     fun build(context: IssuanceContext): IssuanceConsentView {
         if (!consentProperties.issuance.enabled) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Issuance consent UX is disabled")

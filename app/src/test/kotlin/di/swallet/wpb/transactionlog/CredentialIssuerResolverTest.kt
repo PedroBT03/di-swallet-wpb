@@ -1,3 +1,7 @@
+/**
+ * Tests credential issuer resolver.
+ */
+
 package di.swallet.wpb.transactionlog
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -10,6 +14,10 @@ import java.util.Base64
 class CredentialIssuerResolverTest {
     private val resolver = CredentialIssuerResolver(ObjectMapper())
 
+    /**
+     * Resolves issuer from an SD-JWT whose iss claim differs from the credential userId.
+     * Resolved name and LEI-typed identifier must both use the iss URL.
+     */
     @Test
     fun `resolve uses iss claim from SD-JWT not holder userId`() {
         val iss = "https://pt-mock-issuer.gov.pt"
@@ -29,6 +37,10 @@ class CredentialIssuerResolverTest {
         assertEquals("http://data.europa.eu/eudi/id/LEI", resolved.identifier?.type)
     }
 
+    /**
+     * Resolves issuer from a credential with opaque encodedData and no parseable JWT payload.
+     * Name must fall back to "Wallet Provider" and identifier must be null.
+     */
     @Test
     fun `resolve falls back to wallet provider when issuer is unknown`() {
         val credential = WalletCredential(

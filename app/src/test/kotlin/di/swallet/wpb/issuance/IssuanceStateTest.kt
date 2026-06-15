@@ -1,3 +1,7 @@
+/**
+ * Tests issuance state.
+ */
+
 package di.swallet.wpb.issuance
 
 import di.swallet.wpb.issuance.domain.IssuanceState
@@ -7,6 +11,9 @@ import org.junit.jupiter.api.Test
 
 class IssuanceStateTest {
 
+    /**
+     * Each consecutive pair in the standard issuance progression reports canTransitionTo=true.
+     */
     @Test
     fun `forward happy-path transitions are valid`() {
         val happyPath = listOf(
@@ -24,6 +31,9 @@ class IssuanceStateTest {
         }
     }
 
+    /**
+     * Deferred issuance path transitions are valid; DEFERRED_PENDING may transition to itself.
+     */
     @Test
     fun `deferred branch transitions are valid`() {
         val deferredPath = listOf(
@@ -39,12 +49,18 @@ class IssuanceStateTest {
         assertTrue(IssuanceState.DEFERRED_PENDING.canTransitionTo(IssuanceState.DEFERRED_PENDING))
     }
 
+    /**
+     * OFFER_RECEIVED cannot jump directly to CREDENTIAL_ISSUED or AUTHORIZED.
+     */
     @Test
     fun `cannot skip ahead from OFFER_RECEIVED`() {
         assertFalse(IssuanceState.OFFER_RECEIVED.canTransitionTo(IssuanceState.CREDENTIAL_ISSUED))
         assertFalse(IssuanceState.OFFER_RECEIVED.canTransitionTo(IssuanceState.AUTHORIZED))
     }
 
+    /**
+     * NOTIFIED, FAILED, REJECTED, and EXPIRED all report isTerminal=true.
+     */
     @Test
     fun `terminal states are flagged as terminal`() {
         listOf(
@@ -55,6 +71,9 @@ class IssuanceStateTest {
         ).forEach { assertTrue(it.isTerminal, "Expected $it to be terminal") }
     }
 
+    /**
+     * Terminal states may move to EXPIRED but not back to CREDENTIAL_REQUESTED.
+     */
     @Test
     fun `terminal states can only expire afterwards`() {
         listOf(
@@ -70,6 +89,9 @@ class IssuanceStateTest {
         }
     }
 
+    /**
+     * OFFER_RESOLVED may transition directly to AUTHORIZED for pre-authorized flows.
+     */
     @Test
     fun `pre-authorized flow can short-circuit prepare step`() {
         assertTrue(IssuanceState.OFFER_RESOLVED.canTransitionTo(IssuanceState.AUTHORIZED))

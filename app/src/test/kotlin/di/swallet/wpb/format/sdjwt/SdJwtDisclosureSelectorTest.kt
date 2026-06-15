@@ -1,3 +1,7 @@
+/**
+ * Tests sd jwt disclosure selector.
+ */
+
 package di.swallet.wpb.format.sdjwt
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -14,6 +18,9 @@ class SdJwtDisclosureSelectorTest {
     private val sdJwtService = SdJwtService(objectMapper)
     private val selector = SdJwtDisclosureSelector(objectMapper, sdJwtService)
 
+    /**
+     * Two disclosures for given_name and country; selecting given_name returns only that disclosure.
+     */
     @Test
     fun `selects disclosure by leaf key`() {
         val given = sdJwtService.createDisclosure("given_name", "Pedro")
@@ -25,6 +32,9 @@ class SdJwtDisclosureSelectorTest {
         assertEquals(listOf(given), selected)
     }
 
+    /**
+     * address.locality and address.country disclosures; path address.locality selects locality only.
+     */
     @Test
     fun `selects disclosure by PID dot notation path`() {
         val locality = sdJwtService.createDisclosure("address.locality", "Lisbon")
@@ -34,12 +44,18 @@ class SdJwtDisclosureSelectorTest {
         assertEquals(listOf(locality), selected)
     }
 
+    /**
+     * Empty requested paths yield an empty disclosure list even when disclosures exist.
+     */
     @Test
     fun `empty paths selects no disclosures`() {
         val disc = sdJwtService.createDisclosure("given_name", "Pedro")
         assertTrue(selector.selectDisclosures(listOf(disc), emptyList()).isEmpty())
     }
 
+    /**
+     * canSatisfy is true for a matching single path and false when any requested path is missing.
+     */
     @Test
     fun `canSatisfy requires every path to match`() {
         val given = sdJwtService.createDisclosure("given_name", "Pedro")
@@ -52,6 +68,9 @@ class SdJwtDisclosureSelectorTest {
         )
     }
 
+    /**
+     * nationalities disclosure with wildcard path segment is selected and satisfies canSatisfy.
+     */
     @Test
     fun `satisfies array path with wildcard segment`() {
         val disc = sdJwtService.createDisclosure("nationalities", listOf("PT", "ES"))
@@ -60,6 +79,9 @@ class SdJwtDisclosureSelectorTest {
         assertEquals(listOf(disc), selector.selectDisclosures(listOf(disc), listOf(path)))
     }
 
+    /**
+     * nationalities disclosure with index segment [1] satisfies canSatisfy.
+     */
     @Test
     fun `satisfies array path with index segment`() {
         val disc = sdJwtService.createDisclosure("nationalities", listOf("PT", "ES"))
@@ -67,6 +89,9 @@ class SdJwtDisclosureSelectorTest {
         assertTrue(selector.canSatisfy(listOf(disc), listOf(path)))
     }
 
+    /**
+     * Nested address object; selecting address.locality returns parent and child disclosures (closure of two).
+     */
     @Test
     fun `nested SD-JWT path selects child and parent closure`() {
         val issued = sdJwtService.createNestedObjectDisclosures(

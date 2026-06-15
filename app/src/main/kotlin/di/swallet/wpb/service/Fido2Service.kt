@@ -1,3 +1,7 @@
+/**
+ * FIDO2/WebAuthn relying-party logic for device registration and sole-control authentication.
+ */
+
 package di.swallet.wpb.service
 
 import com.yubico.webauthn.*
@@ -15,8 +19,7 @@ import org.springframework.stereotype.Service
 import java.util.*
 
 /**
- * Service managing real cryptographic FIDO2/WebAuthn verification logic.
- * Acts as the Relying Party (RP) in the WebAuthn ceremony to enforce Sole Control.
+ * Verifies WebAuthn assertions and manages registered FIDO2 devices as the wallet relying party.
  */
 @Service
 class Fido2Service(
@@ -162,10 +165,13 @@ class Fido2Service(
     }
 
     /**
-     * Bridge class that provides access to the PostgreSQL device store for the Yubico WebAuthn engine.
+     * Adapts persisted user devices to the Yubico WebAuthn credential repository interface.
      */
     private class Fido2CredentialBridge(private val repo: UserDeviceRepository) : CredentialRepository {
 
+        /**
+         * Returns all registered credential descriptors for the given wallet user ID.
+         */
         override fun getCredentialIdsForUsername(username: String): Set<PublicKeyCredentialDescriptor> {
             return repo.findByUserId(username).map {
                 PublicKeyCredentialDescriptor.builder()
@@ -175,14 +181,23 @@ class Fido2Service(
             }.toSet()
         }
 
+        /**
+         * Returns the WebAuthn user handle bytes derived from the wallet user ID.
+         */
         override fun getUserHandleForUsername(username: String): Optional<com.yubico.webauthn.data.ByteArray> {
             return Optional.of(com.yubico.webauthn.data.ByteArray(username.toByteArray()))
         }
 
+        /**
+         * Resolves the wallet user ID from a WebAuthn user handle byte array.
+         */
         override fun getUsernameForUserHandle(userHandle: com.yubico.webauthn.data.ByteArray): Optional<String> {
             return Optional.of(String(userHandle.bytes))
         }
 
+        /**
+         * Loads a registered credential when both credential ID and user handle match a stored device.
+         */
         override fun lookup(
             credentialId: com.yubico.webauthn.data.ByteArray,
             userHandle: com.yubico.webauthn.data.ByteArray
@@ -200,6 +215,9 @@ class Fido2Service(
                 }
         }
 
+        /**
+         * Returns all registered credentials that share the given credential ID.
+         */
         override fun lookupAll(credentialId: com.yubico.webauthn.data.ByteArray): Set<RegisteredCredential> {
             return repo.findByCredentialId(credentialId.base64Url).map {
                 RegisteredCredential.builder()

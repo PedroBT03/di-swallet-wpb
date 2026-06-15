@@ -1,3 +1,7 @@
+/**
+ * Spring configuration for OpenAPI documentation and global security schemes.
+ */
+
 package di.swallet.wpb.config
 
 import io.swagger.v3.oas.models.Components
@@ -17,6 +21,9 @@ import org.springframework.context.annotation.Configuration
 @ConditionalOnProperty(prefix = "wpb.swagger", name = ["enabled"], havingValue = "true", matchIfMissing = true)
 class OpenApiConfig {
 
+    /**
+     * Builds the OpenAPI document with WPB metadata and the X-Wallet-Authorization security scheme.
+     */
     @Bean
     fun customOpenAPI(): OpenAPI {
         val securitySchemeName = "WalletAuth"

@@ -1,3 +1,7 @@
+/**
+ * Tests ka signing certificate resolver.
+ */
+
 package di.swallet.wpb.ka.trust
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -14,6 +18,9 @@ class KaSigningCertificateResolverTest {
 
     private val validator = CertificateChainValidator(DefaultResourceLoader())
 
+    /**
+     * ka.signingX5c configured takes precedence over HSM chain when demoMode is false.
+     */
     @Test
     fun `configured signing chain takes precedence`() {
         val certB64 = testCertBase64()
@@ -27,6 +34,9 @@ class KaSigningCertificateResolverTest {
         assertEquals(listOf(certB64), chain)
     }
 
+    /**
+     * demoMode without configured signingX5c falls back to HSM certificateChainBase64.
+     */
     @Test
     fun `demo mode falls back to hsm certificate chain`() {
         val certB64 = testCertBase64()
@@ -39,6 +49,9 @@ class KaSigningCertificateResolverTest {
         assertEquals(listOf(certB64), chain)
     }
 
+    /**
+     * requireConfiguredSigningChain=true with no ka.signingX5c throws IllegalStateException on resolve.
+     */
     @Test
     fun `require configured signing chain fails without configured x5c`() {
         val props = OpenId4VciProperties().apply { ka.requireConfiguredSigningChain = true }
@@ -49,6 +62,7 @@ class KaSigningCertificateResolverTest {
         }
     }
 
+    /** Minimal WalletKey stub used when exercising KaSigningCertificateResolver chain resolution. */
     private fun walletKey() = WalletKey(
         userId = "holder-1",
         keyAlias = "key-holder-1-1",
@@ -57,6 +71,7 @@ class KaSigningCertificateResolverTest {
         createdAt = LocalDateTime.now(),
     )
 
+    /** Generates a self-signed EC certificate and returns its base64 encoding for resolver tests. */
     private fun testCertBase64(): String {
         val kp = java.security.KeyPairGenerator.getInstance("EC").apply {
             initialize(java.security.spec.ECGenParameterSpec("secp256r1"))

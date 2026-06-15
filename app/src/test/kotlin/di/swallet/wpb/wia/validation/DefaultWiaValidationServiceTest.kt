@@ -1,3 +1,7 @@
+/**
+ * Tests WIA technical validation and access-token binding rules.
+ */
+
 package di.swallet.wpb.wia.validation
 
 import di.swallet.wpb.issuance.domain.WalletInstanceAttestation
@@ -18,10 +22,12 @@ class DefaultWiaValidationServiceTest {
     private lateinit var service: DefaultWiaValidationService
 
     @BeforeEach
+    /** Constructs DefaultWiaValidationService backed by the mocked status list service. */
     fun setup() {
         service = DefaultWiaValidationService(statusListService)
     }
 
+    /** Synthetic WalletInstanceAttestation with adjustable expiry offsets, cnfJkt, and status index. */
     private fun attestation(
         tokenExpOffsetSeconds: Long = 3600,
         statusExpOffsetSeconds: Long = 31L * 24 * 3600,
@@ -44,12 +50,18 @@ class DefaultWiaValidationServiceTest {
         )
     }
 
+    /**
+     * Non-revoked status index and unexpired token/status timestamps pass validateTechnical without exception.
+     */
     @Test
     fun `valid attestation passes technical validation`() {
         `when`(statusListService.isRevoked(42)).thenReturn(false)
         assertDoesNotThrow { service.validateTechnical(attestation()) }
     }
 
+    /**
+     * StatusListService reports revoked for the attestation index; validateTechnical throws wia_revoked.
+     */
     @Test
     fun `revoked client status fails validation`() {
         `when`(statusListService.isRevoked(42)).thenReturn(true)
@@ -59,6 +71,9 @@ class DefaultWiaValidationServiceTest {
         assertEquals("wia_revoked", ex.code)
     }
 
+    /**
+     * tokenExpiresAt in the past; validateTechnical throws wia_expired.
+     */
     @Test
     fun `expired WIA token fails validation`() {
         `when`(statusListService.isRevoked(42)).thenReturn(false)
@@ -68,6 +83,9 @@ class DefaultWiaValidationServiceTest {
         assertEquals("wia_expired", ex.code)
     }
 
+    /**
+     * clientStatusExpiresAt in the past; validateTechnical throws wia_status_expired.
+     */
     @Test
     fun `expired client status fails validation`() {
         `when`(statusListService.isRevoked(42)).thenReturn(false)
@@ -77,11 +95,17 @@ class DefaultWiaValidationServiceTest {
         assertEquals("wia_status_expired", ex.code)
     }
 
+    /**
+     * Matching cnf jkt values pass validateAccessTokenBinding without exception.
+     */
     @Test
     fun `matching jkt passes binding validation`() {
         assertDoesNotThrow { service.validateAccessTokenBinding("jkt-1", "jkt-1") }
     }
 
+    /**
+     * Mismatched cnf jkt values throw wia_binding_mismatch.
+     */
     @Test
     fun `mismatch jkt fails binding validation`() {
         val ex = assertThrows(WiaValidationException::class.java) {

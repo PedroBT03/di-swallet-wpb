@@ -1,3 +1,7 @@
+/**
+ * Adapter port for all EUDI OID4VCI SDK interactions.
+ */
+
 package di.swallet.wpb.openid4vci.adapter
 
 import di.swallet.wpb.issuance.domain.DeferredIssuanceHandle

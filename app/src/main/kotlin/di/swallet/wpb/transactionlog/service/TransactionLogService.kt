@@ -1,3 +1,7 @@
+/**
+ * Core service for storing, listing, decrypting, and exporting encrypted TS10 transaction log entries.
+ */
+
 package di.swallet.wpb.transactionlog.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -21,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 
+/** Lightweight summary of a transaction log entry for list views. */
 data class TransactionLogSummary(
     val transactionId: String,
     val transactionType: String,
@@ -29,6 +34,7 @@ data class TransactionLogSummary(
     val deletedByUser: Boolean,
 )
 
+/** Encrypts TS10 transactions at rest and exposes list, read, export, and retention operations. */
 @Service
 class TransactionLogService(
     private val repository: TransactionLogRepository,
@@ -40,6 +46,7 @@ class TransactionLogService(
 ) : TransactionLogRecorder {
     private val loggedSessions = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
+    /** Encrypts and persists a TS10 transaction. Skips blank holder IDs and duplicate dedupe keys. */
     @Transactional
     override fun record(holderId: String, transaction: Ts10Transaction, dedupeKey: String?): TransactionLogEntry? {
         if (holderId.isBlank()) return null
@@ -74,6 +81,7 @@ class TransactionLogService(
         return repository.save(entry)
     }
 
+    /** Returns non-deleted transaction summaries for a holder, newest first. */
     fun list(holderId: String): List<TransactionLogSummary> =
         repository.findByHolderIdAndDeletedByUserFalseOrderByOccurredAtDesc(holderId)
             .map { entry ->
@@ -86,6 +94,7 @@ class TransactionLogService(
                 )
             }
 
+    /** Decrypts and returns a single transaction. Throws 404 if missing or user-deleted. */
     fun get(holderId: String, transactionId: String): Ts10Transaction {
         val entry = repository.findByTransactionIdAndHolderId(transactionId, holderId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction $transactionId not found")
@@ -95,6 +104,7 @@ class TransactionLogService(
         return decodeEntry(holderId, entry)
     }
 
+    /** Marks a transaction as deleted by the user without removing the encrypted row (DASH_06a). */
     @Transactional
     fun markDeletedByUser(holderId: String, transactionId: String) {
         val entry = repository.findByTransactionIdAndHolderId(transactionId, holderId)
@@ -103,6 +113,7 @@ class TransactionLogService(
         repository.save(entry)
     }
 
+    /** Exports selected or all active transactions as a password-encrypted JWE payload. */
     fun exportSelected(holderId: String, transactionIds: List<String>, password: CharArray): String {
         val entries = if (transactionIds.isEmpty()) {
             repository.findByHolderIdAndDeletedByUserFalseOrderByOccurredAtDesc(holderId)
@@ -117,11 +128,13 @@ class TransactionLogService(
         return jweEncoder.encryptTransactionLogExport(export, password)
     }
 
+    /** Exports migration data (transaction log plus credential metadata) as a password-encrypted JWE. */
     fun exportMigration(holderId: String, password: CharArray, includeNonDeviceBound: Boolean): String {
         val migration = migrationObjectBuilder.build(holderId, includeNonDeviceBound)
         return jweEncoder.encryptMigrationData(migration, password)
     }
 
+    /** Writes an OtherTransaction entry warning the holder that the log is near capacity. */
     @Transactional
     fun recordRetentionWarning(holderId: String, message: String): TransactionLogEntry? {
         val transaction = Ts10Transaction(
@@ -134,6 +147,7 @@ class TransactionLogService(
         return record(holderId, transaction)
     }
 
+    /** Deletes entries older than the cutoff that are not user-deleted. Returns the number pruned. */
     @Transactional
     fun prune(holderId: String, cutoff: Instant): Int {
         val prunable = repository.findPrunable(holderId, cutoff)
@@ -142,8 +156,10 @@ class TransactionLogService(
         return prunable.size
     }
 
+    /** Counts active (non user-deleted) entries for a holder. */
     fun countActive(holderId: String): Long = repository.countByHolderIdAndDeletedByUserFalse(holderId)
 
+    /** Decrypts a stored entry and verifies its integrity MAC before deserializing the TS10 payload. */
     private fun decodeEntry(holderId: String, entry: TransactionLogEntry): Ts10Transaction {
         verifyIntegrity(holderId, entry)
         val dekMode = TransactionLogDekMode.fromConfig(entry.dekMode)
@@ -157,6 +173,7 @@ class TransactionLogService(
         return objectMapper.readValue(plaintext, Ts10Transaction::class.java)
     }
 
+    /** Recomputes the integrity MAC and rejects tampered entries with HTTP 409. */
     private fun verifyIntegrity(holderId: String, entry: TransactionLogEntry) {
         val expected = crypto.integrityMac(
             transactionId = entry.transactionId,

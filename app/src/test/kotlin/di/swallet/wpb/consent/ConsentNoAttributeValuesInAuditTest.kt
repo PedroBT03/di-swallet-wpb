@@ -1,3 +1,7 @@
+/**
+ * Tests that consent audit logs omit raw attribute values.
+ */
+
 package di.swallet.wpb.consent
 
 import di.swallet.wpb.conformance.ConformanceScenario
@@ -35,6 +39,11 @@ import org.junit.jupiter.api.Test
 @ConformanceTest
 class ConsentNoAttributeValuesInAuditTest {
 
+    /**
+     * Runs a presentation session through consent with stub data containing Alice and
+     * SECRET_VALUE, then checks the returned session and audit events omit those strings
+     * while still recording a consent.granted event.
+     */
     @Test
     @ConformanceScenario("consent_no_attribute_values_in_audit")
     fun `consent events and session do not contain attribute values`() = runBlocking {
@@ -84,6 +93,10 @@ class ConsentNoAttributeValuesInAuditTest {
         assertTrue(events.any { it.type == "consent.granted" })
     }
 
+    /**
+     * Returns a stub OpenId4VpGateway that always resolves to a fixed authorization request
+     * with query q1, accepting all positive, negative, and error dispatches.
+     */
     private fun gatewayWithAliceClaim(): OpenId4VpGateway {
         val resolved = ResolvedAuthorizationRequest(
             requestToken = "rt",
@@ -98,23 +111,29 @@ class ConsentNoAttributeValuesInAuditTest {
             ),
         )
         return object : OpenId4VpGateway {
+            /** Returns a successful resolution with the prebuilt authorization request. */
             override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution =
                 AuthorizationRequestResolution.Success(resolved)
+            /** Accepts the positive VP token dispatch without contacting a real verifier. */
             override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken) =
                 PresentationDispatchOutcome.VerifierAccepted(null)
+            /** Accepts a negative presentation response without contacting a real verifier. */
             override suspend fun dispatchNegative(requestToken: String) =
                 PresentationDispatchOutcome.VerifierAccepted(null)
+            /** Accepts an error response dispatch without contacting a real verifier. */
             override suspend fun dispatchError(errorToken: String) =
                 PresentationDispatchOutcome.VerifierAccepted(null)
         }
     }
 
     private class StubTrust : TrustValidator {
+        /** Marks the presentation context as trusted without performing PKIX validation. */
         override fun validate(context: PresentationContext) =
             context.copy(trustDecision = TrustDecision(trusted = true))
     }
 
     private class StubRegistry : RegistryValidator {
+        /** Accepts the verifier with intended-use checked without querying a real RP registry. */
         override fun validate(context: PresentationContext) =
             context.copy(
                 registryDecision = di.swallet.wpb.presentation.domain.RegistryDecision(
@@ -125,11 +144,13 @@ class ConsentNoAttributeValuesInAuditTest {
     }
 
     private class StubPolicy : PolicyEngine {
+        /** Allows the presentation without evaluating real wallet policy rules. */
         override fun evaluate(context: PresentationContext) =
             context.copy(policyDecision = PolicyDecision(allowed = true))
     }
 
     private class StubMatcher : CredentialMatcher {
+        /** Supplies a single PID SD-JWT candidate c1 for query q1 without reading the credential store. */
         override fun match(context: PresentationContext): PresentationContext =
             context.copy(
                 credentialCandidates = listOf(
@@ -146,6 +167,7 @@ class ConsentNoAttributeValuesInAuditTest {
     }
 
     private class StubVpBuilder : VpTokenBuilder {
+        /** Attaches a placeholder VP token map for query q1 without building a real SD-JWT presentation. */
         override fun build(context: PresentationContext): PresentationContext =
             context.copy(vpToken = VpToken(mapOf("q1" to listOf("vp"))))
     }

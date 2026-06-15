@@ -1,3 +1,7 @@
+/**
+ * In-process simulated OID4VCI adapter for demo mode and tests.
+ */
+
 package di.swallet.wpb.openid4vci.adapter
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -55,6 +59,7 @@ class SimulatedOpenId4VciGateway(
     private val mdocCredentialCodec: MdocCredentialCodec,
 ) : OpenId4VciGateway {
 
+    /** In-flight adapter session state keyed by adapterSessionId. */
     private data class AdapterState(
         val offer: ResolvedOffer? = null,
         val metadata: ResolvedIssuerMetadata? = null,
@@ -71,6 +76,7 @@ class SimulatedOpenId4VciGateway(
 
     private val states: MutableMap<String, AdapterState> = ConcurrentHashMap()
 
+    /** Parses a credential offer URI into a resolved offer and synthetic issuer metadata. */
     override fun resolveOffer(offerUri: String): Pair<ResolvedOffer, ResolvedIssuerMetadata> {
         val params = parseQuery(offerUri)
         val payload = params["credential_offer"]
@@ -80,11 +86,13 @@ class SimulatedOpenId4VciGateway(
         return parseOfferPayload(payload)
     }
 
+    /** Returns synthetic issuer metadata for the requested credential configurations. */
     override fun resolveMetadata(
         credentialIssuerId: String,
         credentialConfigurationIds: List<String>,
     ): ResolvedIssuerMetadata = synthesizeMetadata(credentialIssuerId, credentialConfigurationIds)
 
+    /** Starts a simulated authorization-code flow and stores PKCE state. */
     override fun prepareAuthorization(
         adapterSessionId: String,
         offer: ResolvedOffer,
@@ -122,6 +130,7 @@ class SimulatedOpenId4VciGateway(
         )
     }
 
+    /** Accepts an authorization code and stores simulated access tokens. */
     override fun authorizeWithCode(
         adapterSessionId: String,
         authorizationCode: String,
@@ -154,6 +163,7 @@ class SimulatedOpenId4VciGateway(
         )
     }
 
+    /** Accepts a pre-authorized code grant and stores simulated access tokens. */
     override fun authorizeWithPreAuthorizedCode(
         adapterSessionId: String,
         offer: ResolvedOffer,
@@ -188,6 +198,7 @@ class SimulatedOpenId4VciGateway(
         )
     }
 
+    /** Returns a syntactically valid fake credential or a deferred issuance handle. */
     override fun requestCredential(
         adapterSessionId: String,
         request: IssuanceRequest,
@@ -258,6 +269,7 @@ class SimulatedOpenId4VciGateway(
         return IssuanceOutcome.Issued(listOf(credential))
     }
 
+    /** Polls simulated deferred issuance until the configured poll threshold is reached. */
     override fun queryDeferred(
         adapterSessionId: String,
         handle: DeferredIssuanceHandle,
@@ -298,6 +310,7 @@ class SimulatedOpenId4VciGateway(
         return DeferredQueryOutcome.Issued(listOf(credential))
     }
 
+    /** Accepts notification calls when the adapter session still exists. */
     override fun notify(
         adapterSessionId: String,
         notificationId: String,
@@ -307,6 +320,7 @@ class SimulatedOpenId4VciGateway(
         return states[adapterSessionId] != null
     }
 
+    /** Removes all adapter state associated with the session id. */
     override fun discard(adapterSessionId: String) {
         states.remove(adapterSessionId)
     }
@@ -315,6 +329,7 @@ class SimulatedOpenId4VciGateway(
     // Internals
     // ---------------------------------------------------------------------
 
+    /** Parses query parameters from an OpenID4VCI offer URI. */
     private fun parseQuery(uri: String): Map<String, String> {
         // The OID4VCI offer URI uses custom schemes such as
         // `openid-credential-offer://?credential_offer=...` or the loose
@@ -340,6 +355,7 @@ class SimulatedOpenId4VciGateway(
             .toMap()
     }
 
+    /** Returns null because by-reference offers are not fetched in the simulator. */
     private fun fetchByReference(uri: String): String? {
         // Simulator: by-reference offers are not actually fetched. The test harness
         // sends offers by-value or pre-populates the reference store. Returning null
@@ -347,6 +363,7 @@ class SimulatedOpenId4VciGateway(
         return null
     }
 
+    /** Parses offer JSON into a resolved offer plus synthetic issuer metadata. */
     private fun parseOfferPayload(payload: String): Pair<ResolvedOffer, ResolvedIssuerMetadata> {
         val cleaned = payload.trim()
         val issuerId = extractJsonString(cleaned, "credential_issuer") ?: "https://issuer.example.org"
@@ -371,6 +388,7 @@ class SimulatedOpenId4VciGateway(
         return offer to metadata
     }
 
+    /** Builds synthetic issuer metadata for the requested credential configurations. */
     private fun synthesizeMetadata(
         issuerId: String,
         configurationIds: List<String>,
@@ -415,6 +433,7 @@ class SimulatedOpenId4VciGateway(
         )
     }
 
+    /** Builds a simulated authorization redirect URL for the adapter session. */
     private fun buildAuthorizationUrl(
         endpoint: String,
         adapterSessionId: String,
@@ -432,6 +451,7 @@ class SimulatedOpenId4VciGateway(
         return "$endpoint$separator${q.joinToString("&")}"
     }
 
+    /** Builds a fake SD-JWT VC payload for simulator issuance. */
     private fun buildFakeSdJwtVc(
         configurationId: String,
         vct: String,
@@ -448,6 +468,7 @@ class SimulatedOpenId4VciGateway(
         return "$header.$payload.$signature~$disclosure~"
     }
 
+    /** Builds a fake mdoc payload for simulator issuance. */
     private fun buildFakeMdoc(
         configurationId: String,
         docTypeHint: String?,
@@ -484,11 +505,13 @@ class SimulatedOpenId4VciGateway(
         )
     }
 
+    /** Extracts a simple JSON string field using a regex fallback parser. */
     private fun extractJsonString(json: String, key: String): String? {
         val regex = Regex("\"$key\"\\s*:\\s*\"([^\"]+)\"")
         return regex.find(json)?.groupValues?.get(1)
     }
 
+    /** Extracts string values from a simple JSON string array using regex. */
     private fun extractJsonStringArray(json: String, key: String): List<String> {
         val regex = Regex("\"$key\"\\s*:\\s*\\[([^\\]]+)\\]")
         val match = regex.find(json) ?: return emptyList()
@@ -497,10 +520,12 @@ class SimulatedOpenId4VciGateway(
             .toList()
     }
 
+    /** Encodes deferred polling context as a base64url string. */
     private fun encodeContext(adapterSessionId: String, configurationId: String): String =
         Base64.getUrlEncoder().withoutPadding()
             .encodeToString("$adapterSessionId|$configurationId".toByteArray(StandardCharsets.UTF_8))
 
+    /** Decodes deferred polling context from a base64url string. */
     private fun decodeContext(serialized: String?): Pair<String, String> {
         require(!serialized.isNullOrBlank()) { "missing deferred context" }
         val raw = String(Base64.getUrlDecoder().decode(serialized), StandardCharsets.UTF_8)
@@ -509,12 +534,14 @@ class SimulatedOpenId4VciGateway(
         return parts[0] to parts[1]
     }
 
+    /** Generates a URL-safe random token truncated to the requested length. */
     private fun randomToken(length: Int): String {
         val bytes = ByteArray(length)
         java.security.SecureRandom().nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes).take(length)
     }
 
+    /** Base64url-encodes a UTF-8 string without padding. */
     private fun base64Url(value: String): String =
         Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray(StandardCharsets.UTF_8))
 }

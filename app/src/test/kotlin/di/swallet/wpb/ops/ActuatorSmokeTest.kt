@@ -1,3 +1,7 @@
+/**
+ * Smoke tests for actuator.
+ */
+
 package di.swallet.wpb.ops
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -10,6 +14,10 @@ import org.springframework.http.HttpStatus
 @ConformanceTest
 class ActuatorSmokeTest : BaseIntegrationTest() {
 
+    /**
+     * Hits /actuator/health for HSM and trustSnapshot plus the aggregate health endpoint
+     * and expects known status values with hsm and trustSnapshot listed as components.
+     */
     @Test
     @ConformanceScenario("actuator_health_smoke")
     fun `actuator health reports UP with HSM and trust components`() {
@@ -26,6 +34,10 @@ class ActuatorSmokeTest : BaseIntegrationTest() {
         assertThat(components).containsKeys("hsm", "trustSnapshot")
     }
 
+    /**
+     * GETs /actuator/info and expects an operational section containing profile, demoMode,
+     * and swaggerEnabled keys for deployment profile visibility.
+     */
     @Test
     @ConformanceScenario("actuator_info_operational")
     fun `actuator info exposes operational profile metadata`() {

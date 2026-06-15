@@ -1,3 +1,7 @@
+/**
+ * End-to-end tests for ts5 registry open id4 vp.
+ */
+
 package di.swallet.wpb.presentation
 
 import com.nimbusds.jose.JOSEObjectType
@@ -78,6 +82,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 class Ts5RegistryOpenId4VpE2ETest {
     private val mdocCodec = MdocTestSupport.stack().codec
 
+    /**
+     * Local HTTP servers emulate remote LOTE trust and signed TS5 registry responses.
+     * check-intended-use true reaches consent with registry.passed; flipping it false yields registry_rejected while trust stays valid.
+     */
     @Test
     @ConformanceScenario("vp_ts5_registry_intended_use")
     fun `ts5 signed registry response changes openid4vp runtime decision`() = runBlocking {
@@ -207,6 +215,7 @@ class Ts5RegistryOpenId4VpE2ETest {
         }
     }
 
+    /** Builds an OpenId4VpGateway stub with x5c verifier info and a full DCQL CredentialQuery for given_name. */
     private fun gatewayStub(clientId: String, leaf: X509Certificate): OpenId4VpGateway {
         val verifierInfoJson = """{"x5c":["${Base64.getEncoder().encodeToString(leaf.encoded)}"]}"""
         val resolved = ResolvedAuthorizationRequest(
@@ -233,21 +242,27 @@ class Ts5RegistryOpenId4VpE2ETest {
             verifierInfoJson = verifierInfoJson,
         )
         return object : OpenId4VpGateway {
+            /** Returns the prebuilt resolved authorization request for any request URI. */
             override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution =
                 AuthorizationRequestResolution.Success(resolved)
 
+            /** Acknowledges positive VP dispatch without contacting a remote verifier. */
             override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken): PresentationDispatchOutcome =
                 PresentationDispatchOutcome.VerifierAccepted(null)
 
+            /** Acknowledges negative dispatch without contacting a remote verifier. */
             override suspend fun dispatchNegative(requestToken: String): PresentationDispatchOutcome =
                 PresentationDispatchOutcome.VerifierAccepted(null)
 
+            /** Acknowledges error dispatch without contacting a remote verifier. */
             override suspend fun dispatchError(errorToken: String): PresentationDispatchOutcome =
                 PresentationDispatchOutcome.VerifierAccepted(null)
         }
     }
 
+    /** Returns a VpTokenBuilder that attaches a stub SD-JWT VP for consent-dispatch assertions. */
     private fun vpBuilderStub(): VpTokenBuilder = object : VpTokenBuilder {
+        /** Attaches a stub SD-JWT VP token with one pid presentation segment. */
         override fun build(context: di.swallet.wpb.presentation.domain.PresentationContext) =
             context.copy(
                 vpToken = VpToken(
@@ -259,6 +274,7 @@ class Ts5RegistryOpenId4VpE2ETest {
 
     private data class CertChain(val root: X509Certificate, val leaf: X509Certificate)
 
+    /** Issues a root CA and leaf certificate pair with DNS SAN on the leaf for TS5 registry E2E tests. */
     private fun issueChain(clientIdDns: String): CertChain {
         val generator = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }
         val rootKeys = generator.generateKeyPair()
@@ -268,6 +284,7 @@ class Ts5RegistryOpenId4VpE2ETest {
         return CertChain(root = root, leaf = leaf)
     }
 
+    /** Creates a self-signed CA certificate with basicConstraints CA true for LOTE trust anchoring. */
     private fun selfSignedCa(keys: KeyPair, subjectDn: String): X509Certificate {
         val subject = X500Name(subjectDn)
         val now = Instant.now()
@@ -284,6 +301,7 @@ class Ts5RegistryOpenId4VpE2ETest {
         return JcaX509CertificateConverter().getCertificate(builder.build(signer))
     }
 
+    /** Issues a leaf certificate signed by the CA with a DNS subjectAlternativeName entry. */
     private fun issuedLeaf(
         issuerCert: X509Certificate,
         issuerKeys: KeyPair,
@@ -311,6 +329,10 @@ class Ts5RegistryOpenId4VpE2ETest {
         return JcaX509CertificateConverter().getCertificate(builder.build(signer))
     }
 
+    /**
+     * Starts a local HTTP server exposing /lote, /registry/wrp/rp-123, and
+     * /registry/wrp/check-intended-use endpoints with supplier-provided JWT bodies.
+     */
     private fun startServer(
         lotePayload: String,
         registryRecordJwtSupplier: () -> String,
@@ -335,6 +357,7 @@ class Ts5RegistryOpenId4VpE2ETest {
         return server
     }
 
+    /** Writes an HTTP response with the given status, content type, and UTF-8 body to the exchange. */
     private fun writeResponse(exchange: HttpExchange, status: Int, contentType: String, body: String) {
         val bytes = body.toByteArray(StandardCharsets.UTF_8)
         exchange.responseHeaders.add("Content-Type", contentType)
@@ -342,6 +365,7 @@ class Ts5RegistryOpenId4VpE2ETest {
         exchange.responseBody.use { it.write(bytes) }
     }
 
+    /** Builds a TS119602 LoTE JSON document with the leaf x5c and root trust anchor PEM embedded. */
     private fun ts119602Payload(clientId: String, leafCert: X509Certificate, rootCert: X509Certificate): String {
         val leafB64 = Base64.getEncoder().encodeToString(leafCert.encoded)
         val rootPem = pem(rootCert)
@@ -379,6 +403,7 @@ class Ts5RegistryOpenId4VpE2ETest {
         """.trimIndent()
     }
 
+    /** Returns the TS5 wallet relying party record data map with KYC intended use covering given_name. */
     private fun walletRelyingPartyRecordData(identifier: String): Map<String, Any> = mapOf(
         "identifier" to listOf(mapOf("identifier" to identifier, "type" to "http://data.europa.eu/eudi/id/EUID")),
         "tradeName" to "RP Example",
@@ -406,6 +431,7 @@ class Ts5RegistryOpenId4VpE2ETest {
         ),
     )
 
+    /** Signs a registry JWT with ES256 embedding the supplied data claim and audience. */
     private fun signRegistryJwt(
         signer: KeyPair,
         data: Any,
@@ -429,12 +455,14 @@ class Ts5RegistryOpenId4VpE2ETest {
         return jwt.serialize()
     }
 
+    /** Generates an EC P-256 key pair for signing registry JWT responses in the test server. */
     private fun ecKeyPair(): KeyPair {
         val generator = KeyPairGenerator.getInstance("EC")
         generator.initialize(ECGenParameterSpec("secp256r1"))
         return generator.generateKeyPair()
     }
 
+    /** Writes the public key to a temp PEM file and returns a file: URI path for registry verification config. */
     private fun writePublicKeyPem(keyPair: KeyPair): String {
         val encoded = Base64.getEncoder().encodeToString(keyPair.public.encoded)
         val pem = "-----BEGIN PUBLIC KEY-----\n$encoded\n-----END PUBLIC KEY-----\n"
@@ -443,9 +471,11 @@ class Ts5RegistryOpenId4VpE2ETest {
         return "file:${path.toAbsolutePath()}"
     }
 
+    /** Formats the certificate as a PEM block with base64-encoded DER. */
     private fun pem(cert: X509Certificate): String =
         "-----BEGIN CERTIFICATE-----\n${Base64.getEncoder().encodeToString(cert.encoded)}\n-----END CERTIFICATE-----\n"
 
+    /** Escapes a multi-line PEM string for safe embedding inside JSON string literals. */
     private fun jsonString(raw: String): String =
         "\"" + raw.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
 }

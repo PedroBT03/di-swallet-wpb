@@ -1,3 +1,7 @@
+/**
+ * Tests wallet credential revocation.
+ */
+
 package di.swallet.wpb.revocation
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -22,6 +26,10 @@ class WalletCredentialRevocationTest : BaseIntegrationTest() {
     @Autowired lateinit var walletUnitRepository: WalletUnitRepository
     @Autowired lateinit var hsmService: HsmService
 
+    /**
+     * Issues an SD-JWT credential via the API, revokes it, then attempts presentation with a given_name disclosure.
+     * Presentation endpoint must respond with HTTP 403 Forbidden.
+     */
     @Test
     @ConformanceScenario("credential_revocation_blocks_use")
     fun `revoked WP-managed credential is rejected for presentation`() {

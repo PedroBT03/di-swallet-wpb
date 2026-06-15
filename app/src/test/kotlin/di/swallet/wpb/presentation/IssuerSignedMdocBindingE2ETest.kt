@@ -1,3 +1,7 @@
+/**
+ * End-to-end tests for issuer signed mdoc binding.
+ */
+
 package di.swallet.wpb.presentation
 
 import di.swallet.wpb.config.WalletProperties
@@ -33,6 +37,10 @@ class IssuerSignedMdocBindingE2ETest {
     private val registry = MdocDocTypeRegistry()
     private val independent = IndependentMdocVerifier()
 
+    /**
+     * PID mdoc is issued through storage then selected for VP building.
+     * Stored encodedData matches the issued artifact and the presented device response preserves the issuer-auth payload.
+     */
     @Test
     fun `issuer artifact is preserved from issuance storage to presentation`() {
         val state = mutableListOf<WalletCredential>()

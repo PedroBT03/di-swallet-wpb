@@ -1,3 +1,7 @@
+/**
+ * Validation rules for relying party IDs allowed to register pseudonym passkeys.
+ */
+
 package di.swallet.wpb.pseudonym
 
 import di.swallet.wpb.config.PseudonymProperties
@@ -6,13 +10,15 @@ import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
 
 /**
- * MVP RP identity gate (PA_20 baseline). Allow-list is a local mitigation only;
- * it does not replace TLS/browser RP verification or access-certificate trust.
+ * Enforces rpId format and optional allow-list checks before pseudonym creation.
  */
 @Component
 class RpIdPolicy(
     private val properties: PseudonymProperties,
 ) {
+    /**
+     * Rejects invalid, malformed, or disallowed relying party IDs.
+     */
     fun validateRpId(rpId: String) {
         val normalized = rpId.trim().lowercase()
         if (normalized.isBlank() || normalized.length > 256) {

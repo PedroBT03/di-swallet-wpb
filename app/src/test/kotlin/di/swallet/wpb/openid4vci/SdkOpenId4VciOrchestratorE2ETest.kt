@@ -1,3 +1,7 @@
+/**
+ * End-to-end tests for sdk open id4 vci orchestrator.
+ */
+
 package di.swallet.wpb.openid4vci
 
 import com.github.tomakehurst.wiremock.WireMockServer
@@ -61,6 +65,7 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
 
         @JvmStatic
         @DynamicPropertySource
+        /** Registers Spring properties pointing the SDK orchestrator at the local WireMock issuer with preferSigned metadata policy. */
         fun configure(registry: DynamicPropertyRegistry) {
             val issuer = issuerBaseUrl()
             registry.add("wpb.openid4vci.demo-mode") { "false" }
@@ -72,14 +77,17 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
 
         @JvmStatic
         @AfterAll
+        /** Shuts down the shared WireMock server after all tests in this class complete. */
         fun stopWireMock() {
             wireMock.stop()
         }
 
+        /** Returns the base URL of the companion WireMock issuer using its dynamically assigned port. */
         private fun issuerBaseUrl(): String = "http://localhost:${wireMock.port()}"
     }
 
     @BeforeEach
+    /** Clears WireMock stubs and registers default issuer metadata, token, credential, and notification endpoints. */
     fun resetWireMock() {
         wireMock.resetAll()
         configureFor("localhost", wireMock.port())
@@ -92,6 +100,10 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
         stubFor(post(urlEqualTo("/credential/notification")).willReturn(aResponse().withStatus(204)))
     }
 
+    /**
+     * Holder is bootstrapped with HSM keys and the orchestrator runs auth-code issuance against WireMock.
+     * Credential request proof JWT uses the wallet key alias and verifies with the holder public key.
+     */
     @Test
     @ConformanceScenario("vci_haip_issuance_happy_path")
     fun `sdk gateway orchestrator flow uses hsm proof keys against wiremock issuer`() {
@@ -144,6 +156,10 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
         assertTrue(parsed.verify(ECDSAVerifier(ecPublicKey)))
     }
 
+    /**
+     * WireMock serves signed issuer metadata and the orchestrator resolves the credential offer.
+     * Context reaches OFFER_RESOLVED with trusted decision and signed metadata fields populated.
+     */
     @Test
     fun `valid signed metadata allows sdk orchestrator offer resolution`() {
         val issuer = issuerBaseUrl()
@@ -162,6 +178,7 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
         assertEquals(signedJwt, ctx.issuerMetadata!!.signedMetadataJwt)
     }
 
+    /** Stubs OpenID credential issuer and authorization server metadata, optionally embedding a signed_metadata JWT field. */
     private fun stubIssuerMetadata(signedMetadataJwt: String?) {
         val issuer = issuerBaseUrl()
         val signedField = signedMetadataJwt?.let { ""","signed_metadata":"$it"""" } ?: ""
@@ -207,6 +224,7 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
         )
     }
 
+    /** Stubs the OAuth token endpoint to return an access token, c_nonce, and cnf.jkt bound to [cnfJkt]. */
     private fun stubTokenEndpoint(cnfJkt: String) {
         stubFor(
             post(urlEqualTo("/oauth2/token"))
@@ -224,6 +242,7 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
         )
     }
 
+    /** Parses the proof.jwt string from the most recent POST /credential request captured by WireMock. */
     private fun extractProofJwtFromLastCredentialRequest(): String {
         val requests = wireMock.findAll(postRequestedFor(urlEqualTo("/credential")))
         assertTrue(requests.isNotEmpty())

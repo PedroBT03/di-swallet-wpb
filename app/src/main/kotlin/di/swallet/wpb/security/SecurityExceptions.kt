@@ -1,3 +1,7 @@
+/**
+ * Security-related HTTP exceptions for wallet authorization failures.
+ */
+
 package di.swallet.wpb.security
 
 import org.springframework.http.HttpStatus

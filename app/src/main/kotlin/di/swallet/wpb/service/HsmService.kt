@@ -1,3 +1,7 @@
+/**
+ * PKCS#11 HSM integration for wallet keys, JWT signing, pseudonym keys, and health probing.
+ */
+
 package di.swallet.wpb.service
 
 import di.swallet.wpb.config.HsmProperties
@@ -29,8 +33,7 @@ import com.nimbusds.jose.util.Base64URL
 import com.nimbusds.jwt.*
 
 /**
- * WSCA (Wallet Secure Cryptographic Application) implementation.
- * Manages the interaction with the hardware security module (Remote WSCD).
+ * WSCA gateway that performs key generation, signing, and deletion inside the remote PKCS#11 token.
  */
 @Service
 class HsmService(
@@ -152,6 +155,9 @@ class HsmService(
         }
     }
 
+    /**
+     * Signs arbitrary bytes with the private key identified by alias after revocation checks.
+     */
     fun signDataWithAlias(keyAlias: String, dataToSign: ByteArray): ByteArray {
         wscaAccessGuard.requireSciForWalletKeyAlias(keyAlias)
         val walletKey = getKeyByAlias(keyAlias)
@@ -181,11 +187,17 @@ class HsmService(
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "User wallet not found") }
     }
 
+    /**
+     * Loads wallet key metadata for a given HSM alias.
+     */
     fun getKeyByAlias(keyAlias: String): WalletKey {
         return walletKeyRepository.findByKeyAlias(keyAlias)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet key alias not found") }
     }
 
+    /**
+     * Returns the HSM certificate chain for a wallet key encoded as standard Base64 strings.
+     */
     fun certificateChainBase64(walletKey: WalletKey): List<String> {
         try {
             val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
@@ -314,6 +326,9 @@ class HsmService(
         return "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$base64UrlSignature"
     }
 
+    /**
+     * Signs an SD-JWT key-binding JWT for the wallet key identified by alias.
+     */
     override fun signKeyBindingJwtForKeyAlias(keyAlias: String, payload: Map<String, Any>): String {
         val walletKey = getKeyByAlias(keyAlias)
         validateKeyStatus(walletKey)
@@ -330,6 +345,9 @@ class HsmService(
         return "${header.toBase64URL()}.${jwsObject.payload.toBase64URL()}.$base64UrlSignature"
     }
 
+    /**
+     * Signs bytes with ES256 and returns the raw 64-byte R||S signature expected by COSE.
+     */
     fun signCoseEs256WithAlias(keyAlias: String, bytesToSign: ByteArray): ByteArray {
         val derSignature = signDataWithAlias(keyAlias, bytesToSign)
         return ECDSA.transcodeSignatureToConcat(derSignature, 64)
@@ -362,6 +380,9 @@ class HsmService(
         }
     }
 
+    /**
+     * Reads the EC public key for a dedicated pseudonym HSM alias.
+     */
     fun getDedicatedPublicKey(alias: String): java.security.interfaces.ECPublicKey {
         try {
             val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
@@ -377,6 +398,9 @@ class HsmService(
         }
     }
 
+    /**
+     * Signs assertion input with a dedicated pseudonym key and returns a COSE-style ES256 signature.
+     */
     fun signEs256WithDedicatedAlias(alias: String, dataToSign: ByteArray): ByteArray {
         wscaAccessGuard.requireSciForDedicatedAlias(alias)
         try {
@@ -397,6 +421,9 @@ class HsmService(
         }
     }
 
+    /**
+     * Removes a dedicated pseudonym key entry from the HSM token.
+     */
     fun deleteDedicatedKey(alias: String) {
         wscaAccessGuard.requireSciForDedicatedAlias(alias)
         deleteKeyEntry(alias)
@@ -410,6 +437,9 @@ class HsmService(
         deleteKeyEntry(keyAlias)
     }
 
+    /**
+     * Deletes an HSM key entry by alias when it exists on the token.
+     */
     private fun deleteKeyEntry(alias: String) {
         try {
             val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
@@ -445,6 +475,7 @@ class HsmService(
     }
 }
 
+/** Result of a lightweight PKCS#11 session health check without signing operations. */
 data class HsmSessionProbe(
     val reachable: Boolean,
     val tokenLabel: String?,

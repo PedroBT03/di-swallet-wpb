@@ -1,3 +1,7 @@
+/**
+ * Blocks presentation and signing for revoked credentials and invalid wallet keys.
+ */
+
 package di.swallet.wpb.revocation
 
 import di.swallet.wpb.config.StatusListProperties
@@ -10,6 +14,9 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 
+/**
+ * Checks credential and key revocation state before presentation and identifies WP-managed credentials.
+ */
 @Service
 class CredentialRevocationGuard(
     private val walletCredentialRepository: WalletCredentialRepository,
@@ -17,6 +24,9 @@ class CredentialRevocationGuard(
     private val hsmService: HsmService,
     private val properties: StatusListProperties,
 ) {
+    /**
+     * Loads a credential by ID and rejects the request if it is revoked or its key is invalid.
+     */
     fun requirePresentable(credentialId: Long) {
         val credential = walletCredentialRepository.findById(credentialId)
             .orElseThrow {
@@ -25,6 +35,9 @@ class CredentialRevocationGuard(
         requirePresentable(credential)
     }
 
+    /**
+     * Rejects the request when the credential or its bound wallet key is revoked.
+     */
     fun requirePresentable(credential: WalletCredential) {
         if (isRevoked(credential)) {
             throw ResponseStatusException(
@@ -35,6 +48,9 @@ class CredentialRevocationGuard(
         credential.walletKey?.let { hsmService.validateKeyStatus(it) }
     }
 
+    /**
+     * Returns true when the credential is marked revoked locally or in the status list bitstring.
+     */
     fun isRevoked(credential: WalletCredential): Boolean {
         if (credential.revocationState == CredentialRevocationState.REVOKED) {
             return true
@@ -47,9 +63,15 @@ class CredentialRevocationGuard(
         return false
     }
 
+    /**
+     * Returns true when the wallet provider owns both the status list ID and index for the credential.
+     */
     fun isWpManaged(credential: WalletCredential): Boolean =
         credential.statusListId != null && credential.statusListIndex != null
 
+    /**
+     * Builds the public URI clients use to fetch the WP-managed status list credential.
+     */
     fun statusListUri(): String =
         "${properties.publicBaseUrl.trimEnd('/')}/${statusListService.getListId()}"
 }

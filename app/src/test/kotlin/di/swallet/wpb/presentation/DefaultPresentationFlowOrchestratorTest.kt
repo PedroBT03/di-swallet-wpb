@@ -1,3 +1,7 @@
+/**
+ * Tests presentation flow orchestration with stubbed collaborators.
+ */
+
 package di.swallet.wpb.presentation
 
 import di.swallet.wpb.observability.InMemorySessionEventStore
@@ -49,19 +53,23 @@ class DefaultPresentationFlowOrchestratorTest {
         var lastPositiveToken: VpToken? = null
         var negativeCount = 0
         var errorCount = 0
+        /** Returns the fixed resolved authorization request for any request URI. */
         override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution =
             AuthorizationRequestResolution.Success(request)
 
+        /** Captures the positive VP token and acknowledges dispatch to the verifier. */
         override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken): PresentationDispatchOutcome {
             lastPositiveToken = vpToken
             return PresentationDispatchOutcome.VerifierAccepted(null)
         }
 
+        /** Increments the negative dispatch counter and returns a successful outcome. */
         override suspend fun dispatchNegative(requestToken: String): PresentationDispatchOutcome {
             negativeCount++
             return PresentationDispatchOutcome.VerifierAccepted(null)
         }
 
+        /** Increments the error dispatch counter and returns a successful outcome. */
         override suspend fun dispatchError(errorToken: String): PresentationDispatchOutcome {
             errorCount++
             return PresentationDispatchOutcome.VerifierAccepted(null)
@@ -69,16 +77,19 @@ class DefaultPresentationFlowOrchestratorTest {
     }
 
     private class StubTrust(private val trusted: Boolean = true) : TrustValidator {
+        /** Sets trustDecision to trusted or denied based on the constructor flag. */
         override fun validate(context: PresentationContext): PresentationContext =
             context.copy(trustDecision = TrustDecision(trusted = trusted, reason = if (trusted) "ok" else "denied"))
     }
 
     private class StubPolicy(private val allowed: Boolean = true) : PolicyEngine {
+        /** Sets policyDecision.allowed according to the constructor flag with a matching reason string. */
         override fun evaluate(context: PresentationContext): PresentationContext =
             context.copy(policyDecision = PolicyDecision(allowed = allowed, reason = if (allowed) "ok" else "denied"))
     }
 
     private class StubRegistry(private val accepted: Boolean = true) : RegistryValidator {
+        /** Copies registryDecision with accepted or denied based on the constructor flag. */
         override fun validate(context: PresentationContext): PresentationContext =
             context.copy(
                 registryDecision = di.swallet.wpb.presentation.domain.RegistryDecision(
@@ -92,11 +103,13 @@ class DefaultPresentationFlowOrchestratorTest {
     }
 
     private class StubMatcher(private val candidates: List<CredentialCandidate>) : CredentialMatcher {
+        /** Replaces credentialCandidates with the list supplied at construction time. */
         override fun match(context: PresentationContext): PresentationContext =
             context.copy(credentialCandidates = candidates)
     }
 
     private class StubVpBuilder : VpTokenBuilder {
+        /** Attaches a placeholder SD-JWT VP token with one presentation for query q1. */
         override fun build(context: PresentationContext): PresentationContext =
             context.copy(
                 vpToken = VpToken(
@@ -106,6 +119,7 @@ class DefaultPresentationFlowOrchestratorTest {
             )
     }
 
+    /** Builds DefaultPresentationFlowOrchestrator with injectable stub collaborators and real consent dependencies. */
     private fun newOrchestrator(
         gateway: OpenId4VpGateway = GatewayStub(resolved),
         trust: TrustValidator = StubTrust(),
@@ -135,6 +149,7 @@ class DefaultPresentationFlowOrchestratorTest {
         )
     }
 
+    /** Returns a minimal SD-JWT CredentialCandidate for the given query id. */
     private fun candidate(queryId: String = "q1") = CredentialCandidate(
         candidateId = "c1",
         credentialId = 1L,
@@ -144,6 +159,10 @@ class DefaultPresentationFlowOrchestratorTest {
         format = CredentialFormat.SD_JWT,
     )
 
+    /**
+     * Stubbed trust, policy, and matcher succeed and the holder grants consent for one candidate.
+     * Session reaches DISPATCHED and the gateway receives a positive VP token.
+     */
     @Test
     fun `happy path dispatches positive VP on consent`() = runBlocking {
         val gateway = GatewayStub(resolved)
@@ -165,6 +184,10 @@ class DefaultPresentationFlowOrchestratorTest {
         assertNotNull(gateway.lastPositiveToken)
     }
 
+    /**
+     * Session reaches consent pending then the holder denies consent.
+     * State becomes DISPATCHED and the gateway records one negative dispatch.
+     */
     @Test
     fun `consent denial dispatches negative outcome`() = runBlocking {
         val gateway = GatewayStub(resolved)
@@ -184,6 +207,10 @@ class DefaultPresentationFlowOrchestratorTest {
         assertEquals(1, gateway.negativeCount)
     }
 
+    /**
+     * Trust validator is stubbed to reject the verifier before matching runs.
+     * startSession ends DISPATCHED with at least one negative gateway dispatch.
+     */
     @Test
     fun `untrusted verifier rejects and dispatches negative`() = runBlocking {
         val gateway = GatewayStub(resolved)
@@ -196,6 +223,10 @@ class DefaultPresentationFlowOrchestratorTest {
         assertTrue(gateway.negativeCount >= 1)
     }
 
+    /**
+     * Matcher returns no candidates while policy would otherwise allow the request.
+     * startSession rejects immediately as DISPATCHED with one negative dispatch.
+     */
     @Test
     fun `empty candidates after match rejects and dispatches negative`() = runBlocking {
         val gateway = GatewayStub(resolved)
@@ -209,6 +240,10 @@ class DefaultPresentationFlowOrchestratorTest {
         assertEquals(1, gateway.negativeCount)
     }
 
+    /**
+     * Policy engine stub denies the presentation after trust succeeds.
+     * startSession finishes DISPATCHED and sends one negative outcome to the gateway.
+     */
     @Test
     fun `policy rejection dispatches negative outcome`() = runBlocking {
         val gateway = GatewayStub(resolved)
@@ -221,6 +256,10 @@ class DefaultPresentationFlowOrchestratorTest {
         assertEquals(1, gateway.negativeCount)
     }
 
+    /**
+     * Trust and policy pass but registry validation rejects the relying party.
+     * Session dispatches negatively with error code registry_rejected.
+     */
     @Test
     fun `registry rejection dispatches negative even when trust is valid`() = runBlocking {
         val gateway = GatewayStub(resolved)

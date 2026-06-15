@@ -1,3 +1,7 @@
+/**
+ * Tests pseudonym service.
+ */
+
 package di.swallet.wpb.pseudonym
 
 import di.swallet.wpb.config.PseudonymProperties
@@ -25,6 +29,7 @@ class PseudonymServiceTest {
     private val transactionLogger = mock(TransactionLogger::class.java)
     private lateinit var service: PseudonymService
 
+    /** Rebuilds PseudonymService with mocked repository, HSM, and transaction logger before each test. */
     @BeforeEach
     fun setUp() {
         service = PseudonymService(
@@ -39,6 +44,10 @@ class PseudonymServiceTest {
         )
     }
 
+    /**
+     * Repository already reports two pseudonyms for the holder/RP pair when create is called.
+     * Service must throw HTTP 409 and must not persist a new credential.
+     */
     @Test
     fun `create rejects when max per rp reached`() {
         `when`(repository.countByHolderIdAndRpId("holder-1", "rp.example.com")).thenReturn(2L)
@@ -49,6 +58,10 @@ class PseudonymServiceTest {
         verify(repository, never()).save(isA(PseudonymCredential::class.java))
     }
 
+    /**
+     * Creates two pending pseudonyms for the same holder against different RPs.
+     * Both return PENDING status and persist distinct user handles.
+     */
     @Test
     fun `create assigns distinct user handles per slot`() {
         val handles = mutableListOf<String>()
@@ -65,6 +78,10 @@ class PseudonymServiceTest {
         assertEquals(2, handles.toSet().size)
     }
 
+    /**
+     * Pseudonym feature flag is turned off before list is called.
+     * Service must throw ResponseStatusException (not found).
+     */
     @Test
     fun `disabled feature returns not found`() {
         properties.enabled = false

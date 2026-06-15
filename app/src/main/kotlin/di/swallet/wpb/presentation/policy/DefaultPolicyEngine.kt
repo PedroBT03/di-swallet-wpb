@@ -1,3 +1,7 @@
+/**
+ * Default wallet policy rules for OpenID4VP presentation requests.
+ */
+
 package di.swallet.wpb.presentation.policy
 
 import di.swallet.wpb.config.OpenId4VpProperties
@@ -8,13 +12,8 @@ import di.swallet.wpb.presentation.registry.RegistryIntendedUseMatcher
 import org.springframework.stereotype.Service
 
 /**
- * Policy engine for OpenID4VP presentation flows.
- *
- * Enforces:
- *  - verifier trust acceptance;
- *  - TS5/TS6 registry data when registry validation is enabled;
- *  - supported response modes exercised by the orchestrator;
- *  - at least one credential candidate (or demo-mode synthetic continuation).
+ * Enforces trust acceptance, registry coverage, supported response modes, and credential availability.
+ * Demo mode may allow continuation when no wallet credentials match.
  */
 @Service
 class DefaultPolicyEngine(
@@ -26,6 +25,9 @@ class DefaultPolicyEngine(
         PresentationResponseMode.DIRECT_POST_JWT,
     )
 
+    /**
+     * Applies wallet policy checks and records an allow or deny decision on the context.
+     */
     override fun evaluate(context: PresentationContext): PresentationContext {
         val trusted = context.trustDecision?.trusted == true
         if (!trusted) {
@@ -74,6 +76,7 @@ class DefaultPolicyEngine(
         )
     }
 
+    /** Returns a rejection decision when registry policy is enabled but not satisfied. */
     private fun evaluateRegistryPolicy(context: PresentationContext): PolicyDecision? {
         if (!properties.registry.enabled) return null
 

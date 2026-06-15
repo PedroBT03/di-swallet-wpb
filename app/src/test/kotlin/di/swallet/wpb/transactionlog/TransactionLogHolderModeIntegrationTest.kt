@@ -1,3 +1,7 @@
+/**
+ * Tests transaction log holder mode integration test config.
+ */
+
 package di.swallet.wpb.transactionlog
 
 import di.swallet.wpb.config.TransactionLogProperties
@@ -51,6 +55,10 @@ class TransactionLogHolderModeIntegrationTest {
     private val holderId = "holder-holder-mode"
     private val logKey = HolderLogKeyDerivation.derive(holderId, "integration-passphrase".toCharArray())
 
+    /**
+     * Records a presentation transaction with the holder log key present on the request.
+     * Fetching without the key fails; fetching with the key returns the same transaction identifier.
+     */
     @Test
     fun `service rejects decrypt without holder log key in holder dek mode`() {
         val transaction = Ts10Transaction(
@@ -74,6 +82,7 @@ class TransactionLogHolderModeIntegrationTest {
         }
     }
 
+    /** Runs a block with the holder log key attached to the mock request context for holder DEK mode. */
     private fun <T> withLogKey(key: ByteArray, block: () -> T): T {
         val request = MockHttpServletRequest()
         request.setAttribute(WalletSecurityAttributes.HOLDER_LOG_KEY, key)

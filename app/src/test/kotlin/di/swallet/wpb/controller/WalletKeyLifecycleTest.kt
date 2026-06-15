@@ -1,3 +1,7 @@
+/**
+ * Tests wallet key lifecycle.
+ */
+
 package di.swallet.wpb.controller
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -11,7 +15,8 @@ import java.util.*
 class WalletKeyLifecycleTest : BaseIntegrationTest() {
 
     /**
-     * Tests the generation of keys using the dynamic authentication handshake.
+     * Creates a wallet key with FIDO2 headers, signs sample data with a fresh challenge,
+     * and expects both operations to return 200 with a non-null signature.
      */
     @Test
     fun `should manage full key lifecycle with dynamic auth`() {
@@ -35,7 +40,8 @@ class WalletKeyLifecycleTest : BaseIntegrationTest() {
     }
 
     /**
-     * Security test to verify the enforcement of the revocation bitstring.
+     * Creates a key, revokes it via the status-list bitstring, then attempts to sign and
+     * expects HTTP 403 because the revoked bit blocks further HSM use.
      */
     @Test
     fun `should block signature when key is revoked in bitstring`() {

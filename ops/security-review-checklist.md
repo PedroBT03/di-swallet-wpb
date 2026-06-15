@@ -1,4 +1,4 @@
-# WPB Security Review Checklist (Phase 18)
+# WPB Security Review Checklist
 
 Operational security review items for thesis evidence and pre-production sign-off.
 

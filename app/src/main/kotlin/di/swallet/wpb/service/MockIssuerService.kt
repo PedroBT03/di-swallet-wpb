@@ -1,19 +1,21 @@
+/**
+ * Dev-only mock external issuer that returns sample identity claims for credential issuance demos.
+ */
+
 package di.swallet.wpb.service
 
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 
 /**
- * Mock implementation of an External Issuer (e.g., Portuguese IRN).
- * Simulates the retrieval of authentic user data for credential issuance.
+ * Simulates an external government issuer by returning fixed demo user claims in the dev profile.
  */
 @Service
 @Profile("dev")
 class MockIssuerService {
 
     /**
-     * Returns a mock set of user claims.
-     * In the real flow (OpenID4VCI), this would be fetched from a secure government database.
+     * Returns a static set of PID-like claims for the given user ID.
      */
     fun fetchUserData(userId: String): Map<String, Any> {
         return mapOf(

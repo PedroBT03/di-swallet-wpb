@@ -1,3 +1,7 @@
+/**
+ * Tests wallet security.
+ */
+
 package di.swallet.wpb.security
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -8,7 +12,8 @@ import org.springframework.http.HttpStatus
 class WalletSecurityTest : BaseIntegrationTest() {
 
     /**
-     * Verifies that the interceptor blocks requests without the custom header.
+     * POSTs to create a wallet key with no X-Wallet-Authorization header and expects HTTP
+     * 401 because the security interceptor rejects unauthenticated requests.
      */
     @Test
     fun `security interceptor should block requests without valid authorization`() {
@@ -19,7 +24,8 @@ class WalletSecurityTest : BaseIntegrationTest() {
     }
 
     /**
-     * Verifies that the interceptor blocks requests with an incorrect or expired challenge.
+     * Sends X-Wallet-Authorization with a malformed fido2-user value and expects HTTP 401
+     * because the interceptor rejects invalid challenge formats.
      */
     @Test
     fun `security interceptor should block invalid challenge format`() {

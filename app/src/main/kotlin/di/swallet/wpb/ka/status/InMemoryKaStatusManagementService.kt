@@ -1,3 +1,7 @@
+/**
+ * In-memory key attestation status list mapping for unit tests.
+ */
+
 package di.swallet.wpb.ka.status
 
 import di.swallet.wpb.issuance.domain.KaStatusReference
@@ -15,6 +19,7 @@ class InMemoryKaStatusManagementService(
     private val byHolderIssuerAttestation = ConcurrentHashMap<String, Int>()
     private val holderEntries = ConcurrentHashMap<String, MutableSet<Int>>()
 
+    /** Allocates one stable index per holder, issuer scope, and attestation fingerprint. */
     override fun getOrAllocateStatus(
         holderId: String,
         issuerId: String?,
@@ -33,6 +38,7 @@ class InMemoryKaStatusManagementService(
         )
     }
 
+    /** Revokes all indices previously allocated for the holder in this JVM. */
     override fun revokeHolder(holderId: String) {
         holderEntries[holderId]?.forEach { statusListService.revoke(it) }
     }

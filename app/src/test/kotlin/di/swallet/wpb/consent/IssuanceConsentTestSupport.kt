@@ -1,3 +1,7 @@
+/**
+ * Shared test helpers for issuance consent.
+ */
+
 package di.swallet.wpb.consent
 
 import di.swallet.wpb.issuance.domain.IssuanceContext
@@ -7,6 +11,10 @@ import di.swallet.wpb.openid4vci.protocol.IssuanceConsentSubmission
 
 object IssuanceConsentTestSupport {
 
+    /**
+     * If issuance consent is pending, submits a granted consent decision for the holder;
+     * otherwise returns the context unchanged.
+     */
     fun approveStorageIfPending(
         orchestrator: IssuanceFlowOrchestrator,
         ctx: IssuanceContext,

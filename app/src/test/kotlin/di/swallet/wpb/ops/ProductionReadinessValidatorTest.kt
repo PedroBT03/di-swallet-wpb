@@ -1,3 +1,7 @@
+/**
+ * Tests production readiness validator.
+ */
+
 package di.swallet.wpb.ops
 
 import di.swallet.wpb.config.DpaReportProperties
@@ -14,6 +18,10 @@ import org.springframework.mock.env.MockEnvironment
 
 class ProductionReadinessValidatorTest {
 
+    /**
+     * Runs the prod-profile validator with demoMode enabled and weak HSM/DB secrets and
+     * expects IllegalStateException because unsafe prod configuration must fail fast.
+     */
     @Test
     fun `fails fast when demo mode or weak secrets remain in prod`() {
         val env = prodEnvironment()
@@ -24,12 +32,20 @@ class ProductionReadinessValidatorTest {
         assertThrows(IllegalStateException::class.java) { validator.run(null) }
     }
 
+    /**
+     * Runs the prod validator with default bundled classpath signing key paths and expects
+     * IllegalStateException because dev keys must not ship in production.
+     */
     @Test
     fun `fails when bundled dev signing keys remain in prod`() {
         val validator = validator(environment = prodEnvironment())
         assertThrows(IllegalStateException::class.java) { validator.run(null) }
     }
 
+    /**
+     * Configures prod with transaction log dekMode=holder and an otherwise weak server
+     * encryption key, then expects validation to pass because holder DEK mode skips that check.
+     */
     @Test
     fun `passes when prod uses holder dek mode even with default server encryption key`() {
         val validator = ProductionReadinessValidator(
@@ -54,6 +70,10 @@ class ProductionReadinessValidatorTest {
         assertDoesNotThrow { validator.run(null) }
     }
 
+    /**
+     * Supplies prod profile with demo mode off, strong crypto secrets, external signing keys,
+     * and a configured DPA fallback contact, then expects validation to complete cleanly.
+     */
     @Test
     fun `passes when prod secrets and flags are overridden`() {
         val validator = ProductionReadinessValidator(
@@ -77,6 +97,10 @@ class ProductionReadinessValidatorTest {
         assertDoesNotThrow { validator.run(null) }
     }
 
+    /**
+     * Uses otherwise healthy prod settings but leaves provider fallback DPA email unset and
+     * expects IllegalStateException because prod requires a fallback DPA contact.
+     */
     @Test
     fun `fails when provider fallback DPA contact is not configured`() {
         val validator = ProductionReadinessValidator(
@@ -100,6 +124,10 @@ class ProductionReadinessValidatorTest {
         assertThrows(IllegalStateException::class.java) { validator.run(null) }
     }
 
+    /**
+     * Builds a ProductionReadinessValidator with prod profile defaults and optional demo-mode
+     * override on OpenId4VpProperties for unsafe-configuration failure tests.
+     */
     private fun validator(
         environment: MockEnvironment = prodEnvironment(),
         openId4VpProperties: OpenId4VpProperties = OpenId4VpProperties().apply { demoMode = false },
@@ -114,30 +142,35 @@ class ProductionReadinessValidatorTest {
         dpaReportProperties = DpaReportProperties(),
     )
 
+    /** Returns a MockEnvironment with prod profile and known weak HSM pin and DB password. */
     private fun prodEnvironment(): MockEnvironment = MockEnvironment().apply {
         setActiveProfiles("prod")
         setProperty("wpb.hsm.pin", WeakSecretDefaults.KNOWN_WEAK_HSM_PIN)
         setProperty("spring.datasource.password", WeakSecretDefaults.KNOWN_WEAK_DB_PASSWORD)
     }
 
+    /** Returns a MockEnvironment with prod profile and non-default HSM and DB secrets. */
     private fun healthyProdEnvironment(): MockEnvironment = MockEnvironment().apply {
         setActiveProfiles("prod")
         setProperty("wpb.hsm.pin", "prod-hsm-pin-secret")
         setProperty("spring.datasource.password", "prod-db-password-secret")
     }
 
+    /** Configures status-list signing to use an external file path with auto-generation disabled. */
     private fun externalSigningKeyProperties(): StatusListProperties =
         StatusListProperties().apply {
             signingKeyPemPath = "file:/etc/wpb/status-list-signing-key.pem"
             autoGenerateSigningKeyIfMissing = false
         }
 
+    /** Configures mdoc issuer key to use an external file path with auto-generation disabled. */
     private fun externalMdocKeyProperties(): MdocProperties =
         MdocProperties().apply {
             issuerKeyPemPath = "file:/etc/wpb/mdoc-issuer-key.pem"
             autoGenerateIssuerKeyIfMissing = false
         }
 
+    /** Supplies a DpaReportProperties instance with a configured provider fallback email. */
     private fun configuredDpaFallback(): DpaReportProperties =
         DpaReportProperties().apply {
             providerFallbackDpa.email = "dpa-fallback@example.com"

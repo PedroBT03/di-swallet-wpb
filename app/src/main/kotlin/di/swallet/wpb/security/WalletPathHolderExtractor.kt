@@ -1,7 +1,17 @@
+/**
+ * Extracts holder ids embedded in wallet API request paths for authorization checks.
+ */
+
 package di.swallet.wpb.security
 
+/**
+ * Parses wallet REST paths to find holder-scoped resource segments.
+ */
 object WalletPathHolderExtractor {
 
+    /**
+     * Returns the holder id segment from known wallet API paths, if present.
+     */
     fun extractHolderId(requestUri: String, method: String): String? {
         pathSegmentAfter(requestUri, "/api/v1/wallet/keys/")?.let { return it }
         pathSegmentAfter(requestUri, "/api/v1/wallet/sign/")?.let { return it }
@@ -16,6 +26,9 @@ object WalletPathHolderExtractor {
         return null
     }
 
+    /**
+     * Returns the first path segment immediately after the given prefix.
+     */
     private fun pathSegmentAfter(uri: String, prefix: String, endOfPath: Boolean = false): String? {
         if (!uri.contains(prefix)) return null
         val remainder = uri.substringAfter(prefix)

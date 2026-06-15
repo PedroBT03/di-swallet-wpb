@@ -1,3 +1,7 @@
+/**
+ * Ephemeral proof keys for isolated tests when HSM signing is unavailable.
+ */
+
 package di.swallet.wpb.issuance.proof
 
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
@@ -33,9 +37,11 @@ class EphemeralProofMaterialProvider : ProofMaterialProvider {
 
     private val perHolder = ConcurrentHashMap<String, ProofMaterial>()
 
+    /** Reuses one ephemeral key pair per holder for the lifetime of the JVM. */
     override fun provide(holderId: String, metadata: ResolvedIssuerMetadata?): ProofMaterial =
         perHolder.computeIfAbsent(holderId) { generate() }
 
+    /** Creates a fresh secp256r1 key pair tagged with a random ephemeral kid. */
     private fun generate(): ProofMaterial {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))

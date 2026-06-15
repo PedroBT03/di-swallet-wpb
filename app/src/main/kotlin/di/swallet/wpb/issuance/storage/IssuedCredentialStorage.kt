@@ -1,3 +1,7 @@
+/**
+ * Persists OID4VCI-issued credentials into the wallet credential store.
+ */
+
 package di.swallet.wpb.issuance.storage
 
 import di.swallet.wpb.domain.WalletCredential
@@ -29,6 +33,7 @@ import org.springframework.stereotype.Component
  * Phase 7 presentation path.
  */
 interface IssuedCredentialStorage {
+    /** Normalizes and saves an issued credential, returning the wallet row id. */
     fun store(
         holderId: String,
         issued: IssuedCredential,
@@ -38,6 +43,7 @@ interface IssuedCredentialStorage {
     ): Long
 }
 
+/** JPA-backed storage that splits SD-JWT disclosures and binds credentials to keys. */
 @Component
 class JpaIssuedCredentialStorage(
     private val repository: WalletCredentialRepository,
@@ -48,6 +54,7 @@ class JpaIssuedCredentialStorage(
     private val keyBindingRuntimeService: KeyBindingRuntimeService,
     private val credentialStatusParser: CredentialStatusParser,
 ) : IssuedCredentialStorage {
+    /** Persists format-specific payload parts and registers key binding when a key is known. */
     override fun store(
         holderId: String,
         issued: IssuedCredential,
@@ -95,6 +102,7 @@ class JpaIssuedCredentialStorage(
         return savedId
     }
 
+    /** Separates the issuer JWT from trailing disclosures in an SD-JWT VC string. */
     private fun splitSdJwt(raw: String): Pair<String, String> {
         val parts = raw.split("~").filter { it.isNotBlank() }
         if (parts.isEmpty()) return raw to disclosureCipher.encrypt(emptyList())
@@ -103,6 +111,7 @@ class JpaIssuedCredentialStorage(
         return issuerJwt to disclosureCipher.encrypt(disclosures)
     }
 
+    /** Falls back to a format label when the credential configuration id is blank. */
     private fun inferCredentialType(configurationId: String, format: IssuanceCredentialFormat): String {
         if (configurationId.isNotBlank()) return configurationId
         return when (format) {
@@ -112,6 +121,7 @@ class JpaIssuedCredentialStorage(
         }
     }
 
+    /** Accepts only already-encoded mdoc artifacts; silent rebuild is intentionally rejected. */
     private fun normalizeMdoc(issued: IssuedCredential): String {
         if (mdocCredentialCodec.isEncodedMdoc(issued.rawPayload)) return issued.rawPayload
         throw IllegalArgumentException(

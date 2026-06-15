@@ -1,3 +1,7 @@
+/**
+ * Tests transaction log holder dek mode.
+ */
+
 package di.swallet.wpb.transactionlog
 
 import di.swallet.wpb.config.TransactionLogProperties
@@ -22,6 +26,10 @@ class TransactionLogHolderDekModeTest {
     private val password = "user-log-passphrase".toCharArray()
     private val holderKey = HolderLogKeyDerivation.derive(holderId, password)
 
+    /**
+     * Encrypts plaintext in holder DEK mode with the holder log key bound on the request context.
+     * Without that key, canDecrypt is false and decrypt fails; with the key, decrypted bytes match the original.
+     */
     @Test
     fun `holder mode encrypts with supplied key and WPB cannot decrypt without it`() {
         val properties = testTransactionLogProperties { dekMode = "holder" }
@@ -43,6 +51,10 @@ class TransactionLogHolderDekModeTest {
         assertArrayEquals(plaintext, decrypted)
     }
 
+    /**
+     * Encrypts plaintext using the default server DEK mode without a holder log key.
+     * Crypto reports decrypt capability and round-trips the payload unchanged.
+     */
     @Test
     fun `server mode remains backward compatible`() {
         val crypto = crypto(testTransactionLogProperties())
@@ -52,9 +64,11 @@ class TransactionLogHolderDekModeTest {
         assertArrayEquals(plaintext, crypto.decrypt(holderId, ciphertext, TransactionLogDekMode.SERVER))
     }
 
+    /** Constructs TransactionLogCrypto with a fresh HolderLogKeyContext for the given properties. */
     private fun crypto(properties: TransactionLogProperties): TransactionLogCrypto =
         TransactionLogCrypto(properties, HolderLogKeyContext())
 
+    /** Runs a block with the holder log key bound on the current servlet request attributes. */
     private fun <T> withLogKey(key: ByteArray, block: () -> T): T {
         val request = MockHttpServletRequest()
         request.setAttribute(WalletSecurityAttributes.HOLDER_LOG_KEY, key)

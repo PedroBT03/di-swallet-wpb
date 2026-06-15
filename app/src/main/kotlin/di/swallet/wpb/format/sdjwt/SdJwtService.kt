@@ -1,3 +1,7 @@
+/**
+ * SD-JWT disclosure salting, hashing, and nested object bundling utilities.
+ */
+
 package di.swallet.wpb.format.sdjwt
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -18,20 +22,20 @@ class SdJwtService(
 
     private val secureRandom = SecureRandom()
 
+    /** Container for disclosures and their digests produced from a claim map. */
     data class IssuedDisclosures(
         val disclosures: List<String>,
         val digests: List<String>,
     )
 
-    /**
-     * Base64URL disclosure: `[salt, claim_name, claim_value]` (JSON-encoded).
-     */
+    /** Base64URL disclosure: `[salt, claim_name, claim_value]` (JSON-encoded). */
     fun createDisclosure(claimName: String, claimValue: Any): String {
         val salt = randomSaltBase64()
         val json = objectMapper.writeValueAsString(listOf(salt, claimName, claimValue))
         return Base64URL.encode(json.toByteArray()).toString()
     }
 
+    /** Returns the base64url SHA-256 digest of a disclosure string. */
     fun hashDisclosure(disclosure: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val hash = digest.digest(disclosure.toByteArray())
@@ -84,6 +88,7 @@ class SdJwtService(
         return IssuedDisclosures(all, digests.sorted())
     }
 
+    /** Generates a random 16-byte salt encoded as standard base64. */
     private fun randomSaltBase64(): String {
         val salt = ByteArray(16)
         secureRandom.nextBytes(salt)

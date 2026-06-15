@@ -1,3 +1,7 @@
+/**
+ * Tests wallet unit lifecycle.
+ */
+
 package di.swallet.wpb.wallet
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -29,6 +33,9 @@ class WalletUnitLifecycleTest : BaseIntegrationTest() {
     @Autowired
     lateinit var deviceWalletBindingRepository: DeviceWalletBindingRepository
 
+    /**
+     * initWallet with device JWK returns OPERATIONAL and persists an operational wallet unit for the holder.
+     */
     @Test
     fun `init creates candidate then activates to operational`() {
         val holderId = "lifecycle-${UUID.randomUUID()}"
@@ -44,6 +51,9 @@ class WalletUnitLifecycleTest : BaseIntegrationTest() {
         assertEquals(WalletUnitState.OPERATIONAL, wallet.state)
     }
 
+    /**
+     * requireIssuanceEligible for a holder without init throws ResponseStatusException.
+     */
     @Test
     fun `issuance requires operational wallet`() {
         val holderId = "not-init-${UUID.randomUUID()}"
@@ -52,6 +62,9 @@ class WalletUnitLifecycleTest : BaseIntegrationTest() {
         }
     }
 
+    /**
+     * Device binding stores RFC 7638 thumbprint derived from the submitted devicePubJwk.
+     */
     @Test
     fun `device binding uses RFC 7638 thumbprints`() {
         val jwk = WalletTestSupport.ecPublicJwk()

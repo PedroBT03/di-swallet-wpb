@@ -1,3 +1,7 @@
+/**
+ * JPA-backed WIA status list index allocation and revocation.
+ */
+
 package di.swallet.wpb.wia.status
 
 import di.swallet.wpb.domain.WiaStatusIndex
@@ -8,6 +12,7 @@ import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
+/** Production WIA status management backed by persistent holder-to-index mappings. */
 @Service
 @Primary
 class JpaWiaStatusManagementService(
@@ -16,6 +21,7 @@ class JpaWiaStatusManagementService(
 ) : WiaStatusManagementService {
 
     @Transactional
+    /** Reuses a stored index or allocates the next status list slot for the scope. */
     override fun getOrAllocateStatus(holderId: String, issuerId: String?): WiaStatusReference {
         val scope = issuerId ?: "*"
         val existing = repository.findByHolderIdAndIssuerScope(holderId, scope)
@@ -35,12 +41,14 @@ class JpaWiaStatusManagementService(
     }
 
     @Transactional
+    /** Revokes every status index recorded for the holder across issuer scopes. */
     override fun revokeHolder(holderId: String) {
         repository.findAllByHolderId(holderId).forEach { entry ->
             statusListService.revoke(entry.statusIndex)
         }
     }
 
+    /** Maps a persisted index row to the attestation status reference DTO. */
     private fun toReference(entry: WiaStatusIndex): WiaStatusReference =
         WiaStatusReference(
             listId = entry.listId,

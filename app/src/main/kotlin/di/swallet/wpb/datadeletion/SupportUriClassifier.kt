@@ -1,20 +1,28 @@
+/**
+ * Classifies support URIs and raw contact strings into deletion and DPA report channels.
+ */
+
 package di.swallet.wpb.datadeletion
 
 import org.springframework.stereotype.Component
 
+/** Contact channel type used for deletion and DPA reporting actions. */
 enum class DeletionContactChannel {
     WEB,
     EMAIL,
     PHONE,
 }
 
+/** One support contact value with its detected channel type. */
 data class ClassifiedDeletionContact(
     val channel: DeletionContactChannel,
     val value: String,
 )
 
+/** Detects whether a raw string is a web form, email address, or phone number. */
 @Component
 class SupportUriClassifier {
+    /** Classifies a single raw contact string, returning null for blank input. */
     fun classify(raw: String): ClassifiedDeletionContact? {
         val trimmed = raw.trim()
         if (trimmed.isBlank()) return null
@@ -36,6 +44,7 @@ class SupportUriClassifier {
         }
     }
 
+    /** Classifies every non-blank value in the input list. */
     fun classifyAll(values: List<String>): List<ClassifiedDeletionContact> =
         values.mapNotNull { classify(it) }
 

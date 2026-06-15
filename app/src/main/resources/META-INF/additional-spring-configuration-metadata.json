@@ -100,7 +100,7 @@
     {
       "name": "wpb.transaction-log",
       "type": "di.swallet.wpb.config.TransactionLogProperties",
-      "description": "TS10 transaction log persistence, integrity, and retention settings."
+      "description": "Transaction log persistence, integrity, and retention settings."
     },
     {
       "name": "wpb.status-list",
@@ -190,7 +190,7 @@
       "name": "wpb.openid4vp.trust.allowed-client-ids",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$TrustProperties",
-      "description": "Comma-separated allow-list of accepted verifier client_id values. When empty, trust validation is permissive (Phase 1 baseline only).",
+      "description": "Comma-separated allow-list of accepted verifier client_id values. When empty, trust validation is permissive (baseline only).",
       "defaultValue": ""
     },
     {
@@ -267,7 +267,7 @@
       "name": "wpb.openid4vp.registry.enabled",
       "type": "java.lang.Boolean",
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
-      "description": "Enable TS5/TS6 RP registry validation during presentation flow.",
+      "description": "Enable RP registry validation during presentation flow.",
       "defaultValue": false
     },
     {
@@ -281,7 +281,7 @@
       "name": "wpb.openid4vp.registry.base-url",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
-      "description": "Base URL for TS5 RP registry endpoints.",
+      "description": "Base URL for RP registry RP registry endpoints.",
       "defaultValue": ""
     },
     {
@@ -316,7 +316,7 @@
       "name": "wpb.openid4vp.registry.verification-key-pem-paths",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
-      "description": "Comma-separated paths to PEM public keys/certs used to verify TS5 response JWS signatures.",
+      "description": "Comma-separated paths to PEM public keys/certs used to verify RP registry response JWS signatures.",
       "defaultValue": ""
     },
     {
@@ -330,7 +330,7 @@
       "name": "wpb.openid4vp.registry.require-signed-envelope-fields",
       "type": "java.lang.Boolean",
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties$RegistryProperties",
-      "description": "Require TS5 envelope fields iss/iat/data in signed payload.",
+      "description": "Require RP registry envelope fields iss/iat/data in signed payload.",
       "defaultValue": true
     },
     {
@@ -561,14 +561,14 @@
       "name": "wpb.openid4vci.ka.key-storage",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
-      "description": "TS3 key_storage claim value.",
+      "description": "key_storage claim value.",
       "defaultValue": "iso_18045_high"
     },
     {
       "name": "wpb.openid4vci.ka.user-authentication",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$KaProperties",
-      "description": "TS3 user_authentication claim value.",
+      "description": "user_authentication claim value.",
       "defaultValue": "iso_18045_high"
     },
     {
@@ -638,7 +638,7 @@
       "name": "wpb.status-list.capacity",
       "type": "java.lang.Integer",
       "sourceType": "di.swallet.wpb.config.StatusListProperties",
-      "description": "Fixed bitstring capacity for random index allocation (VCR_17 / TS3 herd privacy).",
+      "description": "Fixed bitstring capacity for random index allocation (herd privacy / herd privacy).",
       "defaultValue": 131072
     },
     {
@@ -692,7 +692,7 @@
       "name": "wpb.transaction-log.ts10-schema-version",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.TransactionLogProperties",
-      "description": "TS10 schema version stored on new transaction log entries.",
+      "description": "schema version stored on new transaction log entries.",
       "defaultValue": "1.2"
     },
     {
@@ -726,30 +726,30 @@
     {
       "name": "wpb.data-deletion",
       "type": "di.swallet.wpb.config.DataDeletionRequestProperties",
-      "description": "GDPR Art. 17 data deletion request templates and notices (TS7 / DATA_DLT)."
+      "description": "GDPR Art. 17 data deletion request templates and notices (data deletion)."
     },
     {
       "name": "wpb.data-deletion.mail-subject",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.DataDeletionRequestProperties",
-      "description": "Subject line for mailto deletion request actions (DATA_DLT_08)."
+      "description": "Subject line for mailto deletion request actions (data deletion_08)."
     },
     {
       "name": "wpb.data-deletion.registry-lookup-notice",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.DataDeletionRequestProperties",
-      "description": "User notice when registry fallback supplies deletion contacts (DATA_DLT_02a)."
+      "description": "User notice when registry fallback supplies deletion contacts (data deletion_02a)."
     },
     {
       "name": "wpb.dpa-reporting",
       "type": "di.swallet.wpb.config.DpaReportProperties",
-      "description": "DPA reporting templates, notices and provider-region fallback (TS8 / RPT_DPA)."
+      "description": "DPA reporting templates, notices and provider-region fallback (DPA reporting)."
     },
     {
       "name": "wpb.dpa-reporting.provider-fallback-dpa.name",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.DpaReportProperties",
-      "description": "Name of the Wallet Provider region DPA used when supervising DPA is unavailable (RPT_DPA_01)."
+      "description": "Name of the Wallet Provider region DPA used when supervising DPA is unavailable (provider-region DPA fallback)."
     },
     {
       "name": "wpb.dpa-reporting.provider-fallback-dpa.country",
@@ -772,32 +772,32 @@
     {
       "name": "wpb.trust-mark",
       "type": "di.swallet.wpb.config.TrustMarkProperties",
-      "description": "EUDI Wallet Trust Mark configuration (TS1 / DASH_09)."
+      "description": "EUDI Wallet Trust Mark configuration (Trust Mark)."
     },
     {
       "name": "wpb.trust-mark.enabled",
       "type": "java.lang.Boolean",
       "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
-      "description": "Enable Trust Mark view when TS1 URLs are configured.",
+      "description": "Enable Trust Mark view when URLs are configured.",
       "defaultValue": false
     },
     {
       "name": "wpb.trust-mark.trust-mark-resource-url",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
-      "description": "URL of EC-hosted TrustMarkResource JSON (TS1 TrustMarkResourceURL)."
+      "description": "URL of EC-hosted TrustMarkResource JSON (TrustMarkResourceURL)."
     },
     {
       "name": "wpb.trust-mark.list-of-certified-wallets-url",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
-      "description": "URL of the public list of certified EUDI wallets (TS1)."
+      "description": "URL of the public list of certified EUDI wallets."
     },
     {
       "name": "wpb.trust-mark.wallet-solution-info-page-url",
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.TrustMarkProperties",
-      "description": "URL of this wallet solution page on the eIDAS dashboard (TS1)."
+      "description": "URL of this wallet solution page on the eIDAS dashboard."
     },
     {
       "name": "wpb.trust-mark.cache-ttl-seconds",
@@ -837,7 +837,7 @@
       "name": "wpb.pseudonym.log-include-alias-in-export",
       "type": "java.lang.Boolean",
       "sourceType": "di.swallet.wpb.config.PseudonymProperties",
-      "description": "Include user alias in TS10 pseudonym export payloads (off by default, PA_19).",
+      "description": "Include user alias in pseudonym export payloads (off by default, ).",
       "defaultValue": false
     }
   ],

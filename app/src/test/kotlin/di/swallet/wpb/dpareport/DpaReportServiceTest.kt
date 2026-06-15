@@ -1,3 +1,7 @@
+/**
+ * Tests dpa report service.
+ */
+
 package di.swallet.wpb.dpareport
 
 import di.swallet.wpb.config.DpaReportProperties
@@ -30,6 +34,7 @@ class DpaReportServiceTest {
     private val properties = DpaReportProperties()
     private lateinit var service: DpaReportService
 
+    /** Wires DpaReportService with mocked transaction log, registry, and contact resolver dependencies. */
     @BeforeEach
     fun setUp() {
         properties.providerFallbackDpa = ProviderFallbackDpa()
@@ -49,6 +54,10 @@ class DpaReportServiceTest {
         )
     }
 
+    /**
+     * Initiates a report for a completed presentation with stored DPA contacts and expects
+     * WEB/EMAIL/PHONE actions, certificate-derived dnsName, and a substantiation document.
+     */
     @Test
     fun `initiate returns actions for stored dpa contacts`() {
         org.mockito.Mockito.`when`(transactionLogService.get("holder-1", "pres-1"))
@@ -67,6 +76,10 @@ class DpaReportServiceTest {
         assertEquals("pres-1", response.substantiationDocument.transactionIdentifier)
     }
 
+    /**
+     * Initiates a report for a NotCompleted presentation and expects substantiation to
+     * reflect that result while still offering at least one contact action.
+     */
     @Test
     fun `initiate allows not completed presentations`() {
         org.mockito.Mockito.`when`(transactionLogService.get("holder-1", "pres-2"))
@@ -80,6 +93,10 @@ class DpaReportServiceTest {
         assertTrue(response.availableActions.isNotEmpty())
     }
 
+    /**
+     * Initiates a report when the presentation has no DPA contacts configured and expects
+     * empty actions, no transactionId, and a userNotice explaining the missing contact.
+     */
     @Test
     fun `initiate returns empty actions when no dpa contact configured`() {
         org.mockito.Mockito.`when`(transactionLogService.get("holder-1", "pres-3"))
@@ -94,6 +111,10 @@ class DpaReportServiceTest {
         assertNotNull(response.userNotice)
     }
 
+    /**
+     * Leaves the presentation without DPA contacts but configures a provider fallback DPA and
+     * expects a single EMAIL action addressed to the fallback authority (CNPD).
+     */
     @Test
     fun `initiate uses provider fallback when configured`() {
         properties.providerFallbackDpa = ProviderFallbackDpa().apply {
@@ -113,6 +134,10 @@ class DpaReportServiceTest {
         assertEquals("CNPD", response.dpaName)
     }
 
+    /**
+     * Mocks both Completed and NotCompleted presentation summaries for the holder and expects
+     * listEligible to return both transactions as eligible report sources.
+     */
     @Test
     fun `listEligible includes completed and not completed`() {
         org.mockito.Mockito.`when`(transactionLogService.list("holder-1")).thenReturn(
@@ -130,6 +155,7 @@ class DpaReportServiceTest {
         assertEquals(2, eligible.size)
     }
 
+    /** Builds a TransactionLogSummary stub for the given presentation id and result. */
     private fun summary(id: String, result: Ts10TransactionResult) =
         TransactionLogSummary(
             transactionId = id,
@@ -139,6 +165,7 @@ class DpaReportServiceTest {
             deletedByUser = false,
         )
 
+    /** Builds a presentation transaction with configurable completion status and optional DPA contact channels. */
     private fun presentationTransaction(
         id: String,
         completed: Boolean,

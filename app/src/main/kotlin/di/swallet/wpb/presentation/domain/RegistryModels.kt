@@ -1,7 +1,11 @@
+/**
+ * Domain models for TS5/TS6 relying-party registry validation results.
+ */
+
 package di.swallet.wpb.presentation.domain
 
 /**
- * Normalized result for RP registry validation (TS5/TS6).
+ * Outcome of validating a verifier against the RP registry.
  */
 data class RegistryDecision(
     val accepted: Boolean,
@@ -12,7 +16,7 @@ data class RegistryDecision(
 )
 
 /**
- * Contact information for the supervisory authority (DPA).
+ * Supervisory authority contact details from a registry record.
  */
 data class SupervisoryAuthorityContact(
     val name: String? = null,
@@ -23,7 +27,7 @@ data class SupervisoryAuthorityContact(
 )
 
 /**
- * Normalized intended use view from TS6 registration data.
+ * Registered intended use extracted from TS6 registration data.
  */
 data class RegistryIntendedUse(
     val intendedUseIdentifier: String? = null,
@@ -32,6 +36,9 @@ data class RegistryIntendedUse(
     val credentials: List<RegistryCredentialDescriptor> = emptyList(),
 )
 
+/**
+ * Credential format and claim paths allowed under one intended use entry.
+ */
 data class RegistryCredentialDescriptor(
     val format: String? = null,
     val meta: String? = null,
@@ -39,7 +46,7 @@ data class RegistryCredentialDescriptor(
 )
 
 /**
- * Registry record kept by runtime with normative payload preserved.
+ * Normalized RP registry record with raw signed payload preserved for audit.
  */
 data class RpRegistryRecord(
     val identifier: String,

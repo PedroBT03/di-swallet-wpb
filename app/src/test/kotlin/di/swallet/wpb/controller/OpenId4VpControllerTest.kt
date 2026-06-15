@@ -1,3 +1,7 @@
+/**
+ * Tests OpenID4VP HTTP endpoints and presentation session lifecycle.
+ */
+
 package di.swallet.wpb.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -28,6 +32,10 @@ class OpenId4VpControllerTest {
 
     private val mapper = ObjectMapper().findAndRegisterModules()
 
+    /**
+     * Builds a PresentationContext in CONSENT_PENDING (or the given state) with a minimal
+     * resolved authorization request for stub orchestrator controller tests.
+     */
     private fun newContext(state: PresentationState = PresentationState.CONSENT_PENDING): PresentationContext {
         val now = Instant.now()
         return PresentationContext(
@@ -58,10 +66,12 @@ class OpenId4VpControllerTest {
         var startCount = 0
         var consentCount = 0
         var lastConsent: ConsentSubmission? = null
+        /** Increments startCount and returns the preconfigured stub presentation context. */
         override suspend fun startSession(requestUri: String, holderId: String?): PresentationContext {
             startCount++
             return produced
         }
+        /** Returns a fixed PresentationConsentView with OK minimization for the supplied holder. */
         override suspend fun getConsentView(sessionId: UUID, holderId: String): PresentationConsentView =
             PresentationConsentView(
                 sessionId = produced.sessionMeta.sessionId,
@@ -77,20 +87,28 @@ class OpenId4VpControllerTest {
                 approvalMode = ApprovalMode.ALL_OR_NOTHING,
             )
 
+        /** Records the consent decision and returns the stub context with state DISPATCHED. */
         override suspend fun submitConsent(sessionId: UUID, decision: ConsentSubmission): PresentationContext {
             consentCount++
             lastConsent = decision
             return produced.copy(state = PresentationState.DISPATCHED)
         }
+        /** Returns the preconfigured stub presentation context unchanged. */
         override suspend fun getSession(sessionId: UUID): PresentationContext = produced
     }
 
     private class StubEventStore : SessionEventStore {
         private val events = mutableListOf<SessionEvent>()
+        /** Appends the event to an in-memory list for later retrieval by session id. */
         override fun record(event: SessionEvent) { events.add(event) }
+        /** Filters recorded events to those matching the given presentation session id. */
         override fun getEvents(sessionId: UUID): List<SessionEvent> = events.filter { it.sessionId == sessionId }
     }
 
+    /**
+     * Calls getSession on a stub orchestrator and serialises the response to JSON, expecting
+     * CONSENT_PENDING state and a correlationId field to be present.
+     */
     @Test
     fun `controller exposes lifecycle context as JSON`() = runBlocking {
         val context = newContext()
@@ -102,6 +120,10 @@ class OpenId4VpControllerTest {
         assertTrue(json.contains("\"correlationId\""))
     }
 
+    /**
+     * Posts a granted consent submission with a selected credential and expects the controller
+     * to return DISPATCHED state while forwarding the decision to the orchestrator once.
+     */
     @Test
     fun `controller maps consent submission and returns DISPATCHED`() = runBlocking {
         val context = newContext()

@@ -1,3 +1,7 @@
+/**
+ * Tests wallet authentication.
+ */
+
 package di.swallet.wpb.security
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -10,6 +14,10 @@ import java.util.*
 
 class WalletAuthenticationTest : BaseIntegrationTest() {
 
+    /**
+     * Registers a FIDO2 device, fetches a server challenge, signs a WebAuthn assertion, and
+     * uses it to create a wallet key, expecting HTTP 200 after server-side verification.
+     */
     @Test
     @Suppress("UNCHECKED_CAST")
     fun `should complete a real cryptographic challenge-response handshake`() {

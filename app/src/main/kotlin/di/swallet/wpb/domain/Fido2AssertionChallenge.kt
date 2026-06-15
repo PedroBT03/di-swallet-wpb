@@ -1,3 +1,7 @@
+/**
+ * JPA entity for short-lived FIDO2 assertion challenge requests.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.Column
@@ -7,6 +11,9 @@ import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
 
+/**
+ * Persisted WebAuthn assertion request and challenge keyed by user ID for replay protection.
+ */
 @Entity
 @Table(name = "fido2_assertion_challenges")
 class Fido2AssertionChallenge(

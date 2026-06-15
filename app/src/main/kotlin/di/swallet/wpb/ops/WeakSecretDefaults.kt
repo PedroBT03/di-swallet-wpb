@@ -1,3 +1,7 @@
+/**
+ * Known weak default secrets used only in dev and test profiles.
+ */
+
 package di.swallet.wpb.ops
 
 /**

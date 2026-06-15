@@ -1,8 +1,13 @@
+/**
+ * JPA entity for encrypted TS10 transaction log rows.
+ */
+
 package di.swallet.wpb.transactionlog.domain
 
 import jakarta.persistence.*
 import java.time.Instant
 
+/** Persisted encrypted transaction log entry with integrity MAC and DEK mode metadata. */
 @Entity
 @Table(name = "transaction_log_entries")
 class TransactionLogEntry(

@@ -1,3 +1,7 @@
+/**
+ * Tests wallet verification integrity.
+ */
+
 package di.swallet.wpb.controller
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -16,7 +20,8 @@ import java.util.*
 class WalletVerificationIntegrityTest : BaseIntegrationTest() {
 
     /**
-     * Validates the end-to-end flow using dynamic FIDO2 simulation for every step.
+     * Runs wallet init, key creation, SD-JWT issuance, selective presentation of nationality
+     * only, and mock-RP verification, expecting verified claims to include nationality but not given_name.
      */
     @Test
     @Suppress("UNCHECKED_CAST")

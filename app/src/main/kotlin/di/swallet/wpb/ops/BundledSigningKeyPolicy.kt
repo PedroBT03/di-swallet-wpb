@@ -1,6 +1,16 @@
+/**
+ * Detects bundled or auto-generated signing keys that must not be used in production.
+ */
+
 package di.swallet.wpb.ops
 
+/**
+ * Flags status-list and mDoc signing key settings that rely on dev classpath keys.
+ */
 object BundledSigningKeyPolicy {
+    /**
+     * Returns property keys that still point to bundled or auto-generated dev signing keys.
+     */
     fun violations(
         statusListSigningKeyPemPath: String,
         statusListAutoGenerate: Boolean,
@@ -23,6 +33,9 @@ object BundledSigningKeyPolicy {
         return out
     }
 
+    /**
+     * Returns true when the path is blank, a known dev classpath key, or any classpath resource.
+     */
     private fun isBundledDevSigningKeyPath(path: String, knownDevClasspathPath: String): Boolean {
         val normalized = path.trim()
         if (normalized.isBlank()) return true

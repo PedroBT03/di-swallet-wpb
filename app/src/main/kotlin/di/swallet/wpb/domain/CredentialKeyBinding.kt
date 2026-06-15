@@ -1,3 +1,7 @@
+/**
+ * JPA entity linking credentials to attested holder keys and binding format.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.Column
@@ -15,10 +19,7 @@ import jakarta.persistence.Table
 import java.time.Instant
 
 /**
- * Canonical credential-to-holder-key binding.
- *
- * This aggregate is distinct from device-to-wallet binding and is the runtime
- * anchor for SD-JWT / mdoc holder-binding validation.
+ * One-to-one binding between a stored credential and the attested key used for holder proofs.
  */
 @Entity
 @Table(name = "credential_key_bindings")
@@ -43,6 +44,7 @@ class CredentialKeyBinding(
     val boundAt: Instant = Instant.now(),
 )
 
+/** Credential presentation format supported by a holder-key binding. */
 enum class CredentialBindingFormat {
     SD_JWT,
     MDOC,

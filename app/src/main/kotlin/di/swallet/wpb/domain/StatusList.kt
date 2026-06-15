@@ -1,10 +1,13 @@
+/**
+ * JPA entity for the persisted global revocation and allocation bitstrings.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.*
 
 /**
- * Entity representing the global Status List state.
- * It stores the raw binary data of the bitstring and allocation tracking.
+ * Database row holding the primary status list bitstrings, capacity, and legacy next-index counter.
  */
 @Entity
 @Table(name = "status_lists")

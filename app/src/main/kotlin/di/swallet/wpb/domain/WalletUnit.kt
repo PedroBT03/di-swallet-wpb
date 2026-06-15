@@ -1,3 +1,7 @@
+/**
+ * JPA entity and lifecycle states for the canonical wallet unit aggregate.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.Column
@@ -12,12 +16,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 /**
- * Phase 8 canonical aggregate for wallet-level lifecycle.
- *
- * This is distinct from key and credential aggregates and anchors:
- * - device-to-wallet bindings
- * - attestation provenance (WIA / KA)
- * - wallet lifecycle transitions
+ * Root wallet aggregate tracking holder identity, lifecycle state, and binding anchors.
  */
 @Entity
 @Table(name = "wallet_units")
@@ -40,6 +39,7 @@ class WalletUnit(
     val createdAt: LocalDateTime = LocalDateTime.now(),
 )
 
+/** Allowed lifecycle states for a wallet unit from creation through revocation. */
 enum class WalletUnitState {
     CANDIDATE,
     OPERATIONAL,

@@ -1,3 +1,7 @@
+/**
+ * Tests rp registry resolver.
+ */
+
 package di.swallet.wpb.presentation.registry
 
 import com.nimbusds.jose.JOSEObjectType
@@ -22,6 +26,10 @@ import java.util.Date
 
 class RpRegistryResolverTest {
 
+    /**
+     * Fake client returns signed registry and check-intended-use JWTs for a matching SD-JWT query.
+     * resolveAndValidate accepts with intendedUseChecked true and supervisoryAuthority in the record.
+     */
     @Test
     fun `accepts signed registry record and official intended use check`() {
         val signerKeys = ecKeyPair()
@@ -63,6 +71,10 @@ class RpRegistryResolverTest {
         assertTrue(accepted.record.rawDataJson.contains("supervisoryAuthority"))
     }
 
+    /**
+     * Registry record JWT is signed with a key not trusted by the configured verifier.
+     * resolveAndValidate returns Rejected with a signature-related reason.
+     */
     @Test
     fun `rejects when TS5 response signature is invalid`() {
         val trustedSigner = ecKeyPair()
@@ -98,6 +110,10 @@ class RpRegistryResolverTest {
         assertTrue(rejected.reason.contains("signature", ignoreCase = true))
     }
 
+    /**
+     * Local registry record matches the query but check-intended-use returns isRegistered false.
+     * resolveAndValidate rejects with not registered and cites the check-intended-use endpoint.
+     */
     @Test
     fun `official check-intended-use false prevails over local match`() {
         val signerKeys = ecKeyPair()
@@ -142,6 +158,7 @@ class RpRegistryResolverTest {
         private val recordJwt: String,
         private val checkJwt: String?,
     ) : RpRegistryClient {
+        /** Returns the configured record JWT as a successful registry lookup response. */
         override fun getByIdentifier(identifier: String): RegistryHttpResponse =
             RegistryHttpResponse(
                 endpoint = "https://registry.example/wrp/$identifier",
@@ -150,6 +167,7 @@ class RpRegistryResolverTest {
                 contentType = "application/jwt",
             )
 
+        /** Returns the same record JWT for query-by-identifier registry lookups. */
         override fun queryByIdentifier(identifier: String): RegistryHttpResponse =
             RegistryHttpResponse(
                 endpoint = "https://registry.example/wrp?identifier=$identifier",
@@ -158,6 +176,7 @@ class RpRegistryResolverTest {
                 contentType = "application/jwt",
             )
 
+        /** Returns the check-intended-use JWT when configured, or null to skip the official check. */
         override fun checkIntendedUse(
             rpIdentifier: String,
             intendedUseIdentifier: String?,
@@ -176,6 +195,7 @@ class RpRegistryResolverTest {
         }
     }
 
+    /** Builds the TS5 registry record data map with intended use covering the given claim path. */
     private fun registryRecordData(claimPath: String): Map<String, Any> = mapOf(
         "identifier" to listOf(mapOf("identifier" to "rp-123", "type" to "http://data.europa.eu/eudi/id/EUID")),
         "tradeName" to "RP Example",
@@ -203,6 +223,7 @@ class RpRegistryResolverTest {
         ),
     )
 
+    /** Signs a registry JWT with ES256 embedding the data claim and expected audience. */
     private fun signRegistryJwt(
         keyPair: KeyPair,
         data: Any,
@@ -226,12 +247,14 @@ class RpRegistryResolverTest {
         return jwt.serialize()
     }
 
+    /** Generates an EC P-256 key pair for signing fake registry JWT responses. */
     private fun ecKeyPair(): KeyPair {
         val generator = KeyPairGenerator.getInstance("EC")
         generator.initialize(ECGenParameterSpec("secp256r1"))
         return generator.generateKeyPair()
     }
 
+    /** Writes the public key to a temp PEM file and returns a file: URI for registry verification config. */
     private fun writePublicKeyPem(keyPair: KeyPair): String {
         val encoded = Base64.getEncoder().encodeToString(keyPair.public.encoded)
         val pem = "-----BEGIN PUBLIC KEY-----\n$encoded\n-----END PUBLIC KEY-----\n"

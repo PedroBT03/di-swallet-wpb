@@ -1,3 +1,7 @@
+/**
+ * Factory for transaction log properties preconfigured with documented weak test keys.
+ */
+
 package di.swallet.wpb
 
 import di.swallet.wpb.config.TransactionLogProperties

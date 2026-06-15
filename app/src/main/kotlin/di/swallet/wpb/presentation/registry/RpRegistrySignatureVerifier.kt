@@ -1,3 +1,7 @@
+/**
+ * Verifies signed JWT envelopes returned by the TS5 RP registry.
+ */
+
 package di.swallet.wpb.presentation.registry
 
 import com.nimbusds.jose.JOSEObjectType
@@ -24,6 +28,7 @@ import java.security.spec.X509EncodedKeySpec
 import java.time.Instant
 import java.util.Base64
 
+/** Verified registry JWT payload with parsed `data` claim. */
 data class VerifiedRegistryPayload(
     val signedJwt: String,
     val payloadJson: JsonObject,
@@ -32,6 +37,9 @@ data class VerifiedRegistryPayload(
     val dataElement: JsonElement,
 )
 
+/**
+ * Validates compact JWS responses from RP registry HTTP endpoints.
+ */
 @Component
 class RpRegistrySignatureVerifier(
     private val properties: OpenId4VpProperties,
@@ -41,6 +49,9 @@ class RpRegistrySignatureVerifier(
     private val json = Json { ignoreUnknownKeys = true }
     private val keyCache = mutableListOf<PublicKey>()
 
+    /**
+     * Verifies signature, envelope claims, and issuer policy for a registry JWS body.
+     */
     fun verifyCompactJws(compactJws: String, endpoint: String): VerifiedRegistryPayload {
         val jwt = SignedJWT.parse(compactJws)
         ensureSignatureValid(jwt)
@@ -86,6 +97,7 @@ class RpRegistrySignatureVerifier(
         )
     }
 
+    /** Rejects expired or not-yet-valid registry JWTs within configured clock skew. */
     private fun validateTemporalClaims(claims: com.nimbusds.jwt.JWTClaimsSet) {
         val now = Instant.now()
         val skew = properties.registry.clockSkewSeconds.coerceAtLeast(0)
@@ -101,6 +113,7 @@ class RpRegistrySignatureVerifier(
         }
     }
 
+    /** Validates the JWT audience when an expected audience is configured. */
     private fun validateAudienceIfConfigured(claims: com.nimbusds.jwt.JWTClaimsSet) {
         val expectedAud = properties.registry.expectedAudience.trim()
         if (expectedAud.isBlank()) return
@@ -110,6 +123,7 @@ class RpRegistrySignatureVerifier(
         }
     }
 
+    /** Verifies the JWS signature against configured registry verification keys. */
     private fun ensureSignatureValid(jwt: SignedJWT) {
         if (!properties.registry.requireSignedResponses) return
         val keys = loadVerificationKeys()
@@ -124,6 +138,7 @@ class RpRegistrySignatureVerifier(
         if (!ok) throw IllegalStateException("registry JWT signature validation failed")
     }
 
+    /** Loads and caches PEM public keys or certificates from configured paths. */
     private fun loadVerificationKeys(): List<PublicKey> {
         if (keyCache.isNotEmpty()) return keyCache.toList()
         val keys = mutableListOf<PublicKey>()
@@ -146,6 +161,7 @@ class RpRegistrySignatureVerifier(
         return keys
     }
 
+    /** Parses either a PEM certificate or a PEM public key into a [PublicKey]. */
     private fun parsePemPublicKeyOrCert(raw: String): PublicKey? {
         val trimmed = raw.trim()
         return when {
@@ -155,6 +171,7 @@ class RpRegistrySignatureVerifier(
         }
     }
 
+    /** Parses an X.509 certificate from PEM text. */
     private fun parseCertificate(pem: String): X509Certificate? {
         val base64 = pem
             .replace("-----BEGIN CERTIFICATE-----", "")
@@ -165,6 +182,7 @@ class RpRegistrySignatureVerifier(
         return cf.generateCertificate(ByteArrayInputStream(der)) as X509Certificate
     }
 
+    /** Parses a SubjectPublicKeyInfo PEM block into a [PublicKey]. */
     private fun parsePublicKey(pem: String): PublicKey? {
         val base64 = pem
             .replace("-----BEGIN PUBLIC KEY-----", "")

@@ -1,3 +1,7 @@
+/**
+ * Tests ka jws signature.
+ */
+
 package di.swallet.wpb.ka.attestation
 
 import com.nimbusds.jose.crypto.ECDSAVerifier
@@ -30,6 +34,9 @@ class KaJwsSignatureTest : BaseIntegrationTest() {
     @Autowired
     lateinit var hsmService: HsmService
 
+    /**
+     * Issued KA JWT verifies with x5c leaf public key; tampering the payload breaks verification.
+     */
     @Test
     fun `key attestation JWS verifies with x5c leaf certificate`() {
         val holderId = "ka-signature-${UUID.randomUUID()}"
@@ -66,11 +73,13 @@ class KaJwsSignatureTest : BaseIntegrationTest() {
         assertFalse(tampered.verify(ECDSAVerifier(cert.publicKey as ECPublicKey)))
     }
 
+    /** Decodes a standard Base64 DER certificate string into an X509Certificate instance. */
     private fun parseCertificate(base64Der: String): X509Certificate {
         val certFactory = CertificateFactory.getInstance("X.509")
         return certFactory.generateCertificate(ByteArrayInputStream(Base64.getDecoder().decode(base64Der))) as X509Certificate
     }
 
+    /** Generates a fresh secp256r1 EC public key unrelated to the HSM wallet key for proof binding tests. */
     private fun proofKey(): ECPublicKey {
         val kp = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))

@@ -1,3 +1,7 @@
+/**
+ * Shared test helpers for transaction log.
+ */
+
 package di.swallet.wpb.transactionlog
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -29,9 +33,11 @@ object TransactionLogTestSupport {
     private val dpaContactBuilder = Ts10DpaContactBuilder(classifier)
     private val rpDnsNameResolver = RpDnsNameResolver(DefaultVerifierCertificateExtractor())
 
+    /** Builds a presentation mapper wired with real contact classifiers and RP DNS resolution for unit tests. */
     fun presentationTransactionMapper(): PresentationTransactionMapper =
         PresentationTransactionMapper(contactBuilder, dpaContactBuilder, rpDnsNameResolver)
 
+    /** Returns a TransactionLogger whose recorder drops all entries but still exercises the full mapper stack. */
     fun noopTransactionLogger(): TransactionLogger =
         TransactionLogger(
             transactionLogRecorder = NoopTransactionLogRecorder(),
@@ -43,6 +49,7 @@ object TransactionLogTestSupport {
         )
 
     private class NoopTransactionLogRecorder : TransactionLogRecorder {
+        /** Discards every transaction and returns null so callers can exercise logging without persistence. */
         override fun record(holderId: String, transaction: Ts10Transaction, dedupeKey: String?): TransactionLogEntry? = null
     }
 }

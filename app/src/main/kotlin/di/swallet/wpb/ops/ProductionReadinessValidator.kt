@@ -1,3 +1,7 @@
+/**
+ * Fail-fast production readiness checks run when the prod profile is active.
+ */
+
 package di.swallet.wpb.ops
 
 import di.swallet.wpb.config.DpaReportProperties
@@ -31,6 +35,9 @@ class ProductionReadinessValidator(
 ) : ApplicationRunner {
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Collects unsafe production settings and aborts startup when any are present.
+     */
     override fun run(args: ApplicationArguments?) {
         val violations = mutableListOf<String>()
 
@@ -72,7 +79,7 @@ class ProductionReadinessValidator(
             logger.warn("prod readiness warning: wpb.openid4vci.ka.enforce-production-trust-policy is false")
         }
         if (!dpaReportProperties.providerFallbackDpa.hasContactChannel()) {
-            violations += "wpb.dpa-reporting.provider-fallback-dpa must expose at least one contact channel (RPT_DPA_01)"
+            violations += "wpb.dpa-reporting.provider-fallback-dpa must expose at least one contact channel"
         }
 
         if (violations.isNotEmpty()) {

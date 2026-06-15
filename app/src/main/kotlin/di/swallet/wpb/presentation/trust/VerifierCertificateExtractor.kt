@@ -1,3 +1,7 @@
+/**
+ * Extracts verifier certificate chains from resolved authorization requests.
+ */
+
 package di.swallet.wpb.presentation.trust
 
 import com.fasterxml.jackson.databind.JsonNode
@@ -9,20 +13,33 @@ import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.util.Base64
 
+/** Verifier certificate chain extracted from request metadata. */
 data class VerifierCertificateMaterial(
     val chain: List<X509Certificate>,
     val leaf: X509Certificate,
 )
 
+/**
+ * Reads verifier certificate material from authorization request metadata.
+ */
 interface VerifierCertificateExtractor {
+    /**
+     * Returns the verifier certificate chain when present in [request], otherwise null.
+     */
     fun extract(request: ResolvedAuthorizationRequest): VerifierCertificateMaterial?
 }
 
+/**
+ * Parses x5c arrays and PEM bundles from verifier metadata JSON.
+ */
 @Component
 class DefaultVerifierCertificateExtractor : VerifierCertificateExtractor {
     private val mapper = jacksonObjectMapper().findAndRegisterModules()
     private val certFactory = CertificateFactory.getInstance("X.509")
 
+    /**
+     * Parses verifier metadata and returns the first usable certificate chain found.
+     */
     override fun extract(request: ResolvedAuthorizationRequest): VerifierCertificateMaterial? {
         val raw = request.verifierInfoJson?.trim().orEmpty()
         if (raw.isBlank()) return null
@@ -32,6 +49,7 @@ class DefaultVerifierCertificateExtractor : VerifierCertificateExtractor {
         return VerifierCertificateMaterial(chain = chain, leaf = chain.first())
     }
 
+    /** Reads DER certificates from common x5c JSON fields. */
     private fun extractX5c(root: JsonNode): List<X509Certificate> {
         val candidates = sequenceOf(
             root["x5c"],
@@ -48,6 +66,7 @@ class DefaultVerifierCertificateExtractor : VerifierCertificateExtractor {
         }
     }
 
+    /** Reads one or more PEM certificates embedded in verifier metadata JSON. */
     private fun extractPemChain(root: JsonNode): List<X509Certificate> {
         val pemCandidates = sequenceOf(
             root["certificatePem"]?.asText(),

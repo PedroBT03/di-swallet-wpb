@@ -1,3 +1,7 @@
+/**
+ * End-to-end tests for remote lote trust open id4 vp.
+ */
+
 package di.swallet.wpb.presentation
 
 import com.sun.net.httpserver.HttpServer
@@ -63,6 +67,10 @@ import java.util.Date
 class RemoteLoteTrustOpenId4VpE2ETest {
     private val mdocCodec = MdocTestSupport.stack().codec
 
+    /**
+     * Remote TS119602 document is served over HTTP while demo mode allows local fetch.
+     * Matching client_id reaches consent with trust.passed; a mismatched client_id is trust_rejected.
+     */
     @Test
     @ConformanceScenario("vp_remote_lote_trust")
     fun `remote TS119602 drives runtime trust decision pass and fail`() = runBlocking {
@@ -100,6 +108,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
 
             val eventStore = InMemorySessionEventStore()
             val registryValidator = object : RegistryValidator {
+                /** Accepts registry validation so the test focuses on remote LOTE trust behaviour only. */
                 override fun validate(context: di.swallet.wpb.presentation.domain.PresentationContext) =
                     context.copy(
                         registryDecision = di.swallet.wpb.presentation.domain.RegistryDecision(
@@ -187,6 +196,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
         }
     }
 
+    /** Builds an OpenId4VpGateway stub embedding x5c verifier info and a DCQL given_name request for the client id. */
     private fun gatewayStub(clientId: String, leaf: X509Certificate): OpenId4VpGateway {
         val verifierInfoJson = """{"x5c":["${Base64.getEncoder().encodeToString(leaf.encoded)}"]}"""
         val resolved = ResolvedAuthorizationRequest(
@@ -206,21 +216,27 @@ class RemoteLoteTrustOpenId4VpE2ETest {
             verifierInfoJson = verifierInfoJson,
         )
         return object : OpenId4VpGateway {
+            /** Returns the prebuilt resolved authorization request for any request URI. */
             override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution =
                 AuthorizationRequestResolution.Success(resolved)
 
+            /** Acknowledges positive VP dispatch without contacting a remote verifier. */
             override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken): PresentationDispatchOutcome =
                 PresentationDispatchOutcome.VerifierAccepted(null)
 
+            /** Acknowledges negative dispatch without contacting a remote verifier. */
             override suspend fun dispatchNegative(requestToken: String): PresentationDispatchOutcome =
                 PresentationDispatchOutcome.VerifierAccepted(null)
 
+            /** Acknowledges error dispatch without contacting a remote verifier. */
             override suspend fun dispatchError(errorToken: String): PresentationDispatchOutcome =
                 PresentationDispatchOutcome.VerifierAccepted(null)
         }
     }
 
+    /** Returns a VpTokenBuilder that attaches a stub SD-JWT VP for query pid. */
     private fun vpBuilderStub(): VpTokenBuilder = object : VpTokenBuilder {
+        /** Attaches a placeholder VP-STUB presentation for the pid query id. */
         override fun build(context: di.swallet.wpb.presentation.domain.PresentationContext) =
             context.copy(
                 vpToken = VpToken(
@@ -232,6 +248,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
 
     private data class CertChain(val root: X509Certificate, val leaf: X509Certificate)
 
+    /** Issues a root CA and leaf certificate pair with DNS SAN on the leaf for LOTE trust binding. */
     private fun issueChain(clientIdDns: String): CertChain {
         val generator = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
@@ -243,6 +260,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
         return CertChain(root = root, leaf = leaf)
     }
 
+    /** Creates a self-signed CA certificate with basicConstraints CA true for use as a LOTE trust anchor. */
     private fun selfSignedCa(keys: KeyPair, subjectDn: String): X509Certificate {
         val subject = X500Name(subjectDn)
         val now = Instant.now()
@@ -259,6 +277,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
         return JcaX509CertificateConverter().getCertificate(builder.build(signer))
     }
 
+    /** Issues a leaf certificate signed by the CA with a DNS subjectAlternativeName for client_id binding. */
     private fun issuedLeaf(
         issuerCert: X509Certificate,
         issuerKeys: KeyPair,
@@ -286,6 +305,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
         return JcaX509CertificateConverter().getCertificate(builder.build(signer))
     }
 
+    /** Builds a TS119602 LoTE JSON document embedding the leaf x5c and root trust anchor PEM. */
     private fun ts119602Payload(clientId: String, leafCert: X509Certificate, rootCert: X509Certificate): String {
         val leafB64 = Base64.getEncoder().encodeToString(leafCert.encoded)
         val rootPem = pem(rootCert)
@@ -325,6 +345,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
         """.trimIndent()
     }
 
+    /** Starts a local HTTP server on a random port serving the LoTE payload at /lote. */
     private fun startServer(body: String): HttpServer {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/lote") { exchange ->
@@ -337,9 +358,11 @@ class RemoteLoteTrustOpenId4VpE2ETest {
         return server
     }
 
+    /** Formats the certificate as a PEM block with base64-encoded DER. */
     private fun pem(cert: X509Certificate): String =
         "-----BEGIN CERTIFICATE-----\n${Base64.getEncoder().encodeToString(cert.encoded)}\n-----END CERTIFICATE-----\n"
 
+    /** Escapes a multi-line PEM string for safe embedding inside JSON string literals. */
     private fun jsonString(raw: String): String =
         "\"" + raw
             .replace("\\", "\\\\")

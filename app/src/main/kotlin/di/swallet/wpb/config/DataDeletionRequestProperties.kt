@@ -1,7 +1,12 @@
+/**
+ * Configuration properties for GDPR data deletion request email templates.
+ */
+
 package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 
+/** Binds `wpb.data-deletion.*` settings for holder-initiated erasure request emails. */
 @ConfigurationProperties(prefix = "wpb.data-deletion")
 class DataDeletionRequestProperties {
     var mailSubject: String =

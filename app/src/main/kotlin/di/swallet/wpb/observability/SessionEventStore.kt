@@ -1,3 +1,7 @@
+/**
+ * Event store port for OpenID4VP presentation session lifecycle events.
+ */
+
 package di.swallet.wpb.observability
 
 import di.swallet.wpb.presentation.domain.PresentationState
@@ -5,12 +9,8 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * Structured lifecycle event recorded for an OpenID4VP session.
- *
- * Each event carries the session identifier, a correlation identifier
- * shared with downstream systems (e.g., verifier emulator), the lifecycle
- * state at the moment of the event, a short event type token and a
- * map of free-form attributes used for debugging.
+ * Structured lifecycle event for an OpenID4VP presentation session.
+ * [correlationId] is shared with downstream systems such as the verifier emulator.
  */
 data class SessionEvent(
     val sessionId: UUID,
@@ -21,7 +21,13 @@ data class SessionEvent(
     val attributes: Map<String, String> = emptyMap(),
 )
 
+/**
+ * Records and retrieves presentation lifecycle events for debugging and audit.
+ */
 interface SessionEventStore {
+    /** Appends an event to the session history. */
     fun record(event: SessionEvent)
+
+    /** Returns all events recorded for the session, oldest first. */
     fun getEvents(sessionId: UUID): List<SessionEvent>
 }

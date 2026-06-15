@@ -1,3 +1,7 @@
+/**
+ * Configuration properties for wallet unit lifecycle and device binding.
+ */
+
 package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties

@@ -1,8 +1,13 @@
+/**
+ * Configuration properties for encrypted holder transaction logs.
+ */
+
 package di.swallet.wpb.config
 
 import di.swallet.wpb.transactionlog.crypto.TransactionLogDekMode
 import org.springframework.boot.context.properties.ConfigurationProperties
 
+/** Binds `wpb.transaction-log.*` settings for TS10 transaction log encryption and retention. */
 @ConfigurationProperties(prefix = "wpb.transaction-log")
 class TransactionLogProperties {
     /**
@@ -18,6 +23,9 @@ class TransactionLogProperties {
     /** Base64-encoded 32-byte HMAC key for entry integrity. */
     var integrityKey: String = ""
 
+    /**
+     * Parses [dekMode] into the typed transaction log DEK mode enum.
+     */
     fun resolvedDekMode(): TransactionLogDekMode = TransactionLogDekMode.fromConfig(dekMode)
 
     /** TS10 schema version written into new entries. */

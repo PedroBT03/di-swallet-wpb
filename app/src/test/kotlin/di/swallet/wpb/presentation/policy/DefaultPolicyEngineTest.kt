@@ -1,3 +1,7 @@
+/**
+ * Tests default policy engine.
+ */
+
 package di.swallet.wpb.presentation.policy
 
 import di.swallet.wpb.config.OpenId4VpProperties
@@ -25,6 +29,7 @@ import java.util.UUID
 
 class DefaultPolicyEngineTest {
 
+    /** Creates a DefaultPolicyEngine from OpenId4VpProperties tuned for demo, registry, and privacy-policy flags. */
     private fun engine(
         demoMode: Boolean = false,
         registryEnabled: Boolean = false,
@@ -37,6 +42,7 @@ class DefaultPolicyEngineTest {
         },
     )
 
+    /** Assembles a PresentationContext at VERIFIER_VALIDATED with configurable trust, registry, and candidate inputs. */
     private fun baseContext(
         trusted: Boolean = true,
         registryDecision: RegistryDecision? = null,
@@ -80,12 +86,20 @@ class DefaultPolicyEngineTest {
         )
     }
 
+    /**
+     * Registry is disabled with trusted verifier and matching candidates present.
+     * policyDecision allows the presentation.
+     */
     @Test
     fun `allows when registry disabled and trust plus candidates pass`() {
         val result = engine().evaluate(baseContext())
         assertTrue(result.policyDecision?.allowed == true)
     }
 
+    /**
+     * Registry enforcement is enabled but registryDecision is null.
+     * policyDecision is denied with Registry validation required.
+     */
     @Test
     fun `rejects when registry enabled but decision missing`() {
         val result = engine(registryEnabled = true).evaluate(baseContext(registryDecision = null))
@@ -93,6 +107,10 @@ class DefaultPolicyEngineTest {
         assertTrue(result.policyDecision?.reason?.contains("Registry validation required") == true)
     }
 
+    /**
+     * Registry decision is accepted yet registryRecord is missing.
+     * policyDecision is denied citing a missing registry record.
+     */
     @Test
     fun `rejects when registry enabled but record missing`() {
         val result = engine(registryEnabled = true).evaluate(
@@ -109,6 +127,10 @@ class DefaultPolicyEngineTest {
         assertTrue(result.policyDecision?.reason?.contains("Registry record missing") == true)
     }
 
+    /**
+     * Registry decision is accepted but intendedUseChecked is false.
+     * policyDecision is denied because the intended-use check was not completed.
+     */
     @Test
     fun `rejects when registry enabled but intended use not checked`() {
         val result = engine(registryEnabled = true).evaluate(
@@ -121,6 +143,10 @@ class DefaultPolicyEngineTest {
         assertTrue(result.policyDecision?.reason?.contains("intended-use check") == true)
     }
 
+    /**
+     * Registry record covers family_name only while the query asks for given_name.
+     * policyDecision is denied with a reason about exceeding registry intended use.
+     */
     @Test
     fun `rejects when requested claims exceed registry intended use`() {
         val result = engine(registryEnabled = true).evaluate(
@@ -134,6 +160,10 @@ class DefaultPolicyEngineTest {
         assertTrue(result.policyDecision?.reason?.contains("exceed registry") == true)
     }
 
+    /**
+     * Registry is enabled with accepted decision, checked intended use, and matching claim paths.
+     * policyDecision allows the request.
+     */
     @Test
     fun `accepts when registry enabled and record covers requested credentials`() {
         val result = engine(registryEnabled = true).evaluate(
@@ -145,6 +175,10 @@ class DefaultPolicyEngineTest {
         assertTrue(result.policyDecision?.allowed == true)
     }
 
+    /**
+     * Authorization request uses response_mode query, which the engine does not support.
+     * policyDecision is denied with Unsupported response mode 'query'.
+     */
     @Test
     fun `rejects unsupported response mode`() {
         val result = engine().evaluate(
@@ -154,6 +188,10 @@ class DefaultPolicyEngineTest {
         assertEquals("Unsupported response mode 'query'", result.policyDecision?.reason)
     }
 
+    /**
+     * requirePrivacyPolicyUri is true but the registry record lists no privacy policy URIs.
+     * policyDecision is denied with a privacy policy reason.
+     */
     @Test
     fun `requires privacy policy uri when configured`() {
         val result = engine(registryEnabled = true, requirePrivacyPolicyUri = true).evaluate(
@@ -166,6 +204,7 @@ class DefaultPolicyEngineTest {
         assertTrue(result.policyDecision?.reason?.contains("privacy policy") == true)
     }
 
+    /** Returns a single SD-JWT CredentialQuery requesting the named claim path. */
     private fun sampleQuery(claim: String = "given_name"): CredentialQuery =
         CredentialQuery(
             id = "pid",
@@ -173,6 +212,7 @@ class DefaultPolicyEngineTest {
             requestedClaimPaths = listOf(ClaimPath.key(claim)),
         )
 
+    /** Returns a CredentialCandidate linked to the pid query with the given_name claim path. */
     private fun sampleCandidate(): CredentialCandidate =
         CredentialCandidate(
             candidateId = "cand-1",
@@ -184,6 +224,7 @@ class DefaultPolicyEngineTest {
             requestedClaimPaths = listOf(ClaimPath.key("given_name")),
         )
 
+    /** Builds an RpRegistryRecord whose intended-use credentials cover the supplied claim paths. */
     private fun sampleRecord(
         claimPaths: List<String> = listOf("given_name"),
         privacyPolicyUris: List<String> = listOf("https://rp.example/privacy"),

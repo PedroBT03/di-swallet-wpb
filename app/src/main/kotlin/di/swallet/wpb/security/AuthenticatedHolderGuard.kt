@@ -1,3 +1,7 @@
+/**
+ * Authorization checks that bind wallet resources to the FIDO2-authenticated holder.
+ */
+
 package di.swallet.wpb.security
 
 import di.swallet.wpb.domain.WalletCredentialRepository
@@ -6,12 +10,18 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
 
+/**
+ * Verifies that requested holder, credential, and wallet unit ids belong to the authenticated user.
+ */
 @Component
 class AuthenticatedHolderGuard(
     private val holderContext: AuthenticatedHolderContext,
     private val credentialRepository: WalletCredentialRepository,
     private val walletUnitRepository: WalletUnitRepository,
 ) {
+    /**
+     * Rejects the call when the requested holder id is not the authenticated holder.
+     */
     fun requireSelf(requestedHolderId: String?) {
         val authenticated = holderContext.requireCurrentHolderId()
         if (requestedHolderId.isNullOrBlank() || requestedHolderId != authenticated) {
@@ -22,6 +32,9 @@ class AuthenticatedHolderGuard(
         }
     }
 
+    /**
+     * Rejects the call when the credential does not belong to the authenticated holder.
+     */
     fun requireCredentialOwned(credentialId: Long) {
         val authenticated = holderContext.requireCurrentHolderId()
         val credential = credentialRepository.findById(credentialId)
@@ -34,6 +47,9 @@ class AuthenticatedHolderGuard(
         }
     }
 
+    /**
+     * Rejects the call when the wallet unit does not belong to the authenticated holder.
+     */
     fun requireWalletUnitOwned(walletId: String) {
         val authenticated = holderContext.requireCurrentHolderId()
         val walletUnit = walletUnitRepository.findByWalletId(walletId)

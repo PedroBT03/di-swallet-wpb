@@ -1,3 +1,7 @@
+/**
+ * End-to-end tests for signed oid4 vp trust chain.
+ */
+
 package di.swallet.wpb.presentation
 
 import com.nimbusds.jose.JOSEObjectType
@@ -78,6 +82,10 @@ import com.nimbusds.jose.JWEAlgorithm
 class SignedOid4VpTrustChainE2ETest {
     private val mdocCodec = MdocTestSupport.stack().codec
 
+    /**
+     * Signed authorization request JWT embeds x5c and local TS119602 trust anchors are loaded.
+     * Orchestrator reaches consent with trusted decision, trust.passed event, and PKIX Trusted validation.
+     */
     @Test
     @ConformanceScenario("vp_pkix_access_certificate_trust")
     fun `signed authorization request drives extractor to pkix trust validation`() = runBlocking {
@@ -120,6 +128,7 @@ class SignedOid4VpTrustChainE2ETest {
             )
             val eventStore = InMemorySessionEventStore()
             val registryValidator = object : RegistryValidator {
+                /** Accepts registry validation so the test isolates signed-request trust extraction and PKIX. */
                 override fun validate(context: di.swallet.wpb.presentation.domain.PresentationContext) =
                     context.copy(
                         registryDecision = di.swallet.wpb.presentation.domain.RegistryDecision(
@@ -181,6 +190,7 @@ class SignedOid4VpTrustChainE2ETest {
         }
     }
 
+    /** Creates SdkOpenId4VpGateway with HAIP VP formats and demo-mode resolution fallback enabled. */
     private fun sdkGateway(demoMode: Boolean): SdkOpenId4VpGateway {
         val config = OpenId4VPConfig(
             supportedClientIdPrefixes = listOf(
@@ -213,6 +223,7 @@ class SignedOid4VpTrustChainE2ETest {
         return SdkOpenId4VpGateway(OpenId4Vp(config, httpClient), demoMode = demoMode)
     }
 
+    /** Signs an ES256 authorization request JWT embedding client_id, DCQL, and verifier_info claims. */
     private fun signAuthorizationRequestJwt(
         signer: java.security.KeyPair,
         clientId: String,
@@ -248,12 +259,14 @@ class SignedOid4VpTrustChainE2ETest {
         return jwt.serialize()
     }
 
+    /** Generates an EC P-256 key pair for signing authorization request JWTs in the test. */
     private fun ecKeyPair(): java.security.KeyPair {
         val generator = KeyPairGenerator.getInstance("EC")
         generator.initialize(ECGenParameterSpec("secp256r1"))
         return generator.generateKeyPair()
     }
 
+    /** Starts a local HTTP server that serves the signed authorization request JWT at /request. */
     private fun startRequestServer(jwt: String): HttpServer {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/request") { exchange ->
@@ -266,7 +279,9 @@ class SignedOid4VpTrustChainE2ETest {
         return server
     }
 
+    /** Returns a VpTokenBuilder that attaches a stub SD-JWT VP for consent-dispatch assertions. */
     private fun vpBuilderStub(): VpTokenBuilder = object : VpTokenBuilder {
+        /** Attaches a stub SD-JWT VP token with one pid presentation for consent-dispatch tests. */
         override fun build(context: di.swallet.wpb.presentation.domain.PresentationContext) =
             context.copy(
                 vpToken = VpToken(
@@ -276,6 +291,7 @@ class SignedOid4VpTrustChainE2ETest {
             )
     }
 
+    /** Builds a TS119602 LoTE JSON payload with the leaf certificate embedded in ServiceDigitalIdentity. */
     private fun ts119602Payload(clientId: String, leafCert: X509Certificate, rootCert: X509Certificate): String {
         val leafB64 = Base64.getEncoder().encodeToString(leafCert.encoded)
         return """
@@ -312,6 +328,7 @@ class SignedOid4VpTrustChainE2ETest {
         """.trimIndent()
     }
 
+    /** Writes content to a temporary file and returns its absolute path for trust property paths. */
     private fun writeTempFile(content: String): String {
         val path = Files.createTempFile("signed-trust-e2e-", ".tmp")
         Files.writeString(path, content)

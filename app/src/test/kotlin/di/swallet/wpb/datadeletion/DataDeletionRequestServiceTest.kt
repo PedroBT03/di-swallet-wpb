@@ -1,3 +1,7 @@
+/**
+ * Tests data deletion request service.
+ */
+
 package di.swallet.wpb.datadeletion
 
 import di.swallet.wpb.conformance.ConformanceScenario
@@ -33,6 +37,7 @@ class DataDeletionRequestServiceTest {
     private val contactBuilder = Ts10InteractingPartyContactBuilder(classifier)
     private lateinit var service: DataDeletionRequestService
 
+    /** Wires DataDeletionRequestService with mocked transaction log, registry, and contact resolver dependencies. */
     @BeforeEach
     fun setUp() {
         val contactResolver = DeletionContactResolver(
@@ -50,6 +55,10 @@ class DataDeletionRequestServiceTest {
         )
     }
 
+    /**
+     * Initiates deletion for a completed presentation with web, email, and phone contacts and
+     * expects actions ordered WEB then EMAIL then PHONE, including a mailto privacy URI.
+     */
     @Test
     @ConformanceScenario("data_deletion_request_service")
     fun `initiate returns mailto and web actions ordered web email phone`() {
@@ -71,6 +80,10 @@ class DataDeletionRequestServiceTest {
         assertTrue(response.transactionId.isNotBlank())
     }
 
+    /**
+     * Calls initiate without deleteAllPresented or a claims list and expects
+     * ResponseStatusException because at least one deletion scope must be specified.
+     */
     @Test
     fun `initiate rejects when neither deleteAllPresented nor claims provided`() {
         val presentationId = "pres-2"
@@ -87,6 +100,10 @@ class DataDeletionRequestServiceTest {
         }
     }
 
+    /**
+     * Mocks one completed presentation transaction for the holder and expects listEligible to
+     * return it with hasStoredDeletionContacts true.
+     */
     @Test
     fun `listEligible returns completed presentations with claims`() {
         `when`(transactionLogService.list("holder-1")).thenReturn(
@@ -108,6 +125,7 @@ class DataDeletionRequestServiceTest {
         assertTrue(eligible.first().hasStoredDeletionContacts)
     }
 
+    /** Builds a completed presentation transaction with web, email, and phone deletion contacts for mocking. */
     private fun presentationTransaction(id: String): Ts10Transaction =
         Ts10Transaction(
             transactionIdentifier = id,

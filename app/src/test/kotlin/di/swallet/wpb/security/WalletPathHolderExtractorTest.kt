@@ -1,3 +1,7 @@
+/**
+ * Tests wallet path holder extractor.
+ */
+
 package di.swallet.wpb.security
 
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -5,6 +9,10 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class WalletPathHolderExtractorTest {
+    /**
+     * Parses a POST path to /api/v1/wallet/keys/{holderId} and expects the middle segment
+     * to be returned as the holder id.
+     */
     @Test
     fun `extracts holder from wallet key path`() {
         assertEquals(
@@ -13,6 +21,10 @@ class WalletPathHolderExtractorTest {
         )
     }
 
+    /**
+     * Extracts holder id from GET /credentials/{holderId} but returns null for numeric
+     * credential ids and for POST presentation paths that are not holder-scoped lists.
+     */
     @Test
     fun `extracts holder from credential list path only on GET`() {
         assertEquals(

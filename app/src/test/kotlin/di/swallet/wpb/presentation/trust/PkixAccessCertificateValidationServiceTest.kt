@@ -1,3 +1,7 @@
+/**
+ * Tests pkix access certificate validation service.
+ */
+
 package di.swallet.wpb.presentation.trust
 
 import di.swallet.wpb.ka.trust.CertificateChainValidator
@@ -22,6 +26,10 @@ import java.util.Date
 class PkixAccessCertificateValidationServiceTest {
     private val service = PkixAccessCertificateValidationService(CertificateChainValidator(DefaultResourceLoader()))
 
+    /**
+     * Trust snapshot binds client_id and cert_sha256 to a valid leaf chain.
+     * validate returns Trusted for the matching verifier client.
+     */
     @Test
     fun `accepts trusted verifier when fingerprint and chain match`() {
         val cert = selfSignedCert(notBefore = Instant.now().minusSeconds(60), notAfter = Instant.now().plusSeconds(3600))
@@ -44,6 +52,10 @@ class PkixAccessCertificateValidationServiceTest {
         assertTrue(result is AccessCertificateValidationResult.Trusted)
     }
 
+    /**
+     * Presenter certificate is outside its validity window.
+     * validate returns Rejected with a reason mentioning validity.
+     */
     @Test
     fun `rejects expired certificate`() {
         val expired = selfSignedCert(notBefore = Instant.now().minusSeconds(7200), notAfter = Instant.now().minusSeconds(3600))
@@ -63,6 +75,10 @@ class PkixAccessCertificateValidationServiceTest {
         assertTrue((result as AccessCertificateValidationResult.Rejected).reason.contains("validity", ignoreCase = true))
     }
 
+    /**
+     * Snapshot has no trust anchors although the client_id is registered.
+     * validate returns Rejected citing missing trust anchors.
+     */
     @Test
     fun `rejects untrusted chain when no anchors exist`() {
         val cert = selfSignedCert(notBefore = Instant.now().minusSeconds(60), notAfter = Instant.now().plusSeconds(3600))
@@ -82,6 +98,10 @@ class PkixAccessCertificateValidationServiceTest {
         assertTrue((result as AccessCertificateValidationResult.Rejected).reason.contains("trust anchors", ignoreCase = true))
     }
 
+    /**
+     * Snapshot expects cert_sha256 DEADBEEF but the presented leaf differs.
+     * validate returns Rejected mentioning cert_sha256 mismatch.
+     */
     @Test
     fun `rejects identity mismatch on fingerprint policy`() {
         val cert = selfSignedCert(notBefore = Instant.now().minusSeconds(60), notAfter = Instant.now().plusSeconds(3600))
@@ -104,6 +124,8 @@ class PkixAccessCertificateValidationServiceTest {
         assertTrue((result as AccessCertificateValidationResult.Rejected).reason.contains("cert_sha256", ignoreCase = true))
     }
 
+    /** Issues a self-signed EC certificate valid between the given notBefore and notAfter instants. */
+    /** Issues a short-lived self-signed EC certificate bounded by the supplied notBefore and notAfter instants. */
     private fun selfSignedCert(notBefore: Instant, notAfter: Instant): X509Certificate {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
@@ -121,6 +143,8 @@ class PkixAccessCertificateValidationServiceTest {
         return JcaX509CertificateConverter().getCertificate(builder.build(signer))
     }
 
+    /** Uppercase hex SHA-256 fingerprint of the certificate DER encoding for trust binding checks. */
+    /** Computes the uppercase SHA-256 hex fingerprint of the certificate DER encoding. */
     private fun fingerprint(cert: X509Certificate): String =
         MessageDigest.getInstance("SHA-256")
             .digest(cert.encoded)

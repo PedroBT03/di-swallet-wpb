@@ -1,3 +1,7 @@
+/**
+ * Proof-of-possession key material supplied to the OID4VCI adapter.
+ */
+
 package di.swallet.wpb.issuance.proof
 
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
@@ -17,7 +21,9 @@ data class ProofMaterial(
     val algorithm: String = "ES256",
 )
 
+/** Supplies ES256 proof keys for a holder during issuance. */
 interface ProofMaterialProvider {
+    /** Returns stable or freshly provisioned proof material for the holder. */
     fun provide(
         holderId: String,
         metadata: ResolvedIssuerMetadata?,

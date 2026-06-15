@@ -1,3 +1,7 @@
+/**
+ * Resolves DPA contact candidates from presentation logs, RP registry, or provider fallback.
+ */
+
 package di.swallet.wpb.dpareport
 
 import di.swallet.wpb.config.DpaReportProperties
@@ -13,12 +17,14 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
 
+/** Source from which a DPA contact candidate was obtained. */
 enum class DpaContactSource {
     LOG,
     REGISTRY,
     PROVIDER_FALLBACK,
 }
 
+/** One DPA candidate with name, country, contacts, and provenance. */
 data class DpaContactCandidate(
     val name: String?,
     val country: String?,
@@ -26,6 +32,7 @@ data class DpaContactCandidate(
     val source: DpaContactSource,
 )
 
+/** Fully resolved context for initiating a DPA report from a presentation transaction. */
 data class ResolvedDpaReportContext(
     val presentationTransactionId: String,
     val presentationTime: String,
@@ -39,6 +46,7 @@ data class ResolvedDpaReportContext(
     val userNotice: String?,
 )
 
+/** Resolves DPA contacts and RP metadata needed to initiate a holder DPA report. */
 @Component
 class DpaContactResolver(
     private val transactionLogService: TransactionLogService,
@@ -47,6 +55,7 @@ class DpaContactResolver(
     private val rpDnsNameResolver: RpDnsNameResolver,
     private val properties: DpaReportProperties,
 ) {
+    /** Loads the presentation, gathers DPA candidates, and selects the best available contact set. */
     fun resolve(
         holderId: String,
         presentationTransactionId: String,
@@ -115,10 +124,12 @@ class DpaContactResolver(
         )
     }
 
+    /** Returns true when the presentation already stores usable DPA contact information. */
     fun hasStoredDpaContacts(presentation: Ts10Presentation): Boolean =
         dpaContactBuilder.parseStoredContact(presentation.dpaContact).hasReportChannel() ||
             !presentation.dpaName.isNullOrBlank()
 
+    /** Ensures the transaction is a reportable presentation with an interacting party reference. */
     private fun validateReportablePresentation(
         transaction: Ts10Transaction,
         presentationTransactionId: String,
@@ -142,6 +153,7 @@ class DpaContactResolver(
         return presentation
     }
 
+    /** Looks up supervisory authority contacts for an RP identifier in the registry. */
     private fun lookupRegistryDpa(rpIdentifier: String): DpaContactCandidate? =
         when (val resolution = registryResolver.lookupByIdentifier(rpIdentifier)) {
             is RegistryResolution.Accepted -> {
@@ -163,6 +175,7 @@ class DpaContactResolver(
             }
         }
 
+    /** Builds a configured provider fallback DPA candidate when registry and log data are missing. */
     private fun buildProviderFallbackCandidate(): DpaContactCandidate? {
         val fallback = properties.providerFallbackDpa
         if (!fallback.isConfigured()) return null
@@ -176,6 +189,7 @@ class DpaContactResolver(
         )
     }
 
+    /** Converts configured fallback properties into a supervisory authority contact shape. */
     private fun ProviderFallbackDpa.toSupervisoryAuthority(): SupervisoryAuthorityContact =
         SupervisoryAuthorityContact(
             name = name.takeIf { it.isNotBlank() },

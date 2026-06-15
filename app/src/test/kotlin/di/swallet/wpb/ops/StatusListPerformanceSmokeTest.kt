@@ -1,3 +1,7 @@
+/**
+ * Smoke tests for status list performance.
+ */
+
 package di.swallet.wpb.ops
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -9,6 +13,10 @@ import org.springframework.http.HttpStatus
 @Tag("performance")
 class StatusListPerformanceSmokeTest : BaseIntegrationTest() {
 
+    /**
+     * Issues 30 unauthenticated GET requests to the PRIMARY_LIST JWT endpoint, measures
+     * latency, and expects the p95 response time to stay below 3000 ms.
+     */
     @Test
     fun `status list JWT endpoint p95 stays within CI smoke threshold`() {
         val iterations = 30

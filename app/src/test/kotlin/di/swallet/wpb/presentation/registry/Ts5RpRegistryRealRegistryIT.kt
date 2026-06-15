@@ -1,3 +1,7 @@
+/**
+ * Integration tests for ts5 rp registry real registry.
+ */
+
 package di.swallet.wpb.presentation.registry
 
 import di.swallet.wpb.conformance.ConformanceScenario
@@ -23,6 +27,10 @@ import org.junit.jupiter.api.Test
  */
 class Ts5RpRegistryRealRegistryIT {
 
+    /**
+     * Real registry env vars enable a production lookup against a configured HTTPS TS5 endpoint.
+     * resolveAndValidate returns Accepted with a non-blank identifier and https source endpoint.
+     */
     @Test
     @Tag(ConformanceTags.EXTERNAL)
     @ConformanceScenario("vp_real_registry_smoke")

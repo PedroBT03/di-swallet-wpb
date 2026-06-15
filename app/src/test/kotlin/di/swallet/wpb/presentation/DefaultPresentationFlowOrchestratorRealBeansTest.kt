@@ -1,3 +1,7 @@
+/**
+ * Tests default presentation flow orchestrator.
+ */
+
 package di.swallet.wpb.presentation
 
 import di.swallet.wpb.domain.WalletCredential
@@ -74,21 +78,26 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
     private class GatewayStub(val request: ResolvedAuthorizationRequest) : OpenId4VpGateway {
         var positiveCount = 0
         var negativeCount = 0
+        /** Returns the fixed resolved authorization request for any request URI. */
         override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution =
             AuthorizationRequestResolution.Success(request)
+        /** Increments positiveCount and acknowledges the positive VP dispatch. */
         override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken): PresentationDispatchOutcome {
             positiveCount++
             return PresentationDispatchOutcome.VerifierAccepted(null)
         }
+        /** Increments negativeCount and acknowledges the negative dispatch. */
         override suspend fun dispatchNegative(requestToken: String): PresentationDispatchOutcome {
             negativeCount++
             return PresentationDispatchOutcome.VerifierAccepted(null)
         }
+        /** Acknowledges error dispatches without contacting a remote verifier. */
         override suspend fun dispatchError(errorToken: String): PresentationDispatchOutcome =
             PresentationDispatchOutcome.VerifierAccepted(null)
     }
 
     private class StubVpBuilder : VpTokenBuilder {
+        /** Attaches a stub SD-JWT VP token with one pid presentation segment. */
         override fun build(context: PresentationContext): PresentationContext =
             context.copy(
                 vpToken = VpToken(
@@ -98,6 +107,10 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
             )
     }
 
+    /**
+     * Wires a DefaultPresentationFlowOrchestrator with real trust, policy, and matcher beans
+     * plus stub gateway and registry, returning the orchestrator and gateway pair for assertions.
+     */
     private fun orchestrator(
         repository: WalletCredentialRepository,
         allowed: String = "verifier-demo-client",
@@ -122,15 +135,18 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
             loadedAt = Instant.now(),
         )
         val resolver = object : TrustSnapshotResolver {
+            /** Returns a fixed Available snapshot containing verifier-demo-client bindings. */
             override fun currentAvailability(): TrustSnapshotAvailability = TrustSnapshotAvailability.Available(trustSnapshot)
         }
         val extractor = object : VerifierCertificateExtractor {
+            /** Supplies a mocked certificate chain so DefaultTrustValidator can run without real x5c. */
             override fun extract(request: ResolvedAuthorizationRequest): VerifierCertificateMaterial? {
                 val cert = mock(X509Certificate::class.java)
                 return VerifierCertificateMaterial(chain = listOf(cert), leaf = cert)
             }
         }
         val certValidator = object : AccessCertificateValidationService {
+            /** Always reports Trusted so tests isolate policy and matching behaviour from PKIX failures. */
             override fun validate(
                 requestClientId: String,
                 material: VerifierCertificateMaterial,
@@ -138,6 +154,7 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
             ): AccessCertificateValidationResult = AccessCertificateValidationResult.Trusted
         }
         val registryValidator = object : RegistryValidator {
+            /** Sets registryDecision.accepted according to the registryAccepted parameter. */
             override fun validate(context: PresentationContext): PresentationContext =
                 context.copy(
                     registryDecision = di.swallet.wpb.presentation.domain.RegistryDecision(
@@ -184,6 +201,10 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
         return orchestrator to gateway
     }
 
+    /**
+     * Non-demo orchestrator with a wallet SD-JWT matching the DCQL given_name request.
+     * startSession stops at CONSENT_PENDING with one candidate listing the requested claim.
+     */
     @Test
     fun `non-demo session with matching wallet credential reaches consent`() = runBlocking {
         val repository = mock(WalletCredentialRepository::class.java)
@@ -198,6 +219,10 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
         assertEquals(listOf("given_name"), ctx.credentialCandidates.single().requestedClaims)
     }
 
+    /**
+     * Non-demo orchestrator runs against an empty wallet for the holder.
+     * startSession rejects as DISPATCHED with policy_rejected and a negative gateway dispatch.
+     */
     @Test
     fun `non-demo session without matching credentials rejects and dispatches negative`() = runBlocking {
         val repository = mock(WalletCredentialRepository::class.java)
@@ -210,6 +235,10 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
         assertEquals("policy_rejected", ctx.error?.code)
     }
 
+    /**
+     * Trust allow-list excludes the authorization request client_id.
+     * startSession fails before matching with trust_rejected and a negative dispatch.
+     */
     @Test
     fun `non-demo session with untrusted client_id rejects before matching`() = runBlocking {
         val repository = mock(WalletCredentialRepository::class.java)
@@ -220,6 +249,10 @@ class DefaultPresentationFlowOrchestratorRealBeansTest {
         assertTrue(gateway.negativeCount >= 1)
     }
 
+    /**
+     * Matching wallet credential reaches consent and the holder grants the sole candidate.
+     * Final state is DISPATCHED with one positive gateway dispatch.
+     */
     @Test
     fun `consent submission dispatches positive VP`() = runBlocking {
         val repository = mock(WalletCredentialRepository::class.java)

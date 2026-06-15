@@ -1,3 +1,7 @@
+/**
+ * Marks test classes and methods that belong to the OpenID conformance suite.
+ */
+
 package di.swallet.wpb.conformance
 
 import di.swallet.wpb.conformance.report.ConformanceReportExtension

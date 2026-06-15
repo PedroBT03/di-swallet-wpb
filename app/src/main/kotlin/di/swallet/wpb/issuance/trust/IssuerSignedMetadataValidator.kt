@@ -1,3 +1,7 @@
+/**
+ * Validation of OID4VCI issuer signed_metadata JWTs.
+ */
+
 package di.swallet.wpb.issuance.trust
 
 import com.nimbusds.jose.crypto.ECDSAVerifier
@@ -19,6 +23,7 @@ enum class IssuerMetadataPolicyMode {
     IGNORE_SIGNED,
 }
 
+/** Outcome of signed issuer metadata verification. */
 data class SignedMetadataValidationResult(
     val acceptable: Boolean,
     val reason: String? = null,
@@ -32,6 +37,7 @@ data class SignedMetadataValidationResult(
 class IssuerSignedMetadataValidator(
     private val properties: OpenId4VciProperties,
 ) {
+    /** Applies the configured metadata policy to resolved issuer metadata. */
     fun validate(metadata: ResolvedIssuerMetadata): SignedMetadataValidationResult {
         return when (properties.sdk.metadataPolicyMode()) {
             IssuerMetadataPolicyMode.IGNORE_SIGNED -> SignedMetadataValidationResult(true)
@@ -40,6 +46,7 @@ class IssuerSignedMetadataValidator(
         }
     }
 
+    /** Accepts unsigned metadata but verifies the JWT when present. */
     private fun validatePreferSigned(metadata: ResolvedIssuerMetadata): SignedMetadataValidationResult {
         val jwt = metadata.signedMetadataJwt
         if (jwt.isNullOrBlank()) {
@@ -51,6 +58,7 @@ class IssuerSignedMetadataValidator(
         return verifySignedMetadataJwt(jwt, metadata.credentialIssuerId)
     }
 
+    /** Rejects metadata that lacks a signed_metadata JWT. */
     private fun validateRequireSigned(metadata: ResolvedIssuerMetadata): SignedMetadataValidationResult {
         val jwt = metadata.signedMetadataJwt
         if (jwt.isNullOrBlank()) {
@@ -62,6 +70,7 @@ class IssuerSignedMetadataValidator(
         return verifySignedMetadataJwt(jwt, metadata.credentialIssuerId)
     }
 
+    /** Verifies signature, issuer claim, and token time bounds with configured clock skew. */
     private fun verifySignedMetadataJwt(compactJwt: String, expectedIssuer: String): SignedMetadataValidationResult {
         if (expectedIssuer.isBlank()) {
             return SignedMetadataValidationResult(false, "credential_issuer identifier missing")
@@ -104,6 +113,7 @@ class IssuerSignedMetadataValidator(
         }
     }
 
+    /** Builds a JWS verifier from the JWT x5c chain or embedded JWK. */
     private fun resolveVerifier(signed: SignedJWT): com.nimbusds.jose.JWSVerifier? {
         val x5c = signed.header.x509CertChain
         if (!x5c.isNullOrEmpty()) {
@@ -120,6 +130,7 @@ class IssuerSignedMetadataValidator(
         return verifierForJwk(jwk)
     }
 
+    /** Selects an ECDSA or RSA verifier for the given JWK. */
     private fun verifierForJwk(jwk: JWK): com.nimbusds.jose.JWSVerifier? = when (jwk) {
         is ECKey -> ECDSAVerifier(jwk.toECPublicKey())
         is RSAKey -> RSASSAVerifier(jwk.toRSAPublicKey())
@@ -127,6 +138,7 @@ class IssuerSignedMetadataValidator(
     }
 }
 
+/** Maps the configured SDK metadata policy string to a typed mode. */
 fun OpenId4VciProperties.SdkProperties.metadataPolicyMode(): IssuerMetadataPolicyMode =
     when (metadataPolicy.trim().lowercase()) {
         "requiresigned" -> IssuerMetadataPolicyMode.REQUIRE_SIGNED

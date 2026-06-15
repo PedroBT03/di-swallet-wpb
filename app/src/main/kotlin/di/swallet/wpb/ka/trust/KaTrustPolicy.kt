@@ -1,3 +1,7 @@
+/**
+ * Effective key attestation trust mode resolution from configuration.
+ */
+
 package di.swallet.wpb.ka.trust
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -7,6 +11,7 @@ enum class KaTrustMode {
     STRICT,
 }
 
+/** Resolves whether KA x5c validation runs in relaxed or strict PKIX mode. */
 object KaTrustPolicy {
     /**
      * Resolves the effective KA trust mode.

@@ -1,7 +1,12 @@
+/**
+ * Configuration properties for the WSCA Secure Cryptographic Interface boundary.
+ */
+
 package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 
+/** Binds `wpb.wsca.*` settings that gate HSM access behind SCI authorization. */
 @ConfigurationProperties(prefix = "wpb.wsca")
 class WscaSciProperties {
     /**

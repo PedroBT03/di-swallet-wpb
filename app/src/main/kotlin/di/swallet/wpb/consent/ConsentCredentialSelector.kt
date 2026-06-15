@@ -1,3 +1,7 @@
+/**
+ * Resolves holder credential choices submitted during presentation consent.
+ */
+
 package di.swallet.wpb.consent
 
 import di.swallet.wpb.config.ConsentProperties
@@ -8,12 +12,18 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
 
+/**
+ * Validates selected credentials against consent policy and returns the chosen set.
+ */
 @Component
 class ConsentCredentialSelector(
     private val consentProperties: ConsentProperties,
     private val choiceGrouper: CredentialChoiceGrouper,
 ) {
 
+    /**
+     * Maps selected candidate ids to credentials and enforces explicit-choice and all-or-nothing rules.
+     */
     fun select(
         context: PresentationContext,
         selectedCredentialIds: List<String>,
@@ -73,6 +83,9 @@ class ConsentCredentialSelector(
         }
     }
 
+    /**
+     * Ensures exactly one credential is selected for each query group that requires user choice.
+     */
     private fun validateChoiceGroups(
         allCandidates: List<CredentialCandidate>,
         selected: List<CredentialCandidate>,

@@ -1,3 +1,7 @@
+/**
+ * Shared test helpers for consent.
+ */
+
 package di.swallet.wpb.consent
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -12,6 +16,7 @@ import org.mockito.Mockito.mock
 
 object ConsentTestSupport {
 
+    /** Builds ConsentProperties with toggles for explicit choice, all-or-nothing, and issuance consent. */
     fun properties(
         enabled: Boolean = true,
         requireExplicit: Boolean = true,
@@ -24,12 +29,15 @@ object ConsentTestSupport {
         this.issuance.enabled = issuanceEnabled
     }
 
+    /** Creates an AttributeMinimizationEvaluator wired to the supplied OpenId4VpProperties. */
     fun minimizationEvaluator(openId4VpProperties: OpenId4VpProperties = OpenId4VpProperties()): AttributeMinimizationEvaluator =
         AttributeMinimizationEvaluator(openId4VpProperties)
 
+    /** Builds a ConsentCredentialSelector using the given properties and a fresh CredentialChoiceGrouper. */
     fun credentialSelector(properties: ConsentProperties = properties()): ConsentCredentialSelector =
         ConsentCredentialSelector(properties, CredentialChoiceGrouper())
 
+    /** Assembles a PresentationConsentViewBuilder with grouper, minimization evaluator, and credential repository. */
     fun presentationConsentViewBuilder(
         properties: ConsentProperties = properties(),
         repository: WalletCredentialRepository = mock(WalletCredentialRepository::class.java),
@@ -41,9 +49,11 @@ object ConsentTestSupport {
         repository,
     )
 
+    /** Creates a ConsentAuditRecorder sharing the grouper and minimization evaluator from test properties. */
     fun auditRecorder(openId4VpProperties: OpenId4VpProperties = OpenId4VpProperties()): ConsentAuditRecorder =
         ConsentAuditRecorder(CredentialChoiceGrouper(), minimizationEvaluator(openId4VpProperties))
 
+    /** Bundles all consent-related dependencies needed to wire DefaultPresentationFlowOrchestrator in tests. */
     fun presentationOrchestratorDeps(
         properties: ConsentProperties = properties(),
         repository: WalletCredentialRepository = mock(WalletCredentialRepository::class.java),
@@ -59,12 +69,14 @@ object ConsentTestSupport {
         )
     }
 
+    /** Returns a PendingCredentialStore with test wallet disclosure encryption and a Kotlin ObjectMapper. */
     fun pendingCredentialStore(): PendingCredentialStore =
         PendingCredentialStore(
             DisclosureCipherService(testWalletProperties()),
             ObjectMapper().findAndRegisterModules().registerKotlinModule(),
         )
 
+    /** Builds an IssuanceConsentViewBuilder with consent properties, pending store, and preview parser. */
     fun issuanceConsentViewBuilder(
         properties: ConsentProperties = properties(),
         pendingStore: PendingCredentialStore = pendingCredentialStore(),

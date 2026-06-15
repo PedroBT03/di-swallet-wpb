@@ -1,3 +1,7 @@
+/**
+ * Known ISO mdoc docTypes, namespaces, and external claim name aliases.
+ */
+
 package di.swallet.wpb.format.mdoc
 
 import org.springframework.stereotype.Component
@@ -26,12 +30,14 @@ class MdocDocTypeRegistry {
         ),
     )
 
+    /** Resolves a docType string to a known definition when it matches exactly. */
     fun resolve(docType: String?): MdocDocTypeDefinition? {
         val normalized = docType?.trim().orEmpty()
         if (normalized.isBlank()) return null
         return known.firstOrNull { it.docType.equals(normalized, ignoreCase = true) }
     }
 
+    /** Infers docType from configuration id, docType hint, or vct hint using aliases. */
     fun infer(configurationId: String?, docTypeHint: String?, vctHint: String?): MdocDocTypeDefinition? {
         resolve(docTypeHint)?.let { return it }
         resolve(vctHint)?.let { return it }
@@ -42,8 +48,10 @@ class MdocDocTypeRegistry {
         }
     }
 
+    /** Returns true when the docType resolves to a supported definition. */
     fun isSupported(docType: String?): Boolean = resolve(docType) != null
 
+    /** Lists all registered docType definitions. */
     fun all(): List<MdocDocTypeDefinition> = known
 
     private companion object {
@@ -72,12 +80,11 @@ class MdocDocTypeRegistry {
     }
 }
 
+/** Known mdoc docType with namespace, aliases, and external claim name mapping. */
 data class MdocDocTypeDefinition(
     val docType: String,
     val namespace: String,
     val aliases: Set<String> = emptySet(),
-    /**
-     * Runtime mapping from external/request claim names to canonical mdoc names.
-     */
+    /** Runtime mapping from external/request claim names to canonical mdoc names. */
     val claimMapping: Map<String, String> = emptyMap(),
 )

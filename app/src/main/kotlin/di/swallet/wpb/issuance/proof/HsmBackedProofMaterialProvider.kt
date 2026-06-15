@@ -1,3 +1,7 @@
+/**
+ * HSM-backed proof-of-possession key provider for OID4VCI issuance.
+ */
+
 package di.swallet.wpb.issuance.proof
 
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
@@ -21,6 +25,7 @@ class HsmBackedProofMaterialProvider(
     private val hsmService: HsmService,
     private val walletUnitLifecycleService: WalletUnitLifecycleService,
 ) : ProofMaterialProvider {
+    /** Returns the holder's HSM key, provisioning one when issuance eligibility allows. */
     override fun provide(holderId: String, metadata: ResolvedIssuerMetadata?): ProofMaterial {
         val walletUnit = walletUnitLifecycleService.requireIssuanceEligible(holderId)
         val walletKey = runCatching { hsmService.getUserKey(holderId) }
@@ -33,6 +38,7 @@ class HsmBackedProofMaterialProvider(
         )
     }
 
+    /** Decodes a URL-safe base64 X.509 EC public key into a Java key instance. */
     private fun decodeEcPublicKey(publicKeyBase64: String): ECPublicKey {
         val bytes = Base64.getUrlDecoder().decode(publicKeyBase64)
         val spec = X509EncodedKeySpec(bytes)

@@ -1,8 +1,13 @@
+/**
+ * Assembles the EUDI Wallet Trust Mark view from configuration and cached remote resources.
+ */
+
 package di.swallet.wpb.trustmark
 
 import di.swallet.wpb.config.TrustMarkProperties
 import org.springframework.stereotype.Service
 
+/** Builds the Trust Mark view, resolves localization, and validates HTTPS links. */
 @Service
 class TrustMarkService(
     private val properties: TrustMarkProperties,
@@ -11,6 +16,7 @@ class TrustMarkService(
     private val localizationService: TrustMarkLocalizationService,
     private val validator: TrustMarkResourceValidator,
 ) {
+    /** Returns the Trust Mark view for the requested language, or a disabled notice when unconfigured. */
     fun getView(language: String?): TrustMarkView {
         if (!properties.isConfigured()) {
             return TrustMarkView(
@@ -36,12 +42,14 @@ class TrustMarkService(
         )
     }
 
+    /** Invalidates the cache, refetches the remote resource, and returns a fresh view. */
     fun refresh(): TrustMarkView {
         resourceClient.invalidate()
         resourceClient.getResource(forceRefresh = true)
         return getView(language = null)
     }
 
+    /** Builds static Trust Mark URLs and records HTTPS warnings for misconfigured links. */
     private fun buildInformation(warnings: MutableList<String>): TrustMarkInformation {
         validateHttps(properties.trustMarkResourceUrl, "TrustMarkResourceURL", warnings)
         validateHttps(properties.listOfCertifiedWalletsUrl, "ListOfCertifiedWalletsURL", warnings)
@@ -54,6 +62,7 @@ class TrustMarkService(
         )
     }
 
+    /** Validates and localizes the cached TrustMarkResource payload for client display. */
     private fun buildResourceView(
         cached: CachedTrustMarkResource,
         language: String?,
@@ -84,6 +93,7 @@ class TrustMarkService(
         )
     }
 
+    /** Builds external Trust Mark action links and warns about non-HTTPS URLs. */
     private fun buildActions(warnings: MutableList<String>): List<TrustMarkAction> {
         val actions = mutableListOf<TrustMarkAction>()
         val listUrl = properties.listOfCertifiedWalletsUrl.trim()
@@ -102,6 +112,7 @@ class TrustMarkService(
         return actions
     }
 
+    /** Adds a warning when a configured URL is present but not HTTPS. */
     private fun validateHttps(url: String, label: String, warnings: MutableList<String>) {
         if (url.isNotBlank() && !url.startsWith("https://", ignoreCase = true)) {
             warnings.add("$label should use HTTPS")

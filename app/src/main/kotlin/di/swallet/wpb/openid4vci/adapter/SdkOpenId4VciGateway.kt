@@ -1,3 +1,7 @@
+/**
+ * Production OID4VCI adapter backed by issuer HTTP endpoints and SDK resolvers.
+ */
+
 package di.swallet.wpb.openid4vci.adapter
 
 import com.fasterxml.jackson.databind.JsonNode
@@ -65,6 +69,7 @@ class SdkOpenId4VciGateway(
         logger.info("SdkOpenId4VciGateway enabled. Issuer hint: '{}'", properties.sdk.credentialIssuerId)
     }
 
+    /** In-flight adapter session state keyed by adapterSessionId. */
     private data class AdapterState(
         val offer: ResolvedOffer? = null,
         val metadata: ResolvedIssuerMetadata? = null,
@@ -77,6 +82,7 @@ class SdkOpenId4VciGateway(
         val lastRequestedConfigurationId: String? = null,
     )
 
+    /** Resolves a credential offer and issuer metadata, falling back locally when allowed. */
     override fun resolveOffer(offerUri: String): Pair<ResolvedOffer, ResolvedIssuerMetadata> {
         return runCatching {
             val sdkOffer = runBlocking { sdkOfferResolver.resolve(offerUri) }.getOrThrow()
@@ -109,6 +115,7 @@ class SdkOpenId4VciGateway(
         }.getOrThrow()
     }
 
+    /** Loads issuer and authorization-server metadata for wallet-initiated issuance. */
     override fun resolveMetadata(
         credentialIssuerId: String,
         credentialConfigurationIds: List<String>,
@@ -159,6 +166,7 @@ class SdkOpenId4VciGateway(
         )
     }
 
+    /** Parses a credential offer locally when SDK resolution is unavailable. */
     private fun resolveOfferFallback(offerUri: String): Pair<ResolvedOffer, ResolvedIssuerMetadata> {
         val params = parseQuery(offerUri)
         val payload = params["credential_offer"]
@@ -191,6 +199,7 @@ class SdkOpenId4VciGateway(
         ) to metadata
     }
 
+    /** Starts an authorization-code flow and returns the redirect URL plus PKCE state. */
     override fun prepareAuthorization(
         adapterSessionId: String,
         offer: ResolvedOffer,
@@ -231,6 +240,7 @@ class SdkOpenId4VciGateway(
         )
     }
 
+    /** Exchanges an authorization code for access and refresh tokens. */
     override fun authorizeWithCode(
         adapterSessionId: String,
         authorizationCode: String,
@@ -276,6 +286,7 @@ class SdkOpenId4VciGateway(
         )
     }
 
+    /** Exchanges a pre-authorized code grant for issuer tokens. */
     override fun authorizeWithPreAuthorizedCode(
         adapterSessionId: String,
         offer: ResolvedOffer,
@@ -324,6 +335,7 @@ class SdkOpenId4VciGateway(
         )
     }
 
+    /** Requests a credential from the issuer using the stored access token and proof JWT. */
     override fun requestCredential(
         adapterSessionId: String,
         request: IssuanceRequest,
@@ -420,6 +432,7 @@ class SdkOpenId4VciGateway(
         }
     }
 
+    /** Polls the deferred credential endpoint for a previously deferred issuance. */
     override fun queryDeferred(
         adapterSessionId: String,
         handle: DeferredIssuanceHandle,
@@ -473,6 +486,7 @@ class SdkOpenId4VciGateway(
         }
     }
 
+    /** Sends a wallet notification event to the issuer notification endpoint. */
     override fun notify(
         adapterSessionId: String,
         notificationId: String,
@@ -500,10 +514,12 @@ class SdkOpenId4VciGateway(
         }.getOrDefault(false)
     }
 
+    /** Removes all adapter state associated with the session id. */
     override fun discard(adapterSessionId: String) {
         states.remove(adapterSessionId)
     }
 
+    /** Builds credential configuration descriptors from issuer metadata JSON. */
     private fun extractConfigurations(
         metadataNode: JsonNode,
         requestedIds: List<String>,
@@ -545,6 +561,7 @@ class SdkOpenId4VciGateway(
         }
     }
 
+    /** Downloads OAuth authorization-server metadata for one issuer. */
     private fun fetchAuthorizationServerMetadata(issuer: String): JsonNode {
         val endpoint = "${issuer.trimEnd('/')}/.well-known/oauth-authorization-server"
         val body = restClient.get()
@@ -555,6 +572,7 @@ class SdkOpenId4VciGateway(
         return mapper.readTree(body)
     }
 
+    /** Fetches a credential offer payload referenced by URI. */
     private fun fetchOfferReference(referenceUrl: String): String =
         restClient.get()
             .uri(referenceUrl)
@@ -562,6 +580,7 @@ class SdkOpenId4VciGateway(
             .body(String::class.java)
             ?: throw IllegalStateException("empty credential offer reference response")
 
+    /** Parses query parameters from an OpenID4VCI offer URI. */
     private fun parseQuery(uri: String): Map<String, String> {
         val query = when {
             '?' in uri -> uri.substringAfter('?')
@@ -581,6 +600,7 @@ class SdkOpenId4VciGateway(
             .toMap()
     }
 
+    /** Builds the authorization redirect URL with PKCE and wallet attestation parameters. */
     private fun buildAuthorizationUrl(
         endpoint: String,
         adapterSessionId: String,
@@ -609,6 +629,7 @@ class SdkOpenId4VciGateway(
         }
     }
 
+    /** POSTs JSON to an issuer endpoint and parses the JSON response body. */
     private fun postJson(endpoint: String, body: Map<String, Any?>): JsonNode {
         val response = restClient.post()
             .uri(endpoint)
@@ -620,17 +641,20 @@ class SdkOpenId4VciGateway(
         return mapper.readTree(response)
     }
 
+    /** Generates a URL-safe random token of the requested byte length. */
     private fun randomToken(size: Int): String {
         val bytes = ByteArray(size)
         java.security.SecureRandom().nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
 
+    /** Returns the SHA-256 hash of [input] encoded as a base64url string. */
     private fun sha256Base64Url(input: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(StandardCharsets.UTF_8))
         return Base64.getUrlEncoder().withoutPadding().encodeToString(digest)
     }
 
+    /** URL-encodes a query parameter value. */
     private fun urlEncode(value: String): String =
         java.net.URLEncoder.encode(value, StandardCharsets.UTF_8)
 }

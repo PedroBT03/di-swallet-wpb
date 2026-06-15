@@ -1,3 +1,7 @@
+/**
+ * Tests sd jwt vp builder.
+ */
+
 package di.swallet.wpb.presentation.format
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -30,6 +34,7 @@ class SdJwtVpBuilderTest {
     private class CapturingSigner : KeyBindingJwtSigner {
         var lastUserId: String? = null
         var lastPayload: Map<String, Any>? = null
+        /** Records the user id and payload passed to signKeyBindingJwt and returns a fixed stub signature. */
         override fun signKeyBindingJwt(userId: String, payload: Map<String, Any>): String {
             lastUserId = userId
             lastPayload = payload
@@ -37,6 +42,10 @@ class SdJwtVpBuilderTest {
         }
     }
 
+    /**
+     * Wallet stores two disclosures but only given_name is requested for the VP.
+     * Output includes one disclosure, a KB-JWT with aud/nonce/sd_hash, and omits the unrequested claim.
+     */
     @Test
     fun `builds SD-JWT VP with only requested disclosures and a KB-JWT`() {
         val disclosureGiven = sdJwtService.createDisclosure("given_name", "Pedro")
@@ -87,6 +96,10 @@ class SdJwtVpBuilderTest {
         assertNotNull(signer.lastPayload?.get("sd_hash"))
     }
 
+    /**
+     * Selected credential lists no requested claim paths despite stored disclosures.
+     * Presentation includes zero disclosures and still appends a KB-JWT suffix.
+     */
     @Test
     fun `includes no disclosures when claim paths are empty`() {
         val disclosureA = sdJwtService.createDisclosure("a", "1")
@@ -125,6 +138,10 @@ class SdJwtVpBuilderTest {
         assertTrue(result.presentation.endsWith("KB.JWT.SIG"))
     }
 
+    /**
+     * Wallet holds address.locality and address.country disclosures; only locality is requested.
+     * Presentation includes the locality disclosure and excludes country.
+     */
     @Test
     fun `includes dot-notation disclosure for nested DCQL path`() {
         val locality = sdJwtService.createDisclosure("address.locality", "Lisbon")
@@ -163,6 +180,10 @@ class SdJwtVpBuilderTest {
         assertFalse(result.presentation.contains(country))
     }
 
+    /**
+     * Selected credential has no wallet credential id, indicating a demo synthetic candidate.
+     * build marks isDemo true and prefixes the presentation with demo-vp:.
+     */
     @Test
     fun `demo fallback marks output for synthetic candidates`() {
         val builder = SdJwtVpBuilder(

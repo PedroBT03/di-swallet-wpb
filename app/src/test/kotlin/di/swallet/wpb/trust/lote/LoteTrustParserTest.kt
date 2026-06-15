@@ -1,3 +1,7 @@
+/**
+ * Tests lote trust parser.
+ */
+
 package di.swallet.wpb.trust.lote
 
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -9,6 +13,10 @@ import java.time.Instant
 class LoteTrustParserTest {
     private val parser = LoteTrustParser()
 
+    /**
+     * Parses LoTE JSON where one entity lists both a granted and a withdrawn service.
+     * Only the granted service type and status are kept; withdrawn service identifiers are excluded from metadata.
+     */
     @Test
     fun `entity with multiple services only keeps active ones`() {
         val payload =
@@ -53,6 +61,10 @@ class LoteTrustParserTest {
         assertFalse((entity.metadata["etsi.serviceIdentifiers"] ?: "").contains("svc-inactive"))
     }
 
+    /**
+     * Parses LoTE list/scheme information and one granted service, then builds a trust snapshot.
+     * Entity metadata must preserve sequence number, issue date, next update, list type, scheme type, and services JSON.
+     */
     @Test
     fun `parser preserves mandatory ETSI metadata`() {
         val payload =

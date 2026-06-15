@@ -1,3 +1,7 @@
+/**
+ * ISO 18013-5 mdoc issuance, DeviceResponse building, and CBOR decode utilities.
+ */
+
 package di.swallet.wpb.format.mdoc
 
 import com.authlete.cbor.CBORByteArray
@@ -30,6 +34,7 @@ import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.util.Base64
 
+/** Core mdoc runtime for IssuerSigned issuance and selective DeviceResponse presentation. */
 @Component
 class MdocIsoRuntimeService(
     private val properties: MdocProperties,
@@ -39,6 +44,7 @@ class MdocIsoRuntimeService(
     private val sessionTranscriptBuilder: MdocSessionTranscriptBuilder,
     private val walletKeyRepository: WalletKeyRepository,
 ) {
+    /** Builds and encodes an IssuerSigned artifact for the simulator issuer key. */
     fun issueIssuerSigned(
         docType: String,
         namespaceClaims: Map<String, Map<String, Any?>>,
@@ -59,6 +65,7 @@ class MdocIsoRuntimeService(
         return Base64.getUrlEncoder().withoutPadding().encodeToString(issuerSigned.encode())
     }
 
+    /** Assembles a selective DeviceResponse with device authentication over the session transcript. */
     fun buildDeviceResponse(
         originalIssuedPayload: String?,
         docType: String,
@@ -147,6 +154,7 @@ class MdocIsoRuntimeService(
         return Base64.getUrlEncoder().withoutPadding().encodeToString(response.encode())
     }
 
+    /** Parses IssuerSigned or DeviceResponse payloads into a structured document view. */
     fun decode(raw: String): MdocCredentialDocument? {
         val bytes = decodeBase64Url(raw) ?: return null
         val parsed = decodeCbor(bytes) ?: return null
@@ -158,12 +166,16 @@ class MdocIsoRuntimeService(
         }
     }
 
+    /** Returns true when [decode] recognizes the payload structure. */
     fun isEncodedMdoc(raw: String): Boolean = decode(raw) != null
 
+    /** Delegates issuerAuth signature verification to [MdocCredentialVerifier]. */
     fun validateIssuerSigned(raw: String): Boolean = credentialVerifier.validateIssuerSigned(raw)
 
+    /** Delegates full DeviceResponse verification to [MdocCredentialVerifier]. */
     fun validateDeviceResponse(raw: String): Boolean = credentialVerifier.validateDeviceResponse(raw)
 
+    /** Ensures the holder HSM key matches the device key embedded in the MSO. */
     private fun assertDeviceKeyBinding(originalIssuedPayload: String?, holderKeyAlias: String) {
         val payload = originalIssuedPayload?.trim().orEmpty()
         if (payload.isBlank()) return
@@ -179,6 +191,7 @@ class MdocIsoRuntimeService(
         }
     }
 
+    /** Loads the holder wallet key and converts it to a COSE EC2 public key. */
     private fun requireDeviceKeyForAlias(alias: String): COSEEC2Key {
         if (alias.isBlank()) {
             throw IllegalStateException("mdoc issuance requires holder device public key")
@@ -190,9 +203,11 @@ class MdocIsoRuntimeService(
         )
     }
 
+    /** Compares encoded COSE EC2 public key bytes for equality. */
     private fun cosePublicKeysMatch(left: COSEEC2Key, right: COSEEC2Key): Boolean =
         left.encode().contentEquals(right.encode())
 
+    /** Extracts docType and device-signed claims from a DeviceResponse map. */
     private fun decodeDeviceResponseMap(parsedMap: Map<*, *>): MdocCredentialDocument? {
         val documents = parsedMap["documents"] as? List<*> ?: return null
         val firstDoc = documents.firstOrNull() as? Map<*, *> ?: return null
@@ -214,6 +229,7 @@ class MdocIsoRuntimeService(
         )
     }
 
+    /** Extracts issuer-signed namespace claims from an IssuerSigned map. */
     private fun decodeIssuerSignedMap(parsedMap: Map<*, *>): MdocCredentialDocument {
         val claims = mutableMapOf<String, Any?>()
         val namespaces = parsedMap["nameSpaces"] as? Map<*, *> ?: emptyMap<Any, Any>()
@@ -237,6 +253,7 @@ class MdocIsoRuntimeService(
         )
     }
 
+    /** Encodes the DeviceAuthentication CBOR structure signed by the holder key. */
     private fun buildDeviceAuthenticationPayload(
         docType: String,
         sessionTranscript: CBORItem,
@@ -248,6 +265,7 @@ class MdocIsoRuntimeService(
         deviceNameSpacesBytes,
     ).encode()
 
+    /** Returns the issuerSigned CBOR item from IssuerSigned or DeviceResponse input. */
     private fun extractIssuerSignedItem(raw: String): CBORItem? {
         val root = decodeCborItem(raw) ?: return null
         val directNamespaces = readPairValue(root, "nameSpaces")
@@ -260,17 +278,20 @@ class MdocIsoRuntimeService(
         return readPairValue(firstDoc, "issuerSigned")
     }
 
+    /** Decodes a base64url string into a top-level CBOR item. */
     private fun decodeCborItem(rawB64: String): CBORItem? {
         val bytes = decodeBase64Url(rawB64) ?: return null
         return runCatching { CBORDecoder(bytes).next() }.getOrNull()
     }
 
+    /** Decodes CBOR bytes into plain Kotlin/Java structures via Authlete parsing. */
     private fun decodeCbor(bytes: ByteArray): Any? =
         runCatching {
             val item = CBORDecoder(bytes).next()
             item.parse()
         }.getOrNull()
 
+    /** Decodes base64url with optional padding restoration. */
     private fun decodeBase64Url(value: String): ByteArray? {
         val clean = value.trim()
         if (clean.isBlank()) return null
@@ -278,6 +299,7 @@ class MdocIsoRuntimeService(
         return runCatching { Base64.getUrlDecoder().decode(padded) }.getOrNull()
     }
 
+    /** Reads a named value from a CBOR pair list. */
     private fun readPairValue(item: CBORItem, key: String): CBORItem? {
         val pairList = item as? CBORPairList ?: return null
         return pairList.pairs.firstOrNull { pair ->

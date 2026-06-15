@@ -1,3 +1,7 @@
+/**
+ * Tests default issuer trust validator.
+ */
+
 package di.swallet.wpb.issuance.trust
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -8,9 +12,13 @@ import org.junit.jupiter.api.Test
 
 class DefaultIssuerTrustValidatorTest {
 
+    /** Builds DefaultIssuerTrustValidator with the given OpenId4VciProperties and its signed-metadata validator. */
     private fun validator(props: OpenId4VciProperties) =
         DefaultIssuerTrustValidator(props, IssuerSignedMetadataValidator(props))
 
+    /**
+     * demoMode=true with an empty allow-list trusts any issuer id.
+     */
     @Test
     fun `empty allow-list in demo-mode is permissive`() {
         val props = OpenId4VciProperties().apply {
@@ -23,6 +31,9 @@ class DefaultIssuerTrustValidatorTest {
         assertTrue(decision.trusted)
     }
 
+    /**
+     * demoMode=false with an empty allow-list rejects every issuer.
+     */
     @Test
     fun `empty allow-list outside demo-mode is fail-closed`() {
         val props = OpenId4VciProperties().apply {
@@ -35,6 +46,9 @@ class DefaultIssuerTrustValidatorTest {
         assertFalse(decision.trusted)
     }
 
+    /**
+     * issuer.one appears in the allow-list and is marked trusted.
+     */
     @Test
     fun `allow-list accepts listed issuers`() {
         val props = OpenId4VciProperties().apply {
@@ -47,6 +61,9 @@ class DefaultIssuerTrustValidatorTest {
         assertTrue(decision.trusted)
     }
 
+    /**
+     * An issuer not on the allow-list is rejected with a not-in-allow-list reason.
+     */
     @Test
     fun `allow-list rejects unknown issuers`() {
         val props = OpenId4VciProperties().apply {
@@ -60,6 +77,9 @@ class DefaultIssuerTrustValidatorTest {
         assertTrue(decision.reason!!.contains("not in allow-list"))
     }
 
+    /**
+     * Blank credentialIssuerId is rejected even when other issuers are allow-listed.
+     */
     @Test
     fun `blank issuer identifier is rejected`() {
         val props = OpenId4VciProperties().apply {
@@ -72,6 +92,9 @@ class DefaultIssuerTrustValidatorTest {
         assertFalse(decision.trusted)
     }
 
+    /**
+     * Allow-listed issuer with requireSigned but no signed metadata JWT is rejected citing signed_metadata.
+     */
     @Test
     fun `requireSigned rejects allow-listed issuer without signed metadata`() {
         val issuer = "https://issuer.one"
@@ -87,6 +110,9 @@ class DefaultIssuerTrustValidatorTest {
         assertTrue(decision.reason!!.contains("signed_metadata"))
     }
 
+    /**
+     * Allow-listed issuer with a valid signed metadata JWT is trusted under requireSigned.
+     */
     @Test
     fun `requireSigned accepts allow-listed issuer with valid signed metadata`() {
         val issuer = "https://issuer.one"

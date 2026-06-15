@@ -1,3 +1,7 @@
+/**
+ * Default Wallet Instance Attestation (WIA) JWT issuer.
+ */
+
 package di.swallet.wpb.wia.attestation
 
 import com.nimbusds.jose.JOSEObjectType
@@ -15,6 +19,7 @@ import di.swallet.wpb.wia.status.WiaStatusManagementService
 import org.springframework.stereotype.Component
 import java.time.Instant
 
+/** Builds and signs WIA and PoP JWTs with wallet metadata and status list references. */
 @Component
 class DefaultWalletAttestationProvider(
     private val walletKeyRepository: WalletKeyRepository,
@@ -24,6 +29,7 @@ class DefaultWalletAttestationProvider(
     private val properties: OpenId4VciProperties,
 ) : WalletAttestationProvider {
 
+    /** Issues attestation and proof JWTs with cnf.jkt and client_status list binding. */
     override fun issue(
         holderId: String,
         walletInstanceId: String,
@@ -97,9 +103,11 @@ class DefaultWalletAttestationProvider(
         )
     }
 
+    /** Prefers configured x5c chain, falling back to the HSM certificate chain. */
     private fun resolveSigningX5cChain(walletKey: WalletKey): List<String> =
         properties.wia.signingX5cChain().ifEmpty { hsmService.certificateChainBase64(walletKey) }
 
+    /** Signs a JWT with ES256 via the HSM, optionally embedding an x5c header. */
     private fun signJwt(
         walletKey: WalletKey,
         typ: String,

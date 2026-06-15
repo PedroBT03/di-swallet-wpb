@@ -1,3 +1,7 @@
+/**
+ * Shared test helpers for revocation.
+ */
+
 package di.swallet.wpb.revocation
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -10,6 +14,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 
 object RevocationTestSupport {
+    /** CredentialRevocationGuard backed by mocks that never report revoked status-list entries. */
     fun noopGuard(): CredentialRevocationGuard {
         val statusListService = mock(StatusListService::class.java)
         `when`(statusListService.isRevoked(anyInt())).thenReturn(false)
@@ -21,9 +26,11 @@ object RevocationTestSupport {
         )
     }
 
+    /** CredentialStatusParser using a default ObjectMapper for parsing status claims in tests. */
     fun credentialStatusParser(): CredentialStatusParser =
         CredentialStatusParser(ObjectMapper())
 
+    /** StatusListProperties preconfigured with the given token capacity for revocation tests. */
     fun statusListProperties(capacity: Int = 1024): StatusListProperties =
         StatusListProperties().apply { this.capacity = capacity }
 }

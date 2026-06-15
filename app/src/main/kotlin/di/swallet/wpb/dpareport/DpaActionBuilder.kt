@@ -1,3 +1,7 @@
+/**
+ * Builds web, email, and phone action URIs for contacting a DPA about a relying party.
+ */
+
 package di.swallet.wpb.dpareport
 
 import di.swallet.wpb.config.DpaReportProperties
@@ -6,22 +10,26 @@ import org.springframework.stereotype.Component
 import org.springframework.web.util.UriUtils
 import java.nio.charset.StandardCharsets
 
+/** Supported channels for reaching a DPA from the wallet. */
 enum class DpaActionChannel {
     WEB,
     EMAIL,
     PHONE,
 }
 
+/** One actionable DPA contact with its launch URI and raw contact value. */
 data class DpaAction(
     val channel: DpaActionChannel,
     val uri: String,
     val contactValue: String,
 )
 
+/** Fills mailto subject and body templates with the reported RP DNS name. */
 @Component
 class DpaMailTemplateBuilder(
     private val properties: DpaReportProperties,
 ) {
+    /** Builds a mailto URI with configured subject and body templates. */
     fun buildMailto(email: String, dnsName: String): String {
         val subject = properties.mailSubjectTemplate.replace("{dNSName}", dnsName)
         val body = properties.mailBodyTemplate.replace("{dNSName}", dnsName)
@@ -31,10 +39,12 @@ class DpaMailTemplateBuilder(
     }
 }
 
+/** Converts parsed DPA contacts into ordered web, email, and phone actions. */
 @Component
 class DpaActionBuilder(
     private val mailTemplateBuilder: DpaMailTemplateBuilder,
 ) {
+    /** Builds all actionable URIs for the given contacts, preferring web before email and phone. */
     fun buildAll(contacts: ParsedDpaContacts, dnsName: String): List<DpaAction> {
         val actions = mutableListOf<DpaAction>()
         contacts.contacts
@@ -59,9 +69,11 @@ class DpaActionBuilder(
         return actions
     }
 
+    /** Returns the first actionable contact, if any. */
     fun firstAction(contacts: ParsedDpaContacts, dnsName: String): DpaAction? =
         buildAll(contacts, dnsName).firstOrNull()
 
+    /** Defines presentation order for DPA contact channels. */
     private fun channelOrder(channel: DeletionContactChannel): Int = when (channel) {
         DeletionContactChannel.WEB -> 0
         DeletionContactChannel.EMAIL -> 1

@@ -1,3 +1,7 @@
+/**
+ * Manages wallet unit lifecycle transitions from candidate through operational, valid, and revoked states.
+ */
+
 package di.swallet.wpb.service
 
 import di.swallet.wpb.domain.WalletUnit
@@ -8,10 +12,16 @@ import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
 
+/**
+ * Creates wallet units and enforces allowed state transitions for activation, validation, and revocation.
+ */
 @Service
 class WalletUnitLifecycleService(
     private val walletUnitRepository: WalletUnitRepository,
 ) {
+    /**
+     * Creates a new wallet unit in CANDIDATE state with an optional holder ID.
+     */
     fun createCandidate(holderId: String?): WalletUnit =
         walletUnitRepository.save(
             WalletUnit(
@@ -21,12 +31,21 @@ class WalletUnitLifecycleService(
             ),
         )
 
+    /**
+     * Moves a candidate wallet unit to OPERATIONAL after device binding is complete.
+     */
     fun activate(walletUnit: WalletUnit): WalletUnit =
         transition(walletUnit, WalletUnitState.OPERATIONAL)
 
+    /**
+     * Marks an operational wallet unit as VALID after successful credential key binding.
+     */
     fun markValid(walletUnit: WalletUnit): WalletUnit =
         transition(walletUnit, WalletUnitState.VALID)
 
+    /**
+     * Returns the holder's wallet unit when it is eligible for credential issuance.
+     */
     fun requireIssuanceEligible(holderId: String): WalletUnit {
         val walletUnit = walletUnitRepository.findFirstByHolderId(holderId)
             .orElseThrow {
@@ -44,6 +63,9 @@ class WalletUnitLifecycleService(
         return walletUnit
     }
 
+    /**
+     * Rejects operations when the wallet unit is not OPERATIONAL or VALID.
+     */
     fun requireOperational(walletUnit: WalletUnit) {
         if (walletUnit.state !in OPERATIONAL_OR_VALID) {
             throw ResponseStatusException(
@@ -53,9 +75,15 @@ class WalletUnitLifecycleService(
         }
     }
 
+    /**
+     * Permanently revokes a wallet unit and blocks further lifecycle transitions.
+     */
     fun revoke(walletUnit: WalletUnit): WalletUnit =
         transition(walletUnit, WalletUnitState.REVOKED)
 
+    /**
+     * Persists a wallet unit state change when the transition is allowed by lifecycle rules.
+     */
     private fun transition(walletUnit: WalletUnit, target: WalletUnitState): WalletUnit {
         if (!isAllowed(walletUnit.state, target)) {
             throw ResponseStatusException(
@@ -74,6 +102,9 @@ class WalletUnitLifecycleService(
         )
     }
 
+    /**
+     * Returns whether a lifecycle transition from one state to another is permitted.
+     */
     private fun isAllowed(from: WalletUnitState, to: WalletUnitState): Boolean =
         when (from) {
             WalletUnitState.CANDIDATE -> to == WalletUnitState.OPERATIONAL

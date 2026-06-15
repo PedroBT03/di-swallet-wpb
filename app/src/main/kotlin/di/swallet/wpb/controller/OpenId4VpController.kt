@@ -1,3 +1,7 @@
+/**
+ * REST endpoints for the OpenID4VP presentation session lifecycle.
+ */
+
 package di.swallet.wpb.controller
 
 import di.swallet.wpb.observability.SessionEvent
@@ -20,6 +24,9 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
+/**
+ * Routes OpenID4VP presentation requests to the flow orchestrator with holder access checks.
+ */
 @RestController
 @RequestMapping("/openid4vp")
 @Tag(name = "OpenID4VP", description = "OpenID4VP + HAIP presentation lifecycle endpoints")
@@ -30,6 +37,9 @@ class OpenId4VpController(
     private val oid4SessionAccessGuard: Oid4SessionAccessGuard,
 ) {
 
+    /**
+     * Starts a new presentation session from a verifier authorization request URI.
+     */
     @PostMapping("/authorize")
     @Operation(summary = "Start OpenID4VP session")
     suspend fun authorize(@RequestBody request: AuthorizationStartRequest): PresentationContext {
@@ -39,6 +49,9 @@ class OpenId4VpController(
         )
     }
 
+    /**
+     * Returns the holder consent view for the WPI consent screen.
+     */
     @GetMapping("/session/{id}/consent-view")
     @Operation(
         summary = "Get presentation consent view for WPI",
@@ -52,6 +65,9 @@ class OpenId4VpController(
         return presentationFlowOrchestrator.getConsentView(id, holderId)
     }
 
+    /**
+     * Submits holder consent or rejection and requires FIDO2 authentication.
+     */
     @PostMapping("/consent")
     @Operation(summary = "Submit holder consent (requires FIDO2)")
     suspend fun consent(@RequestBody request: ConsentSubmission): PresentationContext {
@@ -62,6 +78,9 @@ class OpenId4VpController(
         )
     }
 
+    /**
+     * Returns the low-level presentation session context for debugging or advanced clients.
+     */
     @GetMapping("/session/{id}")
     @Operation(
         summary = "Get presentation session",
@@ -73,6 +92,9 @@ class OpenId4VpController(
         return session
     }
 
+    /**
+     * Returns the audit event timeline for a presentation session.
+     */
     @GetMapping("/session/{id}/events")
     @Operation(summary = "Get session events")
     suspend fun getSessionEvents(@PathVariable id: UUID): List<SessionEvent> {

@@ -1,3 +1,7 @@
+/**
+ * JUnit tag constants used to filter conformance test runs.
+ */
+
 package di.swallet.wpb.conformance
 
 object ConformanceTags {

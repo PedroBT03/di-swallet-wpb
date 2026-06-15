@@ -1,3 +1,7 @@
+/**
+ * Tests pseudonym assertion verification.
+ */
+
 package di.swallet.wpb.pseudonym
 
 import com.nimbusds.jose.crypto.impl.ECDSA
@@ -12,6 +16,10 @@ import java.security.interfaces.ECPublicKey
 import java.util.Base64
 
 class PseudonymAssertionVerificationTest {
+    /**
+     * Builds WebAuthn assertion authData and clientDataJSON, then signs the concatenated input with a device EC key pair.
+     * DER signature must verify with the public key and transcode to a 64-byte raw signature.
+     */
     @Test
     fun `assertion signature verifies with rp public key`() {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {

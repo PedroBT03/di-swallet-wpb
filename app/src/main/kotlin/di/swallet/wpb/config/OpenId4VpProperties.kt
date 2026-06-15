@@ -1,3 +1,7 @@
+/**
+ * Configuration properties for OpenID4VP presentation flows.
+ */
+
 package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -19,6 +23,7 @@ class OpenId4VpProperties {
 
     var session: SessionProperties = SessionProperties()
 
+    /** Verifier trust material source and refresh settings for presentation flows. */
     class TrustProperties {
         /** Comma-separated allow-list of verifier `client_id` values (empty = open). */
         var allowedClientIds: String = ""
@@ -53,19 +58,31 @@ class OpenId4VpProperties {
         /** Allow fail-open when trust is unavailable only if demo-mode is true (off by default). */
         var allowFailOpenInDemoMode: Boolean = false
 
+        /**
+         * Parses the comma-separated local trust anchor PEM paths into a list.
+         */
         fun localTrustAnchorPemPaths(): List<String> = localTrustAnchorPemPaths
             .split(',')
             .map { it.trim() }
             .filter { it.isNotBlank() }
 
+        /**
+         * Returns the configured trust source mode in lowercase.
+         */
         fun sourceModeNormalized(): String = sourceMode.trim().lowercase()
 
+        /**
+         * Parses the comma-separated allowed verifier client id list into a set.
+         */
         fun allowedClientIds(): Set<String> = allowedClientIds
             .split(',')
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .toSet()
 
+        /**
+         * Parses the comma-separated remote trust fetch host allow-list into a set.
+         */
         fun remoteAllowedHosts(): Set<String> = remoteAllowedHosts
             .split(',')
             .map { it.trim().lowercase() }
@@ -73,6 +90,7 @@ class OpenId4VpProperties {
             .toSet()
     }
 
+    /** RP registry validation and signed-response policy for presentation flows. */
     class RegistryProperties {
         /** Enables TS5/TS6 RP registry validation in presentation flows. */
         var enabled: Boolean = false
@@ -119,17 +137,26 @@ class OpenId4VpProperties {
         /** Require at least one privacy policy URI on the registry intended-use record. */
         var requirePrivacyPolicyUri: Boolean = false
 
+        /**
+         * Parses the comma-separated registry fetch host allow-list into a set.
+         */
         fun remoteAllowedHosts(): Set<String> = remoteAllowedHosts
             .split(',')
             .map { it.trim().lowercase() }
             .filter { it.isNotBlank() }
             .toSet()
 
+        /**
+         * Parses the comma-separated registry JWS verification key PEM paths into a list.
+         */
         fun verificationKeyPemPaths(): List<String> = verificationKeyPemPaths
             .split(',')
             .map { it.trim() }
             .filter { it.isNotBlank() }
 
+        /**
+         * Parses the comma-separated accepted registry issuer list into a set.
+         */
         fun allowedIssuers(): Set<String> = allowedIssuers
             .split(',')
             .map { it.trim() }
@@ -137,6 +164,7 @@ class OpenId4VpProperties {
             .toSet()
     }
 
+    /** Presentation session lifetime and expiry settings. */
     class SessionProperties {
         /** Presentation session TTL in seconds. */
         var ttlSeconds: Long = 600

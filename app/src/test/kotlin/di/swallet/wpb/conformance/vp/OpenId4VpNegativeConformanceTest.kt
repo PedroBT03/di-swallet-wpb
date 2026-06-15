@@ -1,3 +1,7 @@
+/**
+ * OpenID4VP negative conformance scenarios that expect early rejection.
+ */
+
 package di.swallet.wpb.conformance.vp
 
 import di.swallet.wpb.conformance.ConformanceScenario
@@ -21,6 +25,10 @@ class OpenId4VpNegativeConformanceTest {
         ConformanceFixtureLoader.loadFixture("fixtures/simple_claim.json"),
     )
 
+    /**
+     * Trust scenario marks the authorization client as untrusted before credential matching.
+     * startSession ends DISPATCHED with trust_rejected and a negative gateway dispatch.
+     */
     @Test
     @ConformanceScenario("vp_trust_untrusted_client")
     fun untrustedClientRejectsBeforeMatching() = runBlocking {
@@ -38,6 +46,10 @@ class OpenId4VpNegativeConformanceTest {
         assertTrue(harness.gateway.negativeCount >= 1)
     }
 
+    /**
+     * Registry scenario rejects intended use while trust would otherwise pass.
+     * Session dispatches negatively with registry_rejected or a negative gateway count.
+     */
     @Test
     @ConformanceScenario("vp_registry_intended_use_fail")
     fun registryRejectionDispatchesNegative() = runBlocking {
@@ -57,6 +69,10 @@ class OpenId4VpNegativeConformanceTest {
         )
     }
 
+    /**
+     * Harness starts with no wallet credentials for the DCQL request.
+     * startSession rejects as DISPATCHED with policy_rejected and a negative dispatch.
+     */
     @Test
     @ConformanceScenario("vp_no_matching_credentials")
     fun noMatchingCredentialsPolicyReject() = runBlocking {
@@ -68,6 +84,10 @@ class OpenId4VpNegativeConformanceTest {
         assertTrue(harness.gateway.negativeCount >= 1)
     }
 
+    /**
+     * Session reaches consent pending then the holder denies consent without selecting credentials.
+     * Outcome is DISPATCHED with negative dispatch and zero positive VP submissions.
+     */
     @Test
     @ConformanceScenario("vp_consent_denied")
     fun consentDeniedDispatchesNegative() = runBlocking {

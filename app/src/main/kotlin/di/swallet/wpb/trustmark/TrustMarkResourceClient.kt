@@ -1,3 +1,7 @@
+/**
+ * HTTP client with in-memory caching for remote TrustMarkResource JSON payloads.
+ */
+
 package di.swallet.wpb.trustmark
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -12,6 +16,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicReference
 
+/** Cached TrustMarkResource payload with HTTP cache metadata. */
 data class CachedTrustMarkResource(
     val payload: TrustMarkResourcePayload,
     val fetchedAt: Instant,
@@ -21,11 +26,16 @@ data class CachedTrustMarkResource(
     val expiresAt: Instant,
 )
 
+/** Abstraction for fetching and invalidating cached TrustMarkResource data. */
 interface TrustMarkResourceProvider {
+    /** Returns the cached or freshly fetched TrustMarkResource, honoring force refresh. */
     fun getResource(forceRefresh: Boolean): CachedTrustMarkResource?
+
+    /** Clears the in-memory TrustMarkResource cache entry. */
     fun invalidate()
 }
 
+/** Fetches TrustMarkResource JSON over HTTP with ETag revalidation and TTL caching. */
 @Component
 class TrustMarkResourceClient(
     private val properties: TrustMarkProperties,
@@ -38,6 +48,7 @@ class TrustMarkResourceClient(
         .build()
     private val cache = AtomicReference<CachedTrustMarkResource?>(null)
 
+    /** Returns a valid cached resource or fetches a new one when expired or forced. */
     override fun getResource(forceRefresh: Boolean): CachedTrustMarkResource? {
         val url = properties.trustMarkResourceUrl.trim()
         if (url.isBlank()) return null
@@ -48,10 +59,12 @@ class TrustMarkResourceClient(
         return fetch(url, cached?.takeIf { !forceRefresh })
     }
 
+    /** Drops the cached TrustMarkResource so the next read refetches remotely. */
     override fun invalidate() {
         cache.set(null)
     }
 
+    /** Performs conditional GET against the remote TrustMarkResource URL. */
     private fun fetch(url: String, previous: CachedTrustMarkResource?): CachedTrustMarkResource? {
         val builder = HttpRequest.newBuilder()
             .uri(URI.create(url))
@@ -105,6 +118,7 @@ class TrustMarkResourceClient(
         return entry
     }
 
+    /** Derives cache expiry from Cache-Control max-age or falls back to the configured TTL. */
     private fun resolveExpiry(response: HttpResponse<String>, fallback: Instant): Instant {
         val cacheControl = response.headers().firstValue("Cache-Control").orElse(null) ?: return fallback
         val maxAge = CACHE_MAX_AGE_REGEX.find(cacheControl)?.groupValues?.get(1)?.toLongOrNull()

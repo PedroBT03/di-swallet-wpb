@@ -1,3 +1,7 @@
+/**
+ * Tests wallet credential.
+ */
+
 package di.swallet.wpb.controller
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -18,9 +22,8 @@ class WalletCredentialTest : BaseIntegrationTest() {
     private lateinit var credentialKeyBindingRepository: CredentialKeyBindingRepository
 
     /**
-     * Validates the Format Engine ability to issue complex SD-JWT credentials.
-     * It verifies the multipart format and the persistence of the issued token
-     * under the new Dynamic Authorization policy.
+     * Initialises a wallet, creates a key, issues an SD-JWT, and checks the stored payload
+     * omits disclosures, persists an SD_JWT key binding, and appears in the credential list.
      */
     @Test
     fun `should issue SD-JWT and persist in database`() {

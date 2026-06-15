@@ -1,7 +1,12 @@
+/**
+ * Configuration properties for mDoc issuance and session transcript handling.
+ */
+
 package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 
+/** Binds `wpb.mdoc.*` settings for mDoc issuer keys and presentation transcript mode. */
 @ConfigurationProperties(prefix = "wpb.mdoc")
 class MdocProperties {
     /**
@@ -27,5 +32,8 @@ class MdocProperties {
     /** Fail presentation when holder HSM key alias is missing (non-demo paths). */
     var requireHolderKeyAlias: Boolean = true
 
+    /**
+     * Normalizes [sessionTranscriptMode] to lowercase for consistent comparisons.
+     */
     fun sessionTranscriptModeNormalized(): String = sessionTranscriptMode.trim().lowercase()
 }

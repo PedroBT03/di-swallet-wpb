@@ -1,3 +1,7 @@
+/**
+ * Extracts human-readable claim previews from issued credential payloads.
+ */
+
 package di.swallet.wpb.consent
 
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
@@ -5,9 +9,15 @@ import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import org.springframework.stereotype.Component
 import java.util.Base64
 
+/**
+ * Parses SD-JWT disclosures or JWT payload claims for the issuance consent screen.
+ */
 @Component
 class IssuedCredentialPreviewParser {
 
+    /**
+     * Returns claim preview items for the given issued credential format.
+     */
     fun parse(issued: IssuedCredential, deviceBound: Boolean): List<ClaimPreviewItem> = when (issued.format) {
         IssuanceCredentialFormat.SD_JWT_VC,
         IssuanceCredentialFormat.UNKNOWN,
@@ -21,6 +31,9 @@ class IssuedCredentialPreviewParser {
         )
     }
 
+    /**
+     * Prefers SD-JWT disclosures when present; otherwise falls back to the signed JWT payload.
+     */
     private fun parseSdJwt(rawPayload: String): List<ClaimPreviewItem> {
         val parts = rawPayload.split('~').filter { it.isNotBlank() }
         if (parts.isEmpty()) return emptyList()
@@ -35,6 +48,9 @@ class IssuedCredentialPreviewParser {
         return decodeJwtPayloadClaims(parts.first())
     }
 
+    /**
+     * Decodes a base64url SD-JWT disclosure array into a claim name and value pair.
+     */
     private fun decodeDisclosure(encoded: String): Pair<String, Any?>? {
         return try {
             val json = String(Base64.getUrlDecoder().decode(encoded.trim()))
@@ -49,6 +65,9 @@ class IssuedCredentialPreviewParser {
         }
     }
 
+    /**
+     * Reads non-standard JWT payload claims, skipping structural and metadata fields.
+     */
     private fun decodeJwtPayloadClaims(signedJwt: String): List<ClaimPreviewItem> {
         val payloadSegment = signedJwt.split('.').getOrNull(1) ?: return emptyList()
         return try {

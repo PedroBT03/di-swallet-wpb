@@ -1,3 +1,7 @@
+/**
+ * Builds the holder consent preview shown before credential presentation.
+ */
+
 package di.swallet.wpb.consent
 
 import di.swallet.wpb.config.ConsentProperties
@@ -8,6 +12,9 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
 
+/**
+ * Assembles verifier, registry, minimization, and credential choice data for the consent UI.
+ */
 @Component
 class PresentationConsentViewBuilder(
     private val consentProperties: ConsentProperties,
@@ -16,6 +23,9 @@ class PresentationConsentViewBuilder(
     private val walletCredentialRepository: WalletCredentialRepository,
 ) {
 
+    /**
+     * Returns the full presentation consent view when the session awaits holder approval.
+     */
     fun build(context: PresentationContext): PresentationConsentView {
         if (!consentProperties.enabled) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Presentation consent UX is disabled")
@@ -60,6 +70,9 @@ class PresentationConsentViewBuilder(
         )
     }
 
+    /**
+     * Maps presentation requirement queries into consent-screen query items with claim labels.
+     */
     private fun buildQueries(context: PresentationContext): List<QueryConsentItem> {
         val queries = context.presentationRequirements?.credentialQueries.orEmpty()
         return queries.map { query ->
@@ -76,6 +89,9 @@ class PresentationConsentViewBuilder(
         }
     }
 
+    /**
+     * Adds registry validation warnings that should appear on the consent screen.
+     */
     private fun buildRegistryWarnings(context: PresentationContext): List<ConsentWarning> {
         val warnings = mutableListOf<ConsentWarning>()
         val decision = context.registryDecision
@@ -91,6 +107,9 @@ class PresentationConsentViewBuilder(
         return warnings
     }
 
+    /**
+     * Looks up each candidate credential and sets whether it is device-bound.
+     */
     private fun enrichDeviceBound(groups: List<CredentialChoiceGroup>): List<CredentialChoiceGroup> =
         groups.map { group ->
             group.copy(

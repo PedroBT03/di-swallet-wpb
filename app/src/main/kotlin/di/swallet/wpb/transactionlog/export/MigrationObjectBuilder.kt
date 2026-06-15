@@ -1,3 +1,7 @@
+/**
+ * Assembles TS10 migration export payloads combining transaction log and credential metadata.
+ */
+
 package di.swallet.wpb.transactionlog.export
 
 import di.swallet.wpb.domain.WalletCredential
@@ -11,12 +15,14 @@ import di.swallet.wpb.transactionlog.CredentialIssuerResolver
 import di.swallet.wpb.transactionlog.service.TransactionLogService
 import org.springframework.stereotype.Component
 
+/** Builds [Ts10MigrationData] for wallet migration exports. */
 @Component
 class MigrationObjectBuilder(
     private val credentialRepository: WalletCredentialRepository,
     private val transactionLogService: TransactionLogService,
     private val credentialIssuerResolver: CredentialIssuerResolver,
 ) {
+    /** Collects full transaction log entries and credential summaries for a holder. Optionally includes non-device-bound credential payloads. */
     fun build(holderId: String, includeNonDeviceBound: Boolean): Ts10MigrationData {
         val credentials = credentialRepository.findByUserId(holderId)
         val transactionLog = transactionLogService.list(holderId)
@@ -33,6 +39,7 @@ class MigrationObjectBuilder(
         )
     }
 
+    /** Maps a stored credential to TS10 credential metadata without the raw payload. */
     private fun toCredentialInfo(credential: WalletCredential): Ts10CredentialInfo {
         val issuer = credentialIssuerResolver.resolve(credential)
         return Ts10CredentialInfo(
@@ -45,6 +52,7 @@ class MigrationObjectBuilder(
         )
     }
 
+    /** Maps a non-device-bound credential to a raw credential entry for migration. Returns null when encoded data is empty. */
     private fun toNonDeviceBound(credential: WalletCredential): Ts10NonDeviceBoundCredential? {
         val raw = credential.encodedData
         if (raw.isBlank()) return null
@@ -54,6 +62,7 @@ class MigrationObjectBuilder(
         )
     }
 
+    /** Infers TS10 credential format from credential type and encoded payload shape. */
     private fun inferFormat(credential: WalletCredential): String = when {
         credential.credentialType.contains("mdoc", ignoreCase = true) ||
             credential.credentialType.contains("mso", ignoreCase = true) -> "mso_mdoc"

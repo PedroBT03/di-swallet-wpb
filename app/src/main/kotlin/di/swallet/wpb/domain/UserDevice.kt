@@ -1,11 +1,14 @@
+/**
+ * JPA entity for FIDO2-registered user devices used to enforce sole control.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
 /**
- * Entity representing a user's physical device authorized via FIDO2/WebAuthn.
- * This stores the 'Authentication Key' used to unlock the 'Identity Key' in the HSM.
+ * Physical device credential that unlocks wallet operations through WebAuthn authentication.
  */
 @Entity
 @Table(name = "user_devices")

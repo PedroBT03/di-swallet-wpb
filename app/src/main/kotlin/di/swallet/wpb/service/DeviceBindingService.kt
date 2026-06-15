@@ -1,3 +1,7 @@
+/**
+ * Binds device public keys to wallet units during initialization and subsequent DPoP or PID-key setup.
+ */
+
 package di.swallet.wpb.service
 
 import di.swallet.wpb.config.WalletBindingProperties
@@ -15,6 +19,7 @@ import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDateTime
 
+/** Input for creating a wallet unit and binding initial device keys in one step. */
 data class WalletInitCommand(
     val holderId: String?,
     val devicePubJwk: String,
@@ -23,6 +28,7 @@ data class WalletInitCommand(
     val userDeviceId: Long? = null,
 )
 
+/** Summary of wallet ID, lifecycle state, and which device binding types are active. */
 data class WalletBindingResult(
     val walletId: String,
     val state: WalletUnitState,
@@ -30,6 +36,9 @@ data class WalletBindingResult(
     val pidKeyBound: Boolean,
 )
 
+/**
+ * Creates wallet units and records DPoP and PID-key thumbprint bindings to authorized devices.
+ */
 @Service
 class DeviceBindingService(
     private val walletUnitRepository: WalletUnitRepository,
@@ -38,6 +47,9 @@ class DeviceBindingService(
     private val walletUnitLifecycleService: WalletUnitLifecycleService,
     private val walletBindingProperties: WalletBindingProperties,
 ) {
+    /**
+     * Initializes a wallet unit, binds device keys, and activates the unit when bindings succeed.
+     */
     fun initWallet(command: WalletInitCommand): WalletBindingResult {
         val userDevice = resolveUserDevice(command)
         val walletUnit = walletUnitLifecycleService.createCandidate(command.holderId)
@@ -54,6 +66,9 @@ class DeviceBindingService(
         )
     }
 
+    /**
+     * Adds or refreshes the DPoP device key binding for an existing wallet unit.
+     */
     fun bindDpop(walletId: String, devicePubJwk: String, userDeviceId: Long? = null): WalletBindingResult {
         val walletUnit = walletUnitRepository.findByWalletId(walletId)
             .orElseThrow { IllegalArgumentException("wallet '$walletId' not found") }
@@ -63,6 +78,9 @@ class DeviceBindingService(
         return currentBindingStatus(activated)
     }
 
+    /**
+     * Adds a PID holder public key binding to an operational wallet unit.
+     */
     fun bindPidKey(walletId: String, pidPubJwk: String): WalletBindingResult {
         val walletUnit = walletUnitRepository.findByWalletId(walletId)
             .orElseThrow { IllegalArgumentException("wallet '$walletId' not found") }
@@ -71,6 +89,9 @@ class DeviceBindingService(
         return currentBindingStatus(walletUnit)
     }
 
+    /**
+     * Activates a candidate wallet unit after its first binding when still in CANDIDATE state.
+     */
     private fun maybeActivate(walletUnit: WalletUnit): WalletUnit =
         if (walletUnit.state == WalletUnitState.CANDIDATE) {
             walletUnitLifecycleService.activate(walletUnit)
@@ -78,6 +99,9 @@ class DeviceBindingService(
             walletUnit
         }
 
+    /**
+     * Stores a device key thumbprint binding when the same thumbprint is not already registered.
+     */
     private fun bind(
         walletUnit: WalletUnit,
         type: DeviceBindingType,
@@ -99,6 +123,9 @@ class DeviceBindingService(
         )
     }
 
+    /**
+     * Reports current DPoP and PID-key binding presence for a wallet unit.
+     */
     private fun currentBindingStatus(walletUnit: WalletUnit): WalletBindingResult {
         val all = deviceWalletBindingRepository.findByWalletUnitId(walletUnit.id!!)
         val dpop = all.any { it.bindingType == DeviceBindingType.DPOP }
@@ -111,6 +138,9 @@ class DeviceBindingService(
         )
     }
 
+    /**
+     * Resolves the FIDO2 user device when wallet init requires an authorized device record.
+     */
     private fun resolveUserDevice(command: WalletInitCommand): UserDevice? {
         if (!walletBindingProperties.requireUserDeviceOnInit) return null
         val userDeviceId = command.userDeviceId
@@ -118,9 +148,15 @@ class DeviceBindingService(
         return loadUserDevice(userDeviceId, command.holderId)
     }
 
+    /**
+     * Loads an optional FIDO2 user device when a device ID is supplied with a binding request.
+     */
     private fun resolveOptionalUserDevice(userDeviceId: Long?, holderId: String?): UserDevice? =
         userDeviceId?.let { loadUserDevice(it, holderId) }
 
+    /**
+     * Loads a user device and verifies it belongs to the expected holder when holderId is provided.
+     */
     private fun loadUserDevice(userDeviceId: Long, holderId: String?): UserDevice {
         val userDevice = userDeviceRepository.findById(userDeviceId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "UserDevice $userDeviceId not found") }

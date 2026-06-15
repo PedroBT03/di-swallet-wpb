@@ -1,28 +1,26 @@
+/**
+ * OpenID4VCI protocol models shared by adapters, controllers, and orchestration.
+ */
+
 package di.swallet.wpb.openid4vci.protocol
 
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import java.time.Instant
 
-/**
- * Authorization flow kind exposed by an OID4VCI credential offer.
- */
+/** Authorization grant type advertised by a credential offer. */
 enum class AuthorizationFlowKind {
     AUTHORIZATION_CODE,
     PRE_AUTHORIZED_CODE,
 }
 
-/**
- * Pre-authorized code grant details extracted from a credential offer.
- */
+/** Pre-authorized code grant details extracted from a credential offer. */
 data class PreAuthorizedGrant(
     val txCodeRequired: Boolean,
     val txCodeDescription: String? = null,
     val txCodeLength: Int? = null,
 )
 
-/**
- * Lightweight description of a credential configuration advertised by an issuer.
- */
+/** Credential configuration advertised by an issuer in its metadata. */
 data class CredentialConfigurationDescriptor(
     val id: String,
     val format: IssuanceCredentialFormat,
@@ -35,9 +33,7 @@ data class CredentialConfigurationDescriptor(
     val display: List<Map<String, String>> = emptyList(),
 )
 
-/**
- * Authorization server metadata captured by the adapter.
- */
+/** OAuth authorization server metadata captured by the adapter. */
 data class AuthorizationServerMetadata(
     val issuer: String,
     val authorizationEndpoint: String? = null,
@@ -48,9 +44,7 @@ data class AuthorizationServerMetadata(
     val grantTypesSupported: List<String> = emptyList(),
 )
 
-/**
- * Issuer metadata captured by the adapter and bound to the orchestrator.
- */
+/** Issuer metadata normalized for orchestration after adapter resolution. */
 data class ResolvedIssuerMetadata(
     val credentialIssuerId: String,
     val credentialEndpoint: String? = null,
@@ -63,9 +57,7 @@ data class ResolvedIssuerMetadata(
     val authorizationServers: List<AuthorizationServerMetadata> = emptyList(),
 )
 
-/**
- * Result of resolving a credential offer (by-value or by-reference).
- */
+/** Parsed credential offer resolved by value or by reference. */
 data class ResolvedOffer(
     val credentialIssuerId: String,
     val credentialConfigurationIds: List<String>,
@@ -76,12 +68,8 @@ data class ResolvedOffer(
 )
 
 /**
- * Adapter-owned authorization context that the orchestrator passes back when
- * completing the authorization code grant.
- *
- * `adapterSessionId` references the per-session SDK state stored inside the
- * adapter (Issuer + Prepared/Authorized request), keeping SDK types out of the
- * orchestrator.
+ * Authorization redirect details produced before the holder completes OAuth.
+ * [adapterSessionId] references in-flight SDK state inside the adapter.
  */
 data class PreparedAuthorization(
     val adapterSessionId: String,
@@ -93,9 +81,7 @@ data class PreparedAuthorization(
     val wiaAttached: Boolean = false,
 )
 
-/**
- * Adapter-opaque authorization context returned after token exchange.
- */
+/** Token exchange outcome returned to orchestration after authorization completes. */
 data class AuthorizedContext(
     val adapterSessionId: String,
     val accessTokenPresent: Boolean,
@@ -108,10 +94,8 @@ data class AuthorizedContext(
 )
 
 /**
- * WIA transport envelope passed from orchestration to the adapter.
- *
- * It represents the generated wallet attestation and its PoP token that must
- * be attached to PAR/token requests.
+ * Wallet attestation and proof-of-possession tokens sent to the issuer.
+ * These are attached to PAR and token requests by the adapter.
  */
 data class WalletAttestationTransport(
     val jwt: String,
@@ -120,6 +104,7 @@ data class WalletAttestationTransport(
     val expiresAt: Instant,
 )
 
+/** Device key attestation envelope required for device-bound credential issuance. */
 data class KeyAttestationTransport(
     val jwt: String,
     val keyId: String,
@@ -132,9 +117,8 @@ data class KeyAttestationTransport(
 )
 
 /**
- * Request payload for issuing a single credential.
- *
- * Either `credentialConfigurationId` or `credentialIdentifier` must be set.
+ * Single credential issuance request sent to the issuer.
+ * Either [credentialConfigurationId] or [credentialIdentifier] must be set.
  */
 data class IssuanceRequest(
     val credentialConfigurationId: String? = null,
@@ -142,9 +126,7 @@ data class IssuanceRequest(
     val claims: List<String> = emptyList(),
 )
 
-/**
- * Issued credential payload returned by the issuer to the wallet.
- */
+/** Credential payload returned by the issuer to the wallet. */
 data class IssuedCredential(
     val credentialConfigurationId: String,
     val format: IssuanceCredentialFormat,
@@ -153,27 +135,31 @@ data class IssuedCredential(
     val receivedAt: Instant = Instant.now(),
 )
 
-/**
- * Outcome of a credential request to the issuer.
- */
+/** Outcome of a credential request to the issuer. */
 sealed interface IssuanceOutcome {
+    /** Credential issued synchronously by the issuer. */
     data class Issued(val credentials: List<IssuedCredential>) : IssuanceOutcome
+
+    /** Issuance deferred; poll with the returned handle. */
     data class Deferred(val handle: di.swallet.wpb.issuance.domain.DeferredIssuanceHandle) : IssuanceOutcome
+
+    /** Credential request failed before a credential could be returned. */
     data class Failed(val code: String, val message: String) : IssuanceOutcome
 }
 
-/**
- * Outcome of polling a deferred issuance endpoint.
- */
+/** Outcome of polling a deferred issuance endpoint. */
 sealed interface DeferredQueryOutcome {
+    /** Deferred issuance completed and credentials are available. */
     data class Issued(val credentials: List<IssuedCredential>) : DeferredQueryOutcome
+
+    /** Issuance is still pending; continue polling with the updated handle. */
     data class StillPending(val updatedHandle: di.swallet.wpb.issuance.domain.DeferredIssuanceHandle) : DeferredQueryOutcome
+
+    /** Deferred polling failed. */
     data class Failed(val code: String, val message: String) : DeferredQueryOutcome
 }
 
-/**
- * Wallet -> Issuer notification event payload.
- */
+/** Wallet-to-issuer notification events defined by OID4VCI. */
 enum class NotificationEvent {
     CREDENTIAL_ACCEPTED,
     CREDENTIAL_DELETED,

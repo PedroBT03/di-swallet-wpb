@@ -1,3 +1,7 @@
+/**
+ * JPA entity mapping holders and attestations to Key Attestation status-list bit indices.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.Column
@@ -9,7 +13,7 @@ import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
 
 /**
- * Durable mapping from holder (+ issuer scope + attestation fingerprint) to a KA status-list bit index.
+ * Durable holder-to-bit-index mapping for KA status entries, scoped by issuer and attestation fingerprint.
  */
 @Entity
 @Table(

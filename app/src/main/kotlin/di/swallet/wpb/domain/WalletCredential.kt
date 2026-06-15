@@ -1,3 +1,7 @@
+/**
+ * JPA entity for stored verifiable credentials with encrypted disclosures and revocation metadata.
+ */
+
 package di.swallet.wpb.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnore
@@ -5,8 +9,7 @@ import jakarta.persistence.*
 import java.time.LocalDateTime
 
 /**
- * Represents a Verifiable Credential (e.g., PID) stored in the wallet.
- * It links the identity data (SD-JWT) to the hardware key used to sign it.
+ * Persisted SD-JWT credential linked to a wallet key and optional WP or issuer status list entry.
  */
 @Entity
 @Table(name = "wallet_credentials")

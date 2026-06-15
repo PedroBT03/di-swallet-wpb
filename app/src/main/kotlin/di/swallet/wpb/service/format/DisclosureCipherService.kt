@@ -1,3 +1,7 @@
+/**
+ * Encrypts and decrypts SD-JWT disclosure sets at rest using AES-GCM.
+ */
+
 package di.swallet.wpb.service.format
 
 import di.swallet.wpb.config.WalletProperties
@@ -9,7 +13,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Encrypts SD-JWT disclosures at rest to reduce exposure of plaintext attributes in database storage.
+ * Protects plaintext SD-JWT disclosures in database storage with AES-256-GCM encryption.
  */
 @Service
 class DisclosureCipherService(
@@ -21,6 +25,9 @@ class DisclosureCipherService(
         require(it.size == 32) { "wallet.disclosures.encryption-key must decode to 32 bytes" }
     }
 
+    /**
+     * Joins disclosures with `~`, encrypts them with a random IV, and returns Base64 ciphertext.
+     */
     fun encrypt(disclosures: List<String>): String {
         val plaintext = disclosures.joinToString("~")
         val iv = ByteArray(12)
@@ -33,6 +40,9 @@ class DisclosureCipherService(
         return Base64.getEncoder().encodeToString(iv + ciphertext)
     }
 
+    /**
+     * Decrypts a stored disclosure blob and splits it back into individual disclosure strings.
+     */
     fun decrypt(encryptedDisclosures: String): List<String> {
         if (encryptedDisclosures.isBlank()) return emptyList()
 

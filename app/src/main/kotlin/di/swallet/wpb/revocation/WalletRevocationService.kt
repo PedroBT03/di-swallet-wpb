@@ -1,3 +1,7 @@
+/**
+ * Revokes wallet units, credentials, keys, and attestations through the status list bitstring.
+ */
+
 package di.swallet.wpb.revocation
 
 import di.swallet.wpb.domain.CredentialRevocationState
@@ -18,6 +22,9 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
+/**
+ * Coordinates credential and wallet-unit revocation across status lists, HSM keys, and lifecycle state.
+ */
 @Service
 class WalletRevocationService(
     private val walletUnitRepository: WalletUnitRepository,
@@ -31,6 +38,9 @@ class WalletRevocationService(
     private val credentialRevocationGuard: CredentialRevocationGuard,
     private val hsmService: HsmService,
 ) {
+    /**
+     * Revokes a single WP-managed credential by setting its status-list bit and local revocation state.
+     */
     @Transactional
     fun revokeCredential(credentialId: Long) {
         val credential = walletCredentialRepository.findById(credentialId)
@@ -50,6 +60,9 @@ class WalletRevocationService(
         walletCredentialRepository.save(credential)
     }
 
+    /**
+     * Revokes an entire wallet unit and cascades revocation to WIA, KA, keys, and WP-managed credentials.
+     */
     @Transactional
     fun revokeWalletUnit(walletId: String) {
         val walletUnit = walletUnitRepository.findByWalletId(walletId)
@@ -79,6 +92,9 @@ class WalletRevocationService(
             }
     }
 
+    /**
+     * Marks all key attestation records for a wallet unit as revoked.
+     */
     private fun markKeyAttestationsRevoked(walletUnit: WalletUnit) {
         val unitId = walletUnit.id ?: return
         keyAttestationRepository.findByWalletUnitId(unitId).forEach { record ->

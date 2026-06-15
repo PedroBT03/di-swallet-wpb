@@ -1,3 +1,7 @@
+/**
+ * Tests dpa report privacy.
+ */
+
 package di.swallet.wpb.dpareport
 
 import di.swallet.wpb.config.DpaReportProperties
@@ -26,6 +30,11 @@ class DpaReportPrivacyTest {
         }
     }
 
+    /**
+     * Initiates a DPA report for a presentation with given_name in the transaction log and
+     * expects the response and Ts10DpaReport serialization to contain claim paths only, not
+     * personal names, JWT fragments, or raw credential payloads.
+     */
     @Test
     fun `substantiation and dpa report contain claim paths only`() {
         val transactionLogService = mock(TransactionLogService::class.java)

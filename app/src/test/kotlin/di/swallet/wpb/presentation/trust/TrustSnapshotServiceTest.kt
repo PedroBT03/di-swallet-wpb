@@ -1,3 +1,7 @@
+/**
+ * Tests trust snapshot loading, refresh, and availability reporting.
+ */
+
 package di.swallet.wpb.presentation.trust
 
 import di.swallet.wpb.config.OpsProperties
@@ -29,6 +33,10 @@ import com.sun.net.httpserver.HttpServer
 
 class TrustSnapshotServiceTest {
 
+    /**
+     * Local trust file contains an empty JSON object with no anchors configured.
+     * refresh returns Unavailable whose reason mentions empty content.
+     */
     @Test
     fun `empty local trust document without anchors is unavailable`() {
         val emptyJson = writeTempFile("{}")
@@ -45,6 +53,10 @@ class TrustSnapshotServiceTest {
         )
     }
 
+    /**
+     * Hybrid mode is selected but local paths and remote URL are all blank.
+     * refresh returns Unavailable immediately.
+     */
     @Test
     fun `hybrid mode with no configured sources is unavailable`() {
         val props = OpenId4VpProperties().apply {
@@ -58,6 +70,10 @@ class TrustSnapshotServiceTest {
         assertTrue(availability is TrustSnapshotAvailability.Unavailable)
     }
 
+    /**
+     * File mode points at local verifier JSON and anchor PEM on disk.
+     * currentAvailability is Available with one anchor and the expected client_id entity.
+     */
     @Test
     fun `loads trust snapshot from local files in file mode`() {
         val cert = selfSignedCert()
@@ -90,6 +106,10 @@ class TrustSnapshotServiceTest {
         assertTrue(snapshot.entities.containsKey("client_id:verifier-demo-client"))
     }
 
+    /**
+     * Hybrid mode loads local trust while the remote URL is unreachable.
+     * Snapshot stays Available with source local and the local verifier entity present.
+     */
     @Test
     fun `hybrid mode tolerates remote outage and keeps local snapshot`() {
         val cert = selfSignedCert()
@@ -126,6 +146,10 @@ class TrustSnapshotServiceTest {
         assertTrue(snapshot.entities.containsKey("client_id:verifier-demo-client"))
     }
 
+    /**
+     * Local and remote documents share entity-1 but disagree on client_id and metadata source.
+     * Merged snapshot keeps remote metadata and client_id bar, dropping local foo.
+     */
     @Test
     fun `hybrid mode uses remote over local for same entityId`() {
         val localCert = selfSignedCert()
@@ -179,6 +203,10 @@ class TrustSnapshotServiceTest {
         }
     }
 
+    /**
+     * Local and remote each contribute anchors, including one shared certificate.
+     * Hybrid snapshot contains three deduplicated trust anchors.
+     */
     @Test
     fun `hybrid mode deduplicates anchors by fingerprint`() {
         val shared = selfSignedCert()
@@ -215,6 +243,10 @@ class TrustSnapshotServiceTest {
         }
     }
 
+    /**
+     * Cached snapshot ages out and a subsequent remote refresh to a dead endpoint fails.
+     * currentAvailability becomes Unavailable after the max age elapses.
+     */
     @Test
     fun `snapshot expired and refresh fails returns unavailable`() {
         val cert = selfSignedCert()
@@ -238,6 +270,10 @@ class TrustSnapshotServiceTest {
         assertTrue(availability is TrustSnapshotAvailability.Unavailable)
     }
 
+    /**
+     * Valid cached snapshot exists when refresh switches to a failing remote source.
+     * refresh still returns Available using the cached snapshot.
+     */
     @Test
     fun `refresh failure keeps valid cached snapshot`() {
         val cert = selfSignedCert()
@@ -260,6 +296,10 @@ class TrustSnapshotServiceTest {
         assertTrue(refreshed is TrustSnapshotAvailability.Available)
     }
 
+    /**
+     * Remote-only mode is configured with no prior cache and the fetch target is down.
+     * refresh returns Unavailable.
+     */
     @Test
     fun `refresh failure without cache returns unavailable`() {
         val props = OpenId4VpProperties().apply {
@@ -274,6 +314,10 @@ class TrustSnapshotServiceTest {
         assertTrue(refreshed is TrustSnapshotAvailability.Unavailable)
     }
 
+    /**
+     * Production remote trust URL host is not listed in remoteAllowedHosts.
+     * refresh returns Unavailable citing allow-listed hosts.
+     */
     @Test
     fun `production rejects remote payload from host not in allow-list`() {
         val server = startServer("""{"verifiers":[{"clientId":"verifier-demo-client"}]}""")
@@ -295,6 +339,10 @@ class TrustSnapshotServiceTest {
         }
     }
 
+    /**
+     * Remote trust fetch fails before any snapshot is loaded.
+     * health reports DOWN.
+     */
     @Test
     fun `health is DOWN when no snapshot is loaded`() {
         val props = OpenId4VpProperties().apply {
@@ -309,6 +357,10 @@ class TrustSnapshotServiceTest {
         assertEquals(TrustSnapshotHealthStatus.DOWN, health.status)
     }
 
+    /**
+     * Hybrid mode loads classpath demo trust material via refresh.
+     * health reports UP afterward.
+     */
     @Test
     fun `health is UP after local snapshot load`() {
         val props = OpenId4VpProperties().apply {
@@ -322,12 +374,16 @@ class TrustSnapshotServiceTest {
         assertEquals(TrustSnapshotHealthStatus.UP, health.status)
     }
 
+    /** Writes content to a temporary file and returns its absolute path for trust snapshot tests. */
+    /** Writes content to a temporary file and returns its absolute path for trust property configuration. */
     private fun writeTempFile(content: String): String {
         val path = Files.createTempFile("lote-trust", ".tmp")
         Files.writeString(path, content)
         return path.toAbsolutePath().toString()
     }
 
+    /** Starts a local HTTP server on a random port that serves the given JSON body at /trust. */
+    /** Starts a local HTTP server on a random port that serves the given JSON body at /trust. */
     private fun startServer(body: String): HttpServer {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/trust") { exchange ->
@@ -340,15 +396,21 @@ class TrustSnapshotServiceTest {
         return server
     }
 
+    /** Formats an X509Certificate as a PEM block with standard BEGIN/END markers. */
+    /** Formats an X509Certificate as a single-line-base64 PEM certificate block. */
     private fun pem(cert: X509Certificate): String =
         "-----BEGIN CERTIFICATE-----\n${Base64.getEncoder().encodeToString(cert.encoded)}\n-----END CERTIFICATE-----\n"
 
+    /** Escapes a raw string for embedding as a JSON string literal in remote trust payloads. */
+    /** Escapes newlines and quotes so a PEM string can be embedded in JSON test payloads. */
     private fun jsonString(raw: String): String =
         "\"" + raw
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
             .replace("\n", "\\n") + "\""
 
+    /** Generates a short-lived self-signed EC trust-anchor certificate for snapshot loading tests. */
+    /** Generates a self-signed EC P-256 certificate valid for one hour from the current instant. */
     private fun selfSignedCert(): X509Certificate {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))

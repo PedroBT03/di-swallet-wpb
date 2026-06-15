@@ -1,3 +1,7 @@
+/**
+ * Tests bundled signing key policy.
+ */
+
 package di.swallet.wpb.ops
 
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -6,6 +10,10 @@ import org.junit.jupiter.api.Test
 
 class BundledSigningKeyPolicyTest {
 
+    /**
+     * Points status-list and mdoc key paths at bundled classpath dev resources and expects
+     * violations to list both wpb.status-list.signing-key-pem-path and wpb.mdoc.issuer-key-pem-path.
+     */
     @Test
     fun `flags bundled classpath signing keys`() {
         val violations = BundledSigningKeyPolicy.violations(
@@ -23,6 +31,10 @@ class BundledSigningKeyPolicyTest {
         )
     }
 
+    /**
+     * Uses file:/etc/... paths for status-list and mdoc issuer keys and expects the policy
+     * check to return an empty violation list.
+     */
     @Test
     fun `accepts external file paths`() {
         val violations = BundledSigningKeyPolicy.violations(

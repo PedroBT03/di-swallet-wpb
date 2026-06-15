@@ -1,3 +1,7 @@
+/**
+ * Extracts credential status list references from issued SD-JWT and JWT claim payloads.
+ */
+
 package di.swallet.wpb.revocation
 
 import com.fasterxml.jackson.databind.JsonNode
@@ -6,12 +10,15 @@ import com.nimbusds.jwt.SignedJWT
 import org.springframework.stereotype.Component
 
 /**
- * Best-effort extraction of credential status references from issued payloads.
+ * Best-effort parser for `credentialStatus` or `status` blocks in issued credential payloads.
  */
 @Component
 class CredentialStatusParser(
     private val objectMapper: ObjectMapper,
 ) {
+    /**
+     * Parses a status list reference from the issuer JWT portion of an SD-JWT string.
+     */
     fun parseFromSdJwt(raw: String): CredentialStatusReference? {
         val issuerJwt = raw.substringBefore('~').trim()
         if (issuerJwt.isBlank()) return null
@@ -21,11 +28,17 @@ class CredentialStatusParser(
         }.getOrNull()
     }
 
+    /**
+     * Parses a status list reference from a flat JWT claims map.
+     */
     fun parseFromClaimsMap(claims: Map<*, *>): CredentialStatusReference? {
         val node = objectMapper.valueToTree<JsonNode>(claims)
         return parseFromJsonNode(node)
     }
 
+    /**
+     * Reads `credentialStatus` or `status` fields from a JSON claims tree.
+     */
     private fun parseFromJsonNode(root: JsonNode): CredentialStatusReference? {
         val statusNode = root.path("credentialStatus").takeIf { !it.isMissingNode }
             ?: root.path("status").takeIf { !it.isMissingNode }
@@ -45,6 +58,9 @@ class CredentialStatusParser(
         return CredentialStatusReference(listUri = uri, listIndex = index, managedByWalletProvider = false)
     }
 
+    /**
+     * Returns a non-blank text field from a JSON node, or null when missing or empty.
+     */
     private fun textOrNull(node: JsonNode, field: String): String? {
         val value = node.path(field)
         if (value.isMissingNode || value.isNull) return null

@@ -1,3 +1,7 @@
+/**
+ * End-to-end tests for mdoc open id4 vp runtime.
+ */
+
 package di.swallet.wpb.presentation
 
 import di.swallet.wpb.conformance.ConformanceScenario
@@ -65,6 +69,10 @@ class MdocOpenId4VpRuntimeE2ETest {
     private val mdocRegistry = MdocDocTypeRegistry()
     private val mdocCodec = stack.codec
 
+    /**
+     * PID and mDL mdocs are issued into the wallet then presented through the full orchestrator.
+     * Positive flows dispatch valid device responses; an empty-wallet negative request ends policy_rejected.
+     */
     @Test
     @ConformanceScenario("vp_mdoc_runtime_e2e")
     fun `mdoc runtime supports PID and mDL positive and negative`() = runBlocking {
@@ -146,6 +154,7 @@ class MdocOpenId4VpRuntimeE2ETest {
         assertEquals("policy_rejected", negative.error?.code)
     }
 
+    /** Assembles a full orchestrator with real mdoc VP builder, permissive trust/registry stubs, and the given gateway. */
     private fun orchestrator(
         gateway: PresentationGatewayStub,
         repository: WalletCredentialRepository,
@@ -161,6 +170,7 @@ class MdocOpenId4VpRuntimeE2ETest {
             disclosureCipherService = DisclosureCipherService(testWalletProperties()),
             disclosureSelector = PresentationTestSupport.disclosureSelector,
             keyBindingJwtSigner = object : KeyBindingJwtSigner {
+                /** Returns a fixed KB-JWT stub so SD-JWT VP assembly does not require a real signing key. */
                 override fun signKeyBindingJwt(userId: String, payload: Map<String, Any>): String = "kb.jwt.stub"
             },
         )
@@ -173,10 +183,12 @@ class MdocOpenId4VpRuntimeE2ETest {
             gateway = gateway,
             repository = InMemoryPresentationSessionRepository(),
             trustValidator = object : TrustValidator {
+                /** Marks every verifier as trusted so mdoc matching and VP building can be exercised in isolation. */
                 override fun validate(context: PresentationContext): PresentationContext =
                     context.copy(trustDecision = TrustDecision(trusted = true, reason = "mdoc-runtime-e2e"))
             },
             registryValidator = object : RegistryValidator {
+                /** Accepts registry validation with intendedUseChecked so policy passes without a real TS5 lookup. */
                 override fun validate(context: PresentationContext): PresentationContext =
                     context.copy(
                         registryDecision = RegistryDecision(
@@ -203,6 +215,7 @@ class MdocOpenId4VpRuntimeE2ETest {
         )
     }
 
+    /** Starts a session, asserts consent pending, grants all candidates, and returns the dispatched context. */
     private suspend fun startAndConsent(
         orchestrator: DefaultPresentationFlowOrchestrator,
         request: ResolvedAuthorizationRequest,
@@ -221,6 +234,7 @@ class MdocOpenId4VpRuntimeE2ETest {
         )
     }
 
+    /** Builds a ResolvedAuthorizationRequest with an mso_mdoc DCQL query for the given doc type and claim. */
     private fun requestFor(queryId: String, docType: String, claim: String): ResolvedAuthorizationRequest {
         return ResolvedAuthorizationRequest(
             requestToken = "rt-$queryId",
@@ -237,6 +251,10 @@ class MdocOpenId4VpRuntimeE2ETest {
         )
     }
 
+    /**
+     * Runs the simulated OpenID4VCI issuance flow for one configuration id and persists
+     * the issued credential into JpaIssuedCredentialStorage for the holder.
+     */
     private fun issueAndStore(
         gateway: SimulatedOpenId4VciGateway,
         storage: JpaIssuedCredentialStorage,
@@ -261,6 +279,7 @@ class MdocOpenId4VpRuntimeE2ETest {
         storage.store(holderId = holderId, issued = issued, walletKey = holder.walletKey)
     }
 
+    /** Mockito-backed repository that assigns sequential ids and mirrors saves into the supplied mutable list. */
     private fun inMemoryRepository(state: MutableList<WalletCredential>): WalletCredentialRepository {
         val repository = mock(WalletCredentialRepository::class.java)
         val seq = AtomicLong(0)
@@ -286,6 +305,7 @@ class MdocOpenId4VpRuntimeE2ETest {
         return repository
     }
 
+    /** Returns fixed wallet attestation transport tokens for the simulated issuance authorization steps. */
     private fun walletAttestation(): WalletAttestationTransport = WalletAttestationTransport(
         jwt = "wia.jwt",
         popJwt = "wia.pop",
@@ -293,6 +313,7 @@ class MdocOpenId4VpRuntimeE2ETest {
         expiresAt = Instant.now().plusSeconds(3600),
     )
 
+    /** Returns stub key attestation transport required by the PID issuance path in the simulated gateway. */
     private fun keyAttestation(): KeyAttestationTransport = KeyAttestationTransport(
         jwt = "ka.jwt",
         keyId = "proof-key",
@@ -307,6 +328,7 @@ class MdocOpenId4VpRuntimeE2ETest {
     private class PresentationGatewayStub : di.swallet.wpb.openid4vp.adapter.OpenId4VpGateway {
         var lastPositiveToken: VpToken? = null
 
+        /** Maps request URI suffixes to PID, mDL, or negative-scenario mdoc authorization requests. */
         override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution {
             val request = when {
                 requestUri.endsWith("request-pid") -> requestFor("pid", "eu.europa.ec.eudi.pid.1", "given_name")
@@ -316,18 +338,22 @@ class MdocOpenId4VpRuntimeE2ETest {
             return AuthorizationRequestResolution.Success(request)
         }
 
+        /** Stores the last positive VP token for post-dispatch assertions in the test. */
         override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken): PresentationDispatchOutcome {
             lastPositiveToken = vpToken
             return PresentationDispatchOutcome.VerifierAccepted(null)
         }
 
+        /** Acknowledges negative dispatches without forwarding to an external verifier. */
         override suspend fun dispatchNegative(requestToken: String): PresentationDispatchOutcome =
             PresentationDispatchOutcome.VerifierAccepted(null)
 
+        /** Acknowledges error dispatches without contacting a remote verifier endpoint. */
         override suspend fun dispatchError(errorToken: String): PresentationDispatchOutcome =
             PresentationDispatchOutcome.VerifierAccepted(null)
 
         companion object {
+            /** Builds a minimal mso_mdoc authorization request for the gateway stub companion helpers. */
             private fun requestFor(queryId: String, docType: String, claim: String): ResolvedAuthorizationRequest {
                 return ResolvedAuthorizationRequest(
                     requestToken = "rt-$queryId",

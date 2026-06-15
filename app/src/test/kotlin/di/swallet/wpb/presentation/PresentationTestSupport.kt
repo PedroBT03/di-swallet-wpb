@@ -1,3 +1,7 @@
+/**
+ * Shared test helpers for presentation.
+ */
+
 package di.swallet.wpb.presentation
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -18,6 +22,7 @@ object PresentationTestSupport {
     private val disclosureCipher = DisclosureCipherService(testWalletProperties())
     val disclosureSelector = SdJwtDisclosureSelector(objectMapper, sdJwtService)
 
+    /** Builds a DefaultCredentialMatcher wired with the supplied repository, mdoc stack, and demo flag. */
     fun credentialMatcher(
         repository: di.swallet.wpb.domain.WalletCredentialRepository,
         mdocCodec: MdocCredentialCodec,
@@ -33,6 +38,7 @@ object PresentationTestSupport {
         credentialRevocationGuard = RevocationTestSupport.noopGuard(),
     )
 
+    /** Creates a wallet credential with one encrypted SD-JWT disclosure for the named claim. */
     fun sdJwtCredential(
         id: Long,
         userId: String,

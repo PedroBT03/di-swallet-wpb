@@ -1,3 +1,7 @@
+/**
+ * HSM-backed JWS signing helpers for issuance attestations and proofs.
+ */
+
 package di.swallet.wpb.issuance.crypto
 
 import com.nimbusds.jose.JWSObject
@@ -8,10 +12,12 @@ import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.service.HsmService
 import org.springframework.stereotype.Service
 
+/** Signs compact JWS values with ES256 using keys held in the HSM. */
 @Service
 class JwsSigningService(
     private val hsmService: HsmService,
 ) {
+    /** Validates key status, signs the payload, and returns a compact ES256 JWS. */
     fun signJws(
         walletKey: WalletKey,
         header: com.nimbusds.jose.JWSHeader,

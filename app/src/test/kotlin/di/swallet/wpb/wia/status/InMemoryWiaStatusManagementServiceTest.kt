@@ -1,3 +1,7 @@
+/**
+ * Tests in memory wia status management service.
+ */
+
 package di.swallet.wpb.wia.status
 
 import di.swallet.wpb.service.StatusListService
@@ -9,6 +13,9 @@ import org.mockito.Mockito.`when`
 
 class InMemoryWiaStatusManagementServiceTest {
 
+    /**
+     * Same holder-issuer pair reuses index 7; a different issuer under the same holder gets index 8.
+     */
     @Test
     fun `allocates and reuses index per holder-issuer key`() {
         val status = mock(StatusListService::class.java)
@@ -25,6 +32,9 @@ class InMemoryWiaStatusManagementServiceTest {
         assertEquals(8, c.index)
     }
 
+    /**
+     * Two issuer scopes allocated for holder h2; revokeHolder revokes both indices 11 and 12.
+     */
     @Test
     fun `revoke holder revokes all allocated indexes`() {
         val status = mock(StatusListService::class.java)
@@ -41,4 +51,3 @@ class InMemoryWiaStatusManagementServiceTest {
         assertTrue(true)
     }
 }
-

@@ -1,3 +1,7 @@
+/**
+ * Actuator health indicator for verifier trust snapshot freshness and availability.
+ */
+
 package di.swallet.wpb.ops.health
 
 import di.swallet.wpb.presentation.trust.TrustSnapshotHealth
@@ -7,10 +11,16 @@ import org.springframework.boot.actuate.health.Health
 import org.springframework.boot.actuate.health.HealthIndicator
 import org.springframework.stereotype.Component
 
+/**
+ * Exposes trust snapshot load time, age, and refresh failure count in actuator health.
+ */
 @Component
 class TrustSnapshotHealthIndicator(
     private val trustSnapshotService: TrustSnapshotService,
 ) : HealthIndicator {
+    /**
+     * Maps trust snapshot service health to Spring Boot actuator UP, DEGRADED, or DOWN.
+     */
     override fun health(): Health {
         val snapshotHealth = trustSnapshotService.health()
         val builder = when (snapshotHealth.status) {

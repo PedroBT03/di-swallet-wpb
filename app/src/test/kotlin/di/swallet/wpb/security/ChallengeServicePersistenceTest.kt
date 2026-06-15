@@ -1,3 +1,7 @@
+/**
+ * Tests challenge service persistence.
+ */
+
 package di.swallet.wpb.security
 
 import com.yubico.webauthn.AssertionRequest
@@ -26,6 +30,10 @@ class ChallengeServicePersistenceTest {
     @Autowired
     private lateinit var challengeRepository: Fido2AssertionChallengeRepository
 
+    /**
+     * Persists an assertion request in the JPA-backed store, retrieves it by challenge key,
+     * removes it, and expects the same key lookup to return null afterward.
+     */
     @Test
     fun `stores and consumes challenge by challenge key`() {
         val userId = "holder-a"
@@ -41,6 +49,10 @@ class ChallengeServicePersistenceTest {
         assertNull(challengeService.getRequest(userId, challengeKey))
     }
 
+    /**
+     * Stores two distinct assertion requests for the same user and expects both challenge
+     * keys to remain retrievable with a repository count of two.
+     */
     @Test
     fun `parallel challenges for same user do not replace each other`() {
         val userId = "holder-b"
@@ -57,6 +69,10 @@ class ChallengeServicePersistenceTest {
         assertNotNull(challengeService.getRequest(userId, secondKey))
     }
 
+    /**
+     * Builds a Yubico AssertionRequest with the given user id and a challenge byte array
+     * derived from the label, for store/retrieve/remove persistence scenarios.
+     */
     private fun assertionRequest(userId: String, challengeLabel: String): AssertionRequest {
         val options = PublicKeyCredentialRequestOptions.builder()
             .challenge(ByteArray(challengeLabel.toByteArray()))

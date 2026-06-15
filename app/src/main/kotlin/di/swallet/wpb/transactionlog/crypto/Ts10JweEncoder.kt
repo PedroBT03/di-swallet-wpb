@@ -1,3 +1,7 @@
+/**
+ * Password-based JWE encryption for transaction log and migration exports.
+ */
+
 package di.swallet.wpb.transactionlog.crypto
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -12,26 +16,31 @@ import di.swallet.wpb.transactionlog.domain.Ts10MigrationData
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionLogExport
 import org.springframework.stereotype.Component
 
+/** Encrypts TS10 export JSON as PBES2 JWE tokens. */
 @Component
 class Ts10JweEncoder(
     private val objectMapper: ObjectMapper,
 ) {
+    /** Serializes and encrypts a transaction log export with the holder password. */
     fun encryptTransactionLogExport(export: Ts10TransactionLogExport, password: CharArray): String {
         val json = objectMapper.writeValueAsString(export)
         return encryptJson(json, password)
     }
 
+    /** Serializes and encrypts migration data with the holder password. */
     fun encryptMigrationData(data: Ts10MigrationData, password: CharArray): String {
         val json = objectMapper.writeValueAsString(data)
         return encryptJson(json, password)
     }
 
+    /** Decrypts a compact JWE and returns the inner JSON string. */
     fun decryptToJson(jweCompact: String, password: CharArray): String {
         val jwe = JWEObject.parse(jweCompact)
         jwe.decrypt(PasswordBasedDecrypter(String(password)))
         return jwe.payload.toString()
     }
 
+    /** Encrypts JSON with PBES2-HS256+A128KW and A128GCM content encryption. */
     private fun encryptJson(json: String, password: CharArray): String {
         val header = JWEHeader.Builder(JWEAlgorithm.PBES2_HS256_A128KW, EncryptionMethod.A128GCM)
             .contentType("application/json")

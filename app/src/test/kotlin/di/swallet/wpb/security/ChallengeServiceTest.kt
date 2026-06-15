@@ -1,3 +1,7 @@
+/**
+ * Tests challenge service.
+ */
+
 package di.swallet.wpb.security
 
 import com.yubico.webauthn.AssertionRequest
@@ -21,6 +25,10 @@ class ChallengeServiceTest {
         challengeRepository = repository,
     )
 
+    /**
+     * Stores a FIDO2 assertion request, retrieves it by challenge key, removes it, and
+     * expects subsequent lookups to return null so each challenge can be used only once.
+     */
     @Test
     fun `challenge request should be single use only`() {
         val userId = "security-test-user"

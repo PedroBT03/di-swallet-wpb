@@ -1,3 +1,7 @@
+/**
+ * Builds selective SD-JWT presentations by filtering disclosures to requested claim paths.
+ */
+
 package di.swallet.wpb.service.format
 
 import di.swallet.wpb.format.sdjwt.SdJwtDisclosureSelector
@@ -6,8 +10,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 /**
- * Service responsible for creating selective presentations of SD-JWT credentials.
- * It allows the user to choose which claims to disclose to a Relying Party.
+ * Creates minimized SD-JWT presentations that reveal only the claims requested by a relying party.
  */
 @Service
 class PresentationService(
@@ -17,10 +20,7 @@ class PresentationService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Creates a minimized SD-JWT by filtering the original disclosures.
-     * @param fullSdJwt The complete SD-JWT string (JWT~Disc1~Disc2~...~)
-     * @param requestedClaims Claim names or dot-notation paths (e.g. `address.locality`)
-     * @return A new multipart SD-JWT string containing only the selected disclosures.
+     * Filters disclosures from a full SD-JWT to match the requested claim names or dot-notation paths.
      */
     fun createSelectivePresentation(fullSdJwt: String, requestedClaims: List<String>): String {
         val parts = fullSdJwt.split("~")

@@ -1,3 +1,7 @@
+/**
+ * HAIP-aligned SD-JWT verifiable presentation builder for wallet credentials.
+ */
+
 package di.swallet.wpb.format.sdjwt
 
 import di.swallet.wpb.domain.WalletCredentialRepository
@@ -35,6 +39,7 @@ class SdJwtVpBuilder(
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /** Assembles disclosures and a KB-JWT bound to verifier audience, nonce, and sd_hash. */
     fun build(
         selected: SelectedCredential,
         verifierAudience: String,
@@ -104,6 +109,7 @@ class SdJwtVpBuilder(
         return SdJwtVpResult(presentation = payload, disclosuresIncluded = 0, isDemo = true)
     }
 
+    /** Returns the URL-safe base64 SHA-256 digest of the canonical SD-JWT prefix. */
     private fun sha256Base64Url(value: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val bytes = digest.digest(value.toByteArray(Charsets.UTF_8))
@@ -111,6 +117,7 @@ class SdJwtVpBuilder(
     }
 }
 
+/** Result of building an SD-JWT VP, including whether a demo fallback was used. */
 data class SdJwtVpResult(
     val presentation: String,
     val disclosuresIncluded: Int,

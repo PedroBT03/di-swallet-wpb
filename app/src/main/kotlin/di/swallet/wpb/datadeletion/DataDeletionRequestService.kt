@@ -1,3 +1,7 @@
+/**
+ * Orchestrates GDPR deletion eligibility, contact resolution, and transaction logging.
+ */
+
 package di.swallet.wpb.datadeletion
 
 import di.swallet.wpb.transactionlog.domain.Ts10ClaimInfo
@@ -10,6 +14,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 
+/** Summary of a completed presentation eligible for a data deletion request. */
 data class EligiblePresentation(
     val presentationTransactionId: String,
     val rpIdentifier: String?,
@@ -19,6 +24,7 @@ data class EligiblePresentation(
     val hasStoredDeletionContacts: Boolean,
 )
 
+/** Request to initiate a deletion request against a stored presentation. */
 data class DataDeletionInitiateRequest(
     val holderId: String,
     val presentationTransactionId: String,
@@ -27,11 +33,13 @@ data class DataDeletionInitiateRequest(
     val consentRegistryLookup: Boolean = false,
 )
 
+/** One actionable deletion contact channel returned to the wallet UI. */
 data class DataDeletionActionResponse(
     val channel: String,
     val uri: String,
 )
 
+/** Result of initiating a deletion request with contact actions and user notices. */
 data class DataDeletionInitiateResponse(
     val transactionId: String,
     val sourcePresentationTransactionId: String,
@@ -42,6 +50,7 @@ data class DataDeletionInitiateResponse(
     val userNotice: String?,
 )
 
+/** Resolves deletion contacts, validates claim selection, and logs deletion transactions. */
 @Service
 class DataDeletionRequestService(
     private val transactionLogService: TransactionLogService,
@@ -50,6 +59,7 @@ class DataDeletionRequestService(
     private val mapper: DataDeletionRequestMapper,
     private val transactionLogger: TransactionLogger,
 ) {
+    /** Lists completed presentations with presented claims and an interacting party reference. */
     fun listEligible(holderId: String): List<EligiblePresentation> =
         transactionLogService.list(holderId)
             .asSequence()
@@ -72,6 +82,7 @@ class DataDeletionRequestService(
             }
             .toList()
 
+    /** Validates claim selection, builds contact actions, and records a deletion request transaction. */
     fun initiate(request: DataDeletionInitiateRequest): DataDeletionInitiateResponse {
         if (request.holderId.isBlank()) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "holderId is required")
@@ -113,12 +124,14 @@ class DataDeletionRequestService(
         )
     }
 
+    /** Returns true when the presentation has claims and an interacting party reference. */
     private fun isEligiblePresentation(presentation: Ts10Presentation): Boolean {
         if (presentation.listOfClaimsPresented.isEmpty()) return false
         return !presentation.interactingPartyIdentifier?.identifier.isNullOrBlank() ||
             !presentation.registrarURL.isNullOrBlank()
     }
 
+    /** Validates requested claims against what was actually presented. */
     private fun resolveClaimsToDelete(
         deleteAllPresented: Boolean,
         claimsToDelete: List<Ts10ClaimInfo>?,

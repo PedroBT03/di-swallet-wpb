@@ -1,3 +1,7 @@
+/**
+ * HTTP interceptor that enforces FIDO2 sole-control authentication on protected routes.
+ */
+
 package di.swallet.wpb.security
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -29,6 +33,9 @@ class AuthorizationInterceptor(
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Validates FIDO2 authorization, binds the holder context, and rejects mismatched holder ids.
+     */
     override fun preHandle(
         request: HttpServletRequest,
         response: HttpServletResponse,
@@ -101,6 +108,9 @@ class AuthorizationInterceptor(
         throw UnauthorizedWalletException("Invalid or expired FIDO2 authorization context")
     }
 
+    /**
+     * Rejects requests when query or path holder ids differ from the authenticated holder.
+     */
     private fun enforceRequestedHolderBinding(request: HttpServletRequest, authenticatedHolderId: String) {
         val queryHolderId = request.getParameter("holderId")?.takeIf { it.isNotBlank() }
         if (queryHolderId != null && queryHolderId != authenticatedHolderId) {
@@ -119,6 +129,9 @@ class AuthorizationInterceptor(
         }
     }
 
+    /**
+     * Stores an optional holder-supplied transaction log encryption key on the request.
+     */
     private fun bindHolderLogKey(request: HttpServletRequest) {
         val header = request.getHeader("X-Wallet-Log-Key")?.takeIf { it.isNotBlank() } ?: return
         try {

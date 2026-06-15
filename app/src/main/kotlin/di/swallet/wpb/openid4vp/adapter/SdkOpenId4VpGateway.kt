@@ -1,3 +1,7 @@
+/**
+ * EUDI OpenID4VP SDK adapter for request resolution and response dispatch.
+ */
+
 package di.swallet.wpb.openid4vp.adapter
 
 import com.nimbusds.jose.util.Base64URL
@@ -39,6 +43,10 @@ import java.net.URL
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Bridges the presentation orchestrator to the EUDI OpenID4VP SDK.
+ * Keeps SDK request objects inside the adapter and exposes normalized DTOs outward.
+ */
 @Service
 class SdkOpenId4VpGateway(
     private val openId4Vp: OpenId4Vp,
@@ -65,6 +73,7 @@ class SdkOpenId4VpGateway(
         return EncryptionParameters.DiffieHellman(Base64URL.encode(randomBytes))
     }
 
+    /** Resolves a verifier request URI through the SDK, with demo-mode fallback parsing. */
     override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution {
         return when (val resolution = openId4Vp.resolveRequestUri(requestUri)) {
             is Resolution.Success -> {
@@ -96,6 +105,7 @@ class SdkOpenId4VpGateway(
         }
     }
 
+    /** Parses authorization request JSON directly when demo-mode fallback is enabled. */
     private fun resolveRequestUriFallback(requestUri: String): AuthorizationRequestResolution? {
         return try {
             val raw = URI(requestUri).toURL().readText()
@@ -159,6 +169,7 @@ class SdkOpenId4VpGateway(
         }
     }
 
+    /** Decodes a JWT payload when the fetched request body is a compact JWS. */
     private fun decodeJwtPayloadIfNeeded(raw: String): String {
         val parts = raw.trim().split('.')
         if (parts.size == 3) {
@@ -169,12 +180,14 @@ class SdkOpenId4VpGateway(
         return raw
     }
 
+    /** Builds an invalid fallback resolution with a fresh error token. */
     private fun invalidFallback(code: String): AuthorizationRequestResolution.Invalid {
         val token = UUID.randomUUID().toString()
         val envelope = AuthorizationRequestErrorEnvelope(token, code, code)
         return AuthorizationRequestResolution.Invalid(envelope)
     }
 
+    /** Dispatches a positive presentation response through the SDK or demo fallback path. */
     override suspend fun dispatchPositive(requestToken: String, vpToken: VpToken): PresentationDispatchOutcome {
         val sdkRequest = requestStore[requestToken]
         if (sdkRequest != null) {
@@ -189,6 +202,7 @@ class SdkOpenId4VpGateway(
         return outcome
     }
 
+    /** Dispatches a negative presentation response through the SDK or demo fallback path. */
     override suspend fun dispatchNegative(requestToken: String): PresentationDispatchOutcome {
         val sdkRequest = requestStore[requestToken]
         if (sdkRequest != null) {
@@ -202,6 +216,7 @@ class SdkOpenId4VpGateway(
         return outcome
     }
 
+    /** Dispatches an authorization request error envelope back to the verifier. */
     override suspend fun dispatchError(errorToken: String): PresentationDispatchOutcome {
         val (sdkError, sdkDispatchDetails) = errorStore[errorToken] ?: return PresentationDispatchOutcome.VerifierRejected
         val details = sdkDispatchDetails ?: return PresentationDispatchOutcome.VerifierRejected
@@ -210,12 +225,14 @@ class SdkOpenId4VpGateway(
         return outcome
     }
 
+    /** Maps an SDK dispatch outcome into the presentation domain model. */
     private fun dispatchOutcome(outcome: DispatchOutcome): PresentationDispatchOutcome = when (outcome) {
         is DispatchOutcome.RedirectURI -> PresentationDispatchOutcome.RedirectUri(outcome.value)
         is DispatchOutcome.VerifierResponse.Accepted -> PresentationDispatchOutcome.VerifierAccepted(outcome.redirectURI)
         DispatchOutcome.VerifierResponse.Rejected -> PresentationDispatchOutcome.VerifierRejected
     }
 
+    /** Converts the wallet VP token into SDK verifiable presentation objects. */
     private fun VpToken.toSdkVerifiablePresentations(): VerifiablePresentations {
         val map = presentationsByQueryId.mapKeys { QueryId(it.key) }.mapValues { (_, values) ->
             values.map { VerifiablePresentation.Generic(it) }
@@ -223,6 +240,7 @@ class SdkOpenId4VpGateway(
         return VerifiablePresentations(map)
     }
 
+    /** Maps a resolved SDK request object into the public authorization request DTO. */
     private fun ResolvedRequestObject.toPublicRequest(requestToken: String, requestUri: String): ResolvedAuthorizationRequest {
         val queryIds = query.credentials.value.map { it.id.value }
         val formats = buildSet {
@@ -254,6 +272,7 @@ class SdkOpenId4VpGateway(
         )
     }
 
+    /** Sends a positive demo fallback response directly to the verifier endpoint. */
     private fun dispatchFallbackPositive(fallback: FallbackRequest, vpToken: VpToken): PresentationDispatchOutcome {
         return try {
             val target = fallback.responseUri ?: fallback.redirectUri
@@ -287,6 +306,7 @@ class SdkOpenId4VpGateway(
         }
     }
 
+    /** Sends a negative demo fallback response directly to the verifier endpoint. */
     private fun dispatchFallbackNegative(fallback: FallbackRequest): PresentationDispatchOutcome {
         return try {
             val target = fallback.responseUri ?: fallback.redirectUri
@@ -307,6 +327,7 @@ class SdkOpenId4VpGateway(
         }
     }
 
+    /** Appends a JSON-escaped string literal to the builder. */
     private fun StringBuilder.appendQuotedJson(value: String) {
         append('"')
         value.forEach { ch ->
@@ -324,6 +345,7 @@ class SdkOpenId4VpGateway(
         append('"')
     }
 
+    /** Minimal authorization request state used by the demo fallback dispatch path. */
     private data class FallbackRequest(
         val requestToken: String,
         val requestUri: String,
@@ -335,6 +357,7 @@ class SdkOpenId4VpGateway(
         val redirectUri: String?,
     )
 
+    /** Maps an SDK authorization request error into the public error envelope. */
     private fun AuthorizationRequestError.toPublicError(token: String, details: ErrorDispatchDetails?): AuthorizationRequestErrorEnvelope {
         return AuthorizationRequestErrorEnvelope(
             errorToken = token,
@@ -344,6 +367,7 @@ class SdkOpenId4VpGateway(
         )
     }
 
+    /** Maps SDK error dispatch details into the public dispatch details DTO. */
     private fun ErrorDispatchDetails.toPublicDispatchDetails(): DispatchDetails = DispatchDetails(
         responseMode = responseMode.toPublicMode(),
         nonce = nonce,
@@ -353,6 +377,7 @@ class SdkOpenId4VpGateway(
         redirectUri = responseMode.redirectUriOrNull(),
     )
 
+    /** Maps an SDK response mode into the application enum. */
     private fun ResponseMode.toPublicMode(): PresentationResponseMode = when (this) {
         is ResponseMode.DirectPost -> PresentationResponseMode.DIRECT_POST
         is ResponseMode.DirectPostJwt -> PresentationResponseMode.DIRECT_POST_JWT
@@ -362,12 +387,14 @@ class SdkOpenId4VpGateway(
         is ResponseMode.FragmentJwt -> PresentationResponseMode.FRAGMENT_JWT
     }
 
+    /** Returns the response URI for direct-post response modes. */
     private fun ResponseMode.responseUriOrNull(): String? = when (this) {
         is ResponseMode.DirectPost -> responseURI.toString()
         is ResponseMode.DirectPostJwt -> responseURI.toString()
         else -> null
     }
 
+    /** Returns the redirect URI for query and fragment response modes. */
     private fun ResponseMode.redirectUriOrNull(): String? = when (this) {
         is ResponseMode.Query -> redirectUri.toString()
         is ResponseMode.QueryJwt -> redirectUri.toString()
@@ -376,5 +403,6 @@ class SdkOpenId4VpGateway(
         else -> null
     }
 
+    /** Returns the verifier display name, defaulting to the client id. */
     private fun eu.europa.ec.eudi.openid4vp.Client.clientDisplayName(): String? = id.clientId
 }

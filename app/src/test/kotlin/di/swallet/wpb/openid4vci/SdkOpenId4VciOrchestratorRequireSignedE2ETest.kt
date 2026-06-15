@@ -1,3 +1,7 @@
+/**
+ * End-to-end tests for sdk open id4 vci orchestrator require signed.
+ */
+
 package di.swallet.wpb.openid4vci
 
 import com.github.tomakehurst.wiremock.WireMockServer
@@ -32,6 +36,7 @@ class SdkOpenId4VciOrchestratorRequireSignedE2ETest : BaseIntegrationTest() {
 
         @JvmStatic
         @DynamicPropertySource
+        /** Points the SDK orchestrator at WireMock with requireSigned metadata policy and demo mode disabled. */
         fun configure(registry: DynamicPropertyRegistry) {
             val issuer = "http://localhost:${wireMock.port()}"
             registry.add("wpb.openid4vci.demo-mode") { "false" }
@@ -42,12 +47,14 @@ class SdkOpenId4VciOrchestratorRequireSignedE2ETest : BaseIntegrationTest() {
 
         @JvmStatic
         @AfterAll
+        /** Stops the shared WireMock server after all tests in this class finish. */
         fun stopWireMock() {
             wireMock.stop()
         }
     }
 
     @BeforeEach
+    /** Resets WireMock and stubs unsigned issuer and authorization server metadata for rejection scenarios. */
     fun stubUnsignedMetadata() {
         wireMock.resetAll()
         configureFor("localhost", wireMock.port())
@@ -85,6 +92,10 @@ class SdkOpenId4VciOrchestratorRequireSignedE2ETest : BaseIntegrationTest() {
         )
     }
 
+    /**
+     * Metadata policy requireSigned is active and WireMock serves unsigned issuer metadata.
+     * resolveOffer ends in REJECTED with issuer_untrusted and a signed_metadata error message.
+     */
     @Test
     @ConformanceScenario("vci_metadata_unsigned_rejected")
     fun `requireSigned rejects unsigned issuer metadata in sdk orchestrator flow`() {

@@ -1,3 +1,7 @@
+/**
+ * Tests holder idor protection.
+ */
+
 package di.swallet.wpb.security
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -9,6 +13,10 @@ import java.util.UUID
 
 class HolderIdorProtectionTest : BaseIntegrationTest() {
 
+    /**
+     * Authenticates as holder-a but POSTs to create a key for holder-b and expects HTTP 403
+     * because the path userId must match the FIDO2-authenticated holder.
+     */
     @Test
     fun `rejects protected request when path userId does not match authenticated holder`() {
         val authenticatedHolder = "holder-a-${UUID.randomUUID()}"
@@ -26,6 +34,10 @@ class HolderIdorProtectionTest : BaseIntegrationTest() {
         assertEquals(HttpStatus.FORBIDDEN, response.statusCode)
     }
 
+    /**
+     * Authenticates as holder-a but GETs transactions with holderId=holder-b in the query
+     * and expects HTTP 403 because the query holder must match the session holder.
+     */
     @Test
     fun `rejects protected request when query holderId does not match authenticated holder`() {
         val authenticatedHolder = "holder-a-${UUID.randomUUID()}"

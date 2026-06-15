@@ -1,3 +1,7 @@
+/**
+ * JSON serialization helpers for persisting WebAuthn assertion requests.
+ */
+
 package di.swallet.wpb.security
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -7,6 +11,9 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.yubico.webauthn.AssertionRequest
 
+/**
+ * Encodes and decodes Yubico AssertionRequest objects for database storage.
+ */
 object AssertionRequestCodec {
     private val objectMapper: ObjectMapper = jacksonObjectMapper()
         .registerModule(Jdk8Module())
@@ -17,7 +24,13 @@ object AssertionRequestCodec {
             },
         )
 
+    /**
+     * Serializes an assertion request to JSON for durable challenge storage.
+     */
     fun encode(request: AssertionRequest): String = objectMapper.writeValueAsString(request)
 
+    /**
+     * Deserializes a previously stored assertion request from JSON.
+     */
     fun decode(json: String): AssertionRequest = objectMapper.readValue(json)
 }

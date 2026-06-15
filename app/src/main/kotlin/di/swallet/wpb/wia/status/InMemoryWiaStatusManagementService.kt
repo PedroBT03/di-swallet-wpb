@@ -1,3 +1,7 @@
+/**
+ * In-memory WIA status list mapping for unit tests.
+ */
+
 package di.swallet.wpb.wia.status
 
 import di.swallet.wpb.issuance.domain.WiaStatusReference
@@ -16,6 +20,7 @@ class InMemoryWiaStatusManagementService(
     private val byHolderIssuer = ConcurrentHashMap<String, Int>()
     private val holderEntries = ConcurrentHashMap<String, MutableSet<Int>>()
 
+    /** Allocates one stable index per holder and issuer scope key for the JVM lifetime. */
     override fun getOrAllocateStatus(holderId: String, issuerId: String?): WiaStatusReference {
         val key = buildKey(holderId, issuerId)
         val idx = byHolderIssuer.computeIfAbsent(key) {
@@ -30,13 +35,14 @@ class InMemoryWiaStatusManagementService(
         )
     }
 
+    /** Revokes all indices previously allocated for the holder in this JVM. */
     override fun revokeHolder(holderId: String) {
         holderEntries[holderId]?.forEach { idx ->
             statusListService.revoke(idx)
         }
     }
 
+    /** Builds the composite map key for holder and optional issuer scope. */
     private fun buildKey(holderId: String, issuerId: String?): String =
         "$holderId::${issuerId ?: "*"}"
 }
-

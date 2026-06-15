@@ -1,3 +1,7 @@
+/**
+ * Tests hsm pin startup validator.
+ */
+
 package di.swallet.wpb.ops
 
 import di.swallet.wpb.config.HsmProperties
@@ -7,6 +11,10 @@ import org.junit.jupiter.api.Test
 
 class HsmPinStartupValidatorTest {
 
+    /**
+     * Configures the known weak default HSM pin with allowKnownWeakPin=false and expects
+     * startup validation to throw IllegalStateException.
+     */
     @Test
     fun `fails when weak pin is used without explicit opt-in`() {
         val validator = HsmPinStartupValidator(
@@ -18,6 +26,10 @@ class HsmPinStartupValidatorTest {
         assertThrows(IllegalStateException::class.java) { validator.run(null) }
     }
 
+    /**
+     * Uses the known weak HSM pin but sets allowKnownWeakPin=true and expects startup
+     * validation to complete without throwing.
+     */
     @Test
     fun `allows weak pin when explicitly opted in`() {
         val validator = HsmPinStartupValidator(
@@ -29,6 +41,10 @@ class HsmPinStartupValidatorTest {
         assertDoesNotThrow { validator.run(null) }
     }
 
+    /**
+     * Sets a non-default staging HSM pin and expects startup validation to pass without
+     * requiring the weak-pin opt-in flag.
+     */
     @Test
     fun `passes with non-default pin`() {
         val validator = HsmPinStartupValidator(

@@ -1,3 +1,7 @@
+/**
+ * Configuration properties for PKCS#11 HSM integration.
+ */
+
 package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties

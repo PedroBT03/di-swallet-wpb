@@ -16,7 +16,7 @@ Exposed via `/actuator/metrics` and `/actuator/prometheus` when enabled.
 | Metric | Description |
 |--------|-------------|
 | `wpb.statuslist.get` | Status list publication GET latency |
-| `wpb.registry.lookup` | TS5 registry HTTP lookup latency |
+| `wpb.registry.lookup` | RP registry HTTP lookup latency |
 
 ## Health (Actuator)
 

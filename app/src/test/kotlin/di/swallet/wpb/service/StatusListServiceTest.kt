@@ -1,3 +1,7 @@
+/**
+ * Tests status list service.
+ */
+
 package di.swallet.wpb.service
 
 import di.swallet.wpb.config.StatusListProperties
@@ -16,6 +20,10 @@ class StatusListServiceTest {
     private val properties = StatusListProperties().apply { capacity = 1024 }
     private lateinit var statusListService: StatusListService
 
+    /**
+     * Mocks the PRIMARY_LIST repository entry and initialises StatusListService before each
+     * allocation and revocation test.
+     */
     @BeforeEach
     fun setup() {
         statusListService = StatusListService(repository, properties)
@@ -32,6 +40,9 @@ class StatusListServiceTest {
         statusListService.init()
     }
 
+    /**
+     * Two allocateRandomIndex calls return distinct values within capacity and mark the first index allocated.
+     */
     @Test
     fun `should allocate random indices within capacity`() {
         val firstIndex = statusListService.allocateRandomIndex()
@@ -43,6 +54,9 @@ class StatusListServiceTest {
         assertTrue(statusListService.isAllocated(firstIndex))
     }
 
+    /**
+     * Freshly allocated index is not revoked; after revoke(index) isRevoked returns true.
+     */
     @Test
     fun `should correctly set and check revocation bit`() {
         val index = statusListService.allocateRandomIndex()

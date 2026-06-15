@@ -1,3 +1,7 @@
+/**
+ * Helpers to generate device keys and WebAuthn assertions in tests.
+ */
+
 package di.swallet.wpb.security
 
 import java.security.*
@@ -7,12 +11,20 @@ import java.math.BigInteger
 
 object Fido2TestHelper {
 
+    /**
+     * Generates a fresh P-256 EC key pair matching the curve used by WebAuthn device
+     * registration and assertion signing in integration tests.
+     */
     fun generateDeviceKeyPair(): KeyPair {
         val kpg = KeyPairGenerator.getInstance("EC")
         kpg.initialize(ECGenParameterSpec("secp256r1"))
         return kpg.generateKeyPair()
     }
 
+    /**
+     * Crafts a minimal WebAuthn assertion map (clientDataJSON, authenticatorData, signature)
+     * signed with the device key over authData plus SHA-256 of client data for server verification.
+     */
     fun createWebAuthnAssertion(
         userId: String,
         credentialId: String,
@@ -53,12 +65,17 @@ object Fido2TestHelper {
         )
     }
 
+    /**
+     * Encodes the EC public key as a base64url COSE_Key (ES256 / P-256) suitable for
+     * Yubico WebAuthn device registration query parameters.
+     */
     fun getPublicKeyBase64(keyPair: KeyPair): String {
         // Convert EC public key to COSE format (what Yubico expects)
         val ecPublicKey = keyPair.public as java.security.interfaces.ECPublicKey
         val point = ecPublicKey.w
 
         // Extract X and Y coordinates, padded to 32 bytes each
+        /** Normalises a BigInteger coordinate to exactly 32 bytes for COSE encoding. */
         fun BigInteger.toBytes32(): ByteArray {
             val bytes = this.toByteArray()
             return when {
@@ -77,6 +94,7 @@ object Fido2TestHelper {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(cose)
     }
 
+    /** Manually CBOR-encodes a five-field COSE EC2 public key from padded X and Y coordinates. */
     private fun buildCoseKey(x: ByteArray, y: ByteArray): ByteArray {
         // Manual CBOR encoding of COSE EC2 key
         val out = java.io.ByteArrayOutputStream()

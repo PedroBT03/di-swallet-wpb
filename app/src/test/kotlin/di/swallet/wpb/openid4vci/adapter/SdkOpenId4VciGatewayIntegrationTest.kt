@@ -1,3 +1,7 @@
+/**
+ * Integration tests for sdk open id4 vci gateway.
+ */
+
 package di.swallet.wpb.openid4vci.adapter
 
 import com.github.tomakehurst.wiremock.WireMockServer
@@ -27,6 +31,7 @@ class SdkOpenId4VciGatewayIntegrationTest {
     private lateinit var server: WireMockServer
 
     @BeforeEach
+    /** Starts a fresh WireMock server on a random port and points the WireMock client at it. */
     fun setUp() {
         server = WireMockServer(0)
         server.start()
@@ -34,10 +39,15 @@ class SdkOpenId4VciGatewayIntegrationTest {
     }
 
     @AfterEach
+    /** Stops the WireMock server started for the current test. */
     fun tearDown() {
         server.stop()
     }
 
+    /**
+     * WireMock issuer serves metadata, token, credential, and notification endpoints for a full auth-code flow.
+     * Gateway resolves the offer, issues an SD-JWT VC, and notify returns true.
+     */
     @Test
     fun `demo-mode false gateway resolves authorizes requests and notifies`() {
         val issuer = "http://localhost:${server.port()}"
@@ -80,6 +90,10 @@ class SdkOpenId4VciGatewayIntegrationTest {
         assertTrue(notified)
     }
 
+    /**
+     * Credential endpoint returns a transaction_id and deferred endpoint later supplies the credential.
+     * requestCredential yields Deferred and queryDeferred completes with Issued.
+     */
     @Test
     fun `gateway handles deferred issuance path`() {
         val issuer = "http://localhost:${server.port()}"
@@ -113,6 +127,10 @@ class SdkOpenId4VciGatewayIntegrationTest {
         assertTrue(polled is di.swallet.wpb.openid4vci.protocol.DeferredQueryOutcome.Issued)
     }
 
+    /**
+     * strictResolution is enabled against an http WireMock issuer offer.
+     * resolveOffer throws IllegalStateException instead of falling back silently.
+     */
     @Test
     fun `strict resolution fails hard when SDK cannot resolve http offer`() {
         val issuer = "http://localhost:${server.port()}"
@@ -125,6 +143,7 @@ class SdkOpenId4VciGatewayIntegrationTest {
         }
     }
 
+    /** Builds an SdkOpenId4VciGateway targeting [issuer] with a stub proof JWT signer and optional strict resolution. */
     private fun gateway(issuer: String, strictResolution: Boolean = false): SdkOpenId4VciGateway {
         val properties = OpenId4VciProperties().apply {
             demoMode = false
@@ -132,6 +151,7 @@ class SdkOpenId4VciGatewayIntegrationTest {
             sdk.strictResolution = strictResolution
         }
         val signer = object : ProofJwtSigner {
+            /** Returns a fixed three-part JWT string embedding audience and c_nonce without real cryptography. */
             override fun sign(proof: ProofMaterial, audience: String, cNonce: String?): String {
                 return "eyJhbGciOiJFUzI1NiJ9.eyJhdWQiOiIkaudienceIiwiY25vbmNlIjoi${cNonce ?: ""}In0.signature"
             }
@@ -139,6 +159,7 @@ class SdkOpenId4VciGatewayIntegrationTest {
         return SdkOpenId4VciGateway(properties, signer)
     }
 
+    /** Registers WireMock stubs for standard OpenID credential issuer and OAuth authorization server metadata at [issuer]. */
     private fun stubStandardMetadata(issuer: String) {
         stubFor(get(urlEqualTo("/.well-known/openid-credential-issuer"))
             .willReturn(
@@ -179,6 +200,7 @@ class SdkOpenId4VciGatewayIntegrationTest {
             ))
     }
 
+    /** Minimal wallet attestation transport with placeholder JWTs and a one-hour expiry. */
     private fun wia() = di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport(
         jwt = "wia.jwt",
         popJwt = "wia.pop",
@@ -186,6 +208,7 @@ class SdkOpenId4VciGatewayIntegrationTest {
         expiresAt = Instant.now().plusSeconds(3600),
     )
 
+    /** Minimal key attestation transport with placeholder JWT, status list index 10, and a one-hour expiry. */
     private fun ka() = KeyAttestationTransport(
         jwt = "ka.jwt",
         keyId = "proof-key-1",
@@ -197,6 +220,7 @@ class SdkOpenId4VciGatewayIntegrationTest {
         statusListIndex = 10,
     )
 
+    /** Generates a fresh ES256 proof key pair with a unique key id for credential requests. */
     private fun proof(): ProofMaterial {
         val kp = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))

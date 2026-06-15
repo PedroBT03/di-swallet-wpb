@@ -1,8 +1,13 @@
+/**
+ * Configuration properties for presentation and issuance consent UX behavior.
+ */
+
 package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 
+/** Binds `wpb.consent.*` settings for holder consent screens and submission policy. */
 @ConfigurationProperties(prefix = "wpb.consent")
 class ConsentProperties {
     /** Master switch for presentation consent UX (OIA_06, RPA_07–10). */
@@ -20,6 +25,7 @@ class ConsentProperties {
     @NestedConfigurationProperty
     var issuance: IssuanceConsentProperties = IssuanceConsentProperties()
 
+    /** Settings specific to ISSU_11 issuance storage consent. */
     class IssuanceConsentProperties {
         /** Gate ISSU_11: holder approval before persisting issued credentials. */
         var enabled: Boolean = true

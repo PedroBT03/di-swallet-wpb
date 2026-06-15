@@ -1,3 +1,7 @@
+/**
+ * Configuration properties for OpenID4VCI credential issuance flows.
+ */
+
 package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -38,6 +42,7 @@ class OpenId4VciProperties {
     @NestedConfigurationProperty
     var ka: KaProperties = KaProperties()
 
+    /** EUDI SDK adapter settings forwarded to the real issuance client. */
     class SdkProperties {
         /** Optional hint of the credential issuer identifier (used by the real SDK adapter). */
         var credentialIssuerId: String = ""
@@ -61,6 +66,7 @@ class OpenId4VciProperties {
         var strictResolution: Boolean = true
     }
 
+    /** Issuer allow-list and signed metadata validation settings. */
     class TrustProperties {
         /** Comma-separated allow-list of issuer identifiers. Empty = depends on `demo-mode`. */
         var allowedIssuerIds: String = ""
@@ -68,6 +74,9 @@ class OpenId4VciProperties {
         /** Clock skew applied when validating signed issuer metadata JWT exp/nbf/iat claims. */
         var clockSkewSeconds: Long = 60
 
+        /**
+         * Parses the comma-separated allowed issuer id list into a set.
+         */
         fun allowedIssuerIds(): Set<String> = allowedIssuerIds
             .split(',')
             .map { it.trim() }
@@ -75,11 +84,13 @@ class OpenId4VciProperties {
             .toSet()
     }
 
+    /** Credential format policy gates such as mDoc allowance. */
     class PolicyProperties {
         /** Allow `mso_mdoc` credentials. Defaults to false and is controlled by policy gate. */
         var allowMdoc: Boolean = false
     }
 
+    /** In-process simulator behavior for demo and test issuance flows. */
     class SimulatorProperties {
         /** When true, every credential request resolves to a deferred outcome. */
         var alwaysDefer: Boolean = false
@@ -91,6 +102,7 @@ class OpenId4VciProperties {
         var deferredPollsBeforeIssue: Int = 1
     }
 
+    /** Wallet Instance Attestation token generation and status maintenance settings. */
     class WiaProperties {
         /** Enable WIA sub-context processing in issuance flow. */
         var enabled: Boolean = true
@@ -117,6 +129,9 @@ class OpenId4VciProperties {
         var maxNonceMismatchRetries: Int = 1
         var maxExpiredRetries: Int = 1
 
+        /**
+         * Parses configured WIA signing certificate material from PEM blocks or comma-separated DER.
+         */
         fun signingX5cChain(): List<String> {
             val raw = signingX5c.trim()
             if (raw.isBlank()) return emptyList()
@@ -135,6 +150,7 @@ class OpenId4VciProperties {
         }
     }
 
+    /** Key Attestation token generation, trust policy, and signing chain settings. */
     class KaProperties {
         /** Enable key attestation sub-context processing for device-bound issuance. */
         var enabled: Boolean = true
@@ -179,17 +195,26 @@ class OpenId4VciProperties {
         var trustMode: String = "relaxed"
         var trustAnchorPemPaths: String = ""
 
+        /**
+         * Parses the comma-separated allowed attestation certificate fingerprint list into a set.
+         */
         fun allowedX5cFingerprints(): Set<String> = allowedX5cFingerprints
             .split(',')
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .toSet()
 
+        /**
+         * Parses the comma-separated KA trust anchor PEM paths into a list.
+         */
         fun trustAnchorPemPaths(): List<String> = trustAnchorPemPaths
             .split(',')
             .map { it.trim() }
             .filter { it.isNotBlank() }
 
+        /**
+         * Parses configured KA signing certificate material from PEM blocks or comma-separated DER.
+         */
         fun signingX5cChain(): List<String> {
             val raw = signingX5c.trim()
             if (raw.isBlank()) return emptyList()

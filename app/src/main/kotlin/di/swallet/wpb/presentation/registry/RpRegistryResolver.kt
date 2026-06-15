@@ -1,3 +1,7 @@
+/**
+ * Resolves, verifies, and caches TS5 RP registry records and intended-use checks.
+ */
+
 package di.swallet.wpb.presentation.registry
 
 import di.swallet.wpb.config.OpenId4VpProperties
@@ -23,18 +27,23 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 sealed interface RegistryResolution {
+    /** Registry lookup and validation succeeded. */
     data class Accepted(
         val record: RpRegistryRecord,
         val sourceEndpoint: String,
         val intendedUseChecked: Boolean,
     ) : RegistryResolution
 
+    /** Registry lookup or validation failed. */
     data class Rejected(
         val reason: String,
         val sourceEndpoint: String? = null,
     ) : RegistryResolution
 }
 
+/**
+ * Looks up RP registry records, verifies signed responses, and validates intended use.
+ */
 @Component
 class RpRegistryResolver(
     private val properties: OpenId4VpProperties,
@@ -44,8 +53,10 @@ class RpRegistryResolver(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val cache = ConcurrentHashMap<String, CachedRegistryRecord>()
 
+    /** Loads an RP record by identifier without running intended-use validation. */
     fun lookupByIdentifier(rpIdentifier: String): RegistryResolution = resolveRecord(rpIdentifier)
 
+    /** Loads an RP record and validates requested credentials against registered intended use. */
     fun resolveAndValidate(
         rpIdentifier: String,
         credentialQueries: List<CredentialQuery>,
@@ -64,6 +75,7 @@ class RpRegistryResolver(
         )
     }
 
+    /** Resolves an RP record from cache or TS5 lookup endpoints. */
     private fun resolveRecord(rpIdentifier: String): RegistryResolution {
         val cached = cache[rpIdentifier]
         if (cached != null && !isExpired(cached.cachedAt)) {
@@ -90,13 +102,14 @@ class RpRegistryResolver(
         }
         return when (fallback) {
             is RegistryLookupOutcome.Rejected -> RegistryResolution.Rejected(fallback.reason, fallback.endpoint)
-            RegistryLookupOutcome.NotFound -> RegistryResolution.Rejected("RP '$rpIdentifier' not found in TS5 registry")
-            RegistryLookupOutcome.Unavailable -> RegistryResolution.Rejected("TS5 registry unavailable for '$rpIdentifier'")
-            null -> RegistryResolution.Rejected("TS5 registry unavailable for '$rpIdentifier'")
+            RegistryLookupOutcome.NotFound -> RegistryResolution.Rejected("RP '$rpIdentifier' not found in registry")
+            RegistryLookupOutcome.Unavailable -> RegistryResolution.Rejected("RP registry unavailable for '$rpIdentifier'")
+            null -> RegistryResolution.Rejected("RP registry unavailable for '$rpIdentifier'")
             else -> RegistryResolution.Rejected("unexpected registry lookup state")
         }
     }
 
+    /** Validates credential queries against registry intended use, remotely or locally. */
     private fun validateIntendedUse(
         rpIdentifier: String,
         record: RpRegistryRecord,
@@ -117,12 +130,13 @@ class RpRegistryResolver(
             RegistryResolution.Accepted(record, "local-fallback", intendedUseChecked = true)
         } else {
             RegistryResolution.Rejected(
-                reason = "Intended use mismatch against TS6 registered data",
+                reason = "Intended use mismatch against registered data",
                 sourceEndpoint = "local-fallback",
             )
         }
     }
 
+    /** Calls the TS5 check-intended-use endpoint when configured and available. */
     private fun runCheckIntendedUse(
         rpIdentifier: String,
         record: RpRegistryRecord,
@@ -146,19 +160,19 @@ class RpRegistryResolver(
                 if (response.statusCode == 404) return null
                 if (response.statusCode !in 200..299) {
                     return RegistryResolution.Rejected(
-                        reason = "TS5 check-intended-use rejected with status ${response.statusCode}",
+                        reason = "Registry check-intended-use rejected with status ${response.statusCode}",
                         sourceEndpoint = response.endpoint,
                     )
                 }
                 val body = response.body?.trim().orEmpty()
                 if (body.isBlank()) {
-                    return RegistryResolution.Rejected("TS5 check-intended-use returned empty response", response.endpoint)
+                    return RegistryResolution.Rejected("Registry check-intended-use returned empty response", response.endpoint)
                 }
                 val verified = runCatching { signatureVerifier.verifyCompactJws(body, response.endpoint) }.getOrElse { ex ->
-                    return RegistryResolution.Rejected("TS5 check-intended-use signature validation failed: ${ex.message}", response.endpoint)
+                    return RegistryResolution.Rejected("Registry check-intended-use signature validation failed: ${ex.message}", response.endpoint)
                 }
                 val result = verified.dataElement.jsonObject["isRegistered"]?.jsonPrimitive?.booleanOrNull
-                    ?: return RegistryResolution.Rejected("TS5 check-intended-use missing data.isRegistered", response.endpoint)
+                    ?: return RegistryResolution.Rejected("Registry check-intended-use missing data.isRegistered", response.endpoint)
                 if (!result) {
                     return RegistryResolution.Rejected(
                         "RP '$rpIdentifier' is not registered for requested intended use",
@@ -170,25 +184,27 @@ class RpRegistryResolver(
         return RegistryResolution.Accepted(record, "/wrp/check-intended-use", intendedUseChecked = true)
     }
 
+    /** Falls back to local intended-use matching against the cached registry record. */
     private fun localIntendedUseCheck(record: RpRegistryRecord, credentialQueries: List<CredentialQuery>): Boolean =
         RegistryIntendedUseMatcher.coversQueries(record, credentialQueries)
 
+    /** Verifies and parses one registry HTTP response into a lookup outcome. */
     private fun runLookup(response: RegistryHttpResponse?): RegistryLookupOutcome? {
         response ?: return RegistryLookupOutcome.Unavailable
         if (response.statusCode == 404) return RegistryLookupOutcome.NotFound
         if (response.statusCode !in 200..299) {
             return RegistryLookupOutcome.Rejected(
-                "TS5 registry lookup failed with status ${response.statusCode}",
+                "RP registry lookup failed with status ${response.statusCode}",
                 response.endpoint,
             )
         }
         val body = response.body?.trim().orEmpty()
         if (body.isBlank()) {
-            return RegistryLookupOutcome.Rejected("TS5 registry returned empty body", response.endpoint)
+            return RegistryLookupOutcome.Rejected("RP registry returned empty body", response.endpoint)
         }
         val verified = runCatching { signatureVerifier.verifyCompactJws(body, response.endpoint) }.getOrElse { ex ->
             return RegistryLookupOutcome.Rejected(
-                "TS5 registry signature validation failed: ${ex.message}",
+                "RP registry signature validation failed: ${ex.message}",
                 response.endpoint,
             )
         }
@@ -199,20 +215,21 @@ class RpRegistryResolver(
                 if (data.isEmpty()) return RegistryLookupOutcome.NotFound
                 if (data.size > 1) {
                     return RegistryLookupOutcome.Rejected(
-                        "TS5 lookup returned multiple RP records (ambiguous identity)",
+                        "RP registry lookup returned multiple RP records (ambiguous identity)",
                         response.endpoint,
                     )
                 }
                 parseRecord(data.first().jsonObject, body, verified.payloadJson.toString())
             }
             else -> return RegistryLookupOutcome.Rejected(
-                "TS5 registry 'data' claim has unsupported shape",
+                "RP registry 'data' claim has unsupported shape",
                 response.endpoint,
             )
         }
         return RegistryLookupOutcome.Found(record, response.endpoint)
     }
 
+    /** Normalizes the TS5 `data` object into an [RpRegistryRecord]. */
     private fun parseRecord(data: JsonObject, signedJwt: String, payloadJson: String): RpRegistryRecord {
         val identifier = data["identifier"].extractIdentifiers().firstOrNull()
             ?: throw IllegalStateException("TS5 record missing WalletRelyingParty.identifier")
@@ -249,12 +266,14 @@ class RpRegistryResolver(
         )
     }
 
+    /** Reads string values from a JSON string, array, or primitive field. */
     private fun JsonElement?.extractStringValues(): List<String> = when (this) {
         is JsonArray -> this.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
         is JsonPrimitive -> listOfNotNull(this.contentOrNull)
         else -> emptyList()
     }
 
+    /** Reads RP identifier values from TS5 identifier JSON shapes. */
     private fun JsonElement?.extractIdentifiers(): List<String> = when (this) {
         is JsonArray -> this.mapNotNull { item ->
             val obj = item as? JsonObject ?: return@mapNotNull null
@@ -264,6 +283,7 @@ class RpRegistryResolver(
         else -> emptyList()
     }
 
+    /** Reads multilingual purpose text from TS5 purpose arrays. */
     private fun JsonElement?.extractMultiLangContents(): List<String> = when (this) {
         is JsonArray -> this.mapNotNull { item ->
             val obj = item as? JsonObject ?: return@mapNotNull null
@@ -272,6 +292,7 @@ class RpRegistryResolver(
         else -> emptyList()
     }
 
+    /** Reads privacy policy URIs from TS5 privacyPolicy arrays. */
     private fun JsonElement?.extractPolicyUris(): List<String> = when (this) {
         is JsonArray -> this.mapNotNull { item ->
             val obj = item as? JsonObject ?: return@mapNotNull null
@@ -280,6 +301,7 @@ class RpRegistryResolver(
         else -> emptyList()
     }
 
+    /** Reads credential descriptors, including claim paths, from TS5 credential arrays. */
     private fun JsonElement?.extractCredentialDescriptors(): List<RegistryCredentialDescriptor> = when (this) {
         is JsonArray -> this.mapNotNull { item ->
             val obj = item as? JsonObject ?: return@mapNotNull null
@@ -296,11 +318,13 @@ class RpRegistryResolver(
         else -> emptyList()
     }
 
+    /** Returns true when a cached registry record exceeded the configured TTL. */
     private fun isExpired(cachedAt: Instant): Boolean {
         val ttl = Duration.ofSeconds(properties.registry.maxCacheAgeSeconds.coerceAtLeast(1))
         return cachedAt.plus(ttl).isBefore(Instant.now())
     }
 
+    /** Cached registry record with lookup timestamp and source endpoint. */
     private data class CachedRegistryRecord(
         val record: RpRegistryRecord,
         val cachedAt: Instant,
@@ -308,7 +332,10 @@ class RpRegistryResolver(
     )
 
     private sealed interface RegistryLookupOutcome {
+        /** Signed registry response parsed into an RP record. */
         data class Found(val record: RpRegistryRecord, val endpoint: String) : RegistryLookupOutcome
+
+        /** Registry response was present but failed verification or parsing. */
         data class Rejected(val reason: String, val endpoint: String? = null) : RegistryLookupOutcome
         data object NotFound : RegistryLookupOutcome
         data object Unavailable : RegistryLookupOutcome

@@ -1,3 +1,7 @@
+/**
+ * Tests status list publication.
+ */
+
 package di.swallet.wpb.controller
 
 import di.swallet.wpb.BaseIntegrationTest
@@ -13,6 +17,10 @@ import java.util.*
 @ConformanceTest
 class StatusListPublicationTest : BaseIntegrationTest() {
 
+    /**
+     * GETs the PRIMARY_LIST status list as JSON without authentication and expects a 200
+     * response with BitstringStatusList type, revocation purpose, encodedList, and capacity.
+     */
     @Test
     @ConformanceScenario("status_list_publication")
     fun `should publish revocation status list without authentication`() {
@@ -28,6 +36,10 @@ class StatusListPublicationTest : BaseIntegrationTest() {
         assertThat(response.body?.get("capacity")).isNotNull
     }
 
+    /**
+     * Creates a wallet key, revokes it, then GETs the status-list entry by returned index
+     * and expects status REVOKED with revoked=true for external verifier lookup.
+     */
     @Test
     fun `should expose revoked entry status for external verifier consumption`() {
         val userId = "status-list-user-${UUID.randomUUID()}"

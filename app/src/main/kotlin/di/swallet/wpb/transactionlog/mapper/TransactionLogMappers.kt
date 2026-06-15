@@ -1,3 +1,7 @@
+/**
+ * Maps wallet domain events to normative TS10 transaction payloads.
+ */
+
 package di.swallet.wpb.transactionlog.mapper
 
 import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
@@ -32,12 +36,14 @@ import org.springframework.stereotype.Component
 import java.time.Instant
 import java.util.UUID
 
+/** Builds TS10 Presentation transactions from presentation sessions or legacy controller calls. */
 @Component
 class PresentationTransactionMapper(
     private val contactBuilder: Ts10InteractingPartyContactBuilder,
     private val dpaContactBuilder: Ts10DpaContactBuilder,
     private val rpDnsNameResolver: RpDnsNameResolver,
 ) {
+    /** Maps a terminal presentation context to a TS10 Presentation transaction. Returns null when not loggable. */
     fun fromContext(context: PresentationContext, now: Instant = Instant.now()): Ts10Transaction? {
         val holderId = context.sessionMeta.holderId ?: return null
         if (holderId.isBlank()) return null
@@ -86,6 +92,7 @@ class PresentationTransactionMapper(
         )
     }
 
+    /** Builds a Presentation transaction from legacy wallet controller parameters. */
     fun fromLegacyPresentation(
         holderId: String,
         credentialType: String,
@@ -116,6 +123,7 @@ class PresentationTransactionMapper(
         )
     }
 
+    /** Returns true for terminal presentation states that should be logged. */
     private fun isLoggableTerminal(state: PresentationState): Boolean =
         state in setOf(
             PresentationState.DISPATCHED,
@@ -124,6 +132,7 @@ class PresentationTransactionMapper(
             PresentationState.EXPIRED,
         )
 
+    /** Collects requested claims from credential queries or candidate groupings. */
     private fun buildRequestedClaims(context: PresentationContext): List<Ts10ClaimInfo> {
         val queries = context.presentationRequirements?.credentialQueries.orEmpty()
         if (queries.isNotEmpty()) {
@@ -139,6 +148,7 @@ class PresentationTransactionMapper(
             }
     }
 
+    /** Maps a single credential query to TS10 claim info. */
     private fun claimInfoFromQuery(query: CredentialQuery): List<Ts10ClaimInfo> {
         val credentialId = query.credentialTypeHints.firstOrNull() ?: query.id
         return listOf(
@@ -149,6 +159,7 @@ class PresentationTransactionMapper(
         )
     }
 
+    /** Collects presented claims from selected credentials or candidate fallbacks. */
     private fun buildPresentedClaims(context: PresentationContext): List<Ts10ClaimInfo> {
         val selected = context.selectedCredentials
         if (selected.isNotEmpty()) {
@@ -169,19 +180,23 @@ class PresentationTransactionMapper(
             }
     }
 
+    /** Builds interacting-party contact strings from RP registry support URIs. */
     private fun buildContact(registry: RpRegistryRecord?): List<String> {
         if (registry == null) return emptyList()
         return contactBuilder.fromRegistry(registry)
     }
 
+    /** Builds DPA contact strings from supervisory authority registry data. */
     private fun buildDpaContact(dpa: di.swallet.wpb.presentation.domain.SupervisoryAuthorityContact?): List<String> {
         if (dpa == null) return emptyList()
         return dpaContactBuilder.fromSupervisoryAuthority(dpa)
     }
 }
 
+/** Builds TS10 CredentialIssuance transactions from issuance sessions or legacy calls. */
 @Component
 class IssuanceTransactionMapper {
+    /** Maps a terminal or partially issued issuance context to a TS10 CredentialIssuance transaction. */
     fun fromContext(
         context: IssuanceContext,
         issued: List<IssuedCredential> = emptyList(),
@@ -219,6 +234,7 @@ class IssuanceTransactionMapper {
         )
     }
 
+    /** Builds a completed CredentialIssuance transaction for the legacy issuance path. */
     fun fromLegacyIssuance(
         holderId: String,
         credentialType: String,
@@ -244,10 +260,12 @@ class IssuanceTransactionMapper {
     )
 }
 
+/** Builds TS10 CredentialDeletion transactions when a credential is removed from the wallet. */
 @Component
 class CredentialDeletionTransactionMapper(
     private val credentialIssuerResolver: CredentialIssuerResolver,
 ) {
+    /** Maps a wallet credential to a completed CredentialDeletion transaction. */
     fun fromCredential(credential: WalletCredential, now: Instant = Instant.now()): Ts10Transaction {
         val issuer = credentialIssuerResolver.resolve(credential)
         return Ts10Transaction(
@@ -264,10 +282,12 @@ class CredentialDeletionTransactionMapper(
     }
 }
 
+/** Builds TS10 SigningSealing transactions for document signing operations. */
 @Component
 class SigningTransactionMapper(
     private val crypto: TransactionLogCrypto,
 ) {
+    /** Maps a sign operation to a SigningSealing transaction with SHA-256 content hash. */
     fun fromSignOperation(
         payload: ByteArray,
         algorithm: String,

@@ -1,3 +1,7 @@
+/**
+ * Builds mdoc device responses for OpenID4VP presentation.
+ */
+
 package di.swallet.wpb.presentation.format
 
 import di.swallet.wpb.domain.WalletCredentialRepository
@@ -12,6 +16,9 @@ import di.swallet.wpb.domain.CredentialBindingFormat
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
+/**
+ * Encodes an mdoc device response for one selected credential and OpenID4VP handover data.
+ */
 @Service
 class MdocVpBuilder(
     private val walletCredentialRepository: WalletCredentialRepository,
@@ -21,6 +28,9 @@ class MdocVpBuilder(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Builds an mdoc presentation for [selected], filtering claims to those requested by the verifier.
+     */
     fun build(
         selected: SelectedCredential,
         handover: MdocOpenId4VpHandover,
@@ -61,6 +71,7 @@ class MdocVpBuilder(
         )
     }
 
+    /** Keeps only claims requested by the verifier, using doc-type claim mapping when available. */
     private fun filterClaims(
         decodedClaims: Map<String, Any?>,
         mapping: Map<String, String>,
@@ -76,6 +87,7 @@ class MdocVpBuilder(
         }
     }
 
+    /** Groups flat claim keys into ISO mdoc namespace maps. */
     private fun toNamespaceClaims(flatClaims: Map<String, Any?>): Map<String, Map<String, Any?>> {
         if (flatClaims.isEmpty()) return emptyMap()
         val grouped = linkedMapOf<String, MutableMap<String, Any?>>()
@@ -87,6 +99,7 @@ class MdocVpBuilder(
         return grouped
     }
 
+    /** Builds a synthetic demo presentation when no stored credential id is available. */
     private fun demoFallback(
         selected: SelectedCredential,
         handover: MdocOpenId4VpHandover,
@@ -112,6 +125,7 @@ class MdocVpBuilder(
     }
 }
 
+/** Result of encoding one mdoc presentation. */
 data class MdocVpResult(
     val presentation: String,
     val disclosedClaims: Int,

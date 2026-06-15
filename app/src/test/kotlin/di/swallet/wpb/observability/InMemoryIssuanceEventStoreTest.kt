@@ -1,3 +1,7 @@
+/**
+ * Tests in memory issuance event store.
+ */
+
 package di.swallet.wpb.observability
 
 import di.swallet.wpb.issuance.domain.IssuanceState
@@ -9,6 +13,10 @@ import java.util.UUID
 
 class InMemoryIssuanceEventStoreTest {
 
+    /**
+     * Two issuance events are recorded for the same session with different types and attributes.
+     * getEvents returns both in order, including the issuer attribute on the last entry.
+     */
     @Test
     fun `records and retrieves events for a session`() {
         val store = InMemoryIssuanceEventStore()
@@ -40,6 +48,10 @@ class InMemoryIssuanceEventStoreTest {
         assertEquals("https://example", events.last().attributes["issuer"])
     }
 
+    /**
+     * No events were recorded for the queried session id.
+     * getEvents returns an empty list.
+     */
     @Test
     fun `returns empty list for unknown session`() {
         val store = InMemoryIssuanceEventStore()

@@ -1,3 +1,7 @@
+/**
+ * RFC 7638 JWK thumbprint computation for EC P-256 keys.
+ */
+
 package di.swallet.wpb.issuance.crypto
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -13,6 +17,7 @@ import java.util.Base64
 object Rfc7638JwkThumbprint {
     private val objectMapper = ObjectMapper()
 
+    /** Computes a thumbprint from a JSON-encoded EC JWK string. */
     fun fromJwkJson(jwkJson: String): String {
         val jwk = objectMapper.readTree(jwkJson.trim())
         require(jwk.path("kty").asText() == "EC") { "Only EC JWK thumbprints are supported" }
@@ -24,6 +29,7 @@ object Rfc7638JwkThumbprint {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(digest)
     }
 
+    /** Computes a P-256 thumbprint from a Java EC public key. */
     fun fromEcPublicKey(publicKey: ECPublicKey): String {
         val encoder = Base64.getUrlEncoder().withoutPadding()
         val fieldSize = (publicKey.params.curve.field.fieldSize + 7) / 8
@@ -34,6 +40,7 @@ object Rfc7638JwkThumbprint {
         return encoder.encodeToString(digest)
     }
 
+    /** Decodes a URL-safe base64 X.509 public key and returns its RFC 7638 thumbprint. */
     fun fromPublicKeyBase64(publicKeyBase64: String): String {
         val bytes = Base64.getUrlDecoder().decode(publicKeyBase64)
         val spec = X509EncodedKeySpec(bytes)
@@ -41,6 +48,7 @@ object Rfc7638JwkThumbprint {
         return fromEcPublicKey(key)
     }
 
+    /** Left-pads or truncates a coordinate byte array to the curve field size. */
     private fun coordinate(value: java.math.BigInteger, size: Int): ByteArray {
         val rawInput = value.toByteArray()
         val raw = if (rawInput.size > size) rawInput.copyOfRange(rawInput.size - size, rawInput.size) else rawInput

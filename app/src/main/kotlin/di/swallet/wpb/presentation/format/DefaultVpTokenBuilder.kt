@@ -1,3 +1,7 @@
+/**
+ * Default VP token builder for SD-JWT and mdoc presentations.
+ */
+
 package di.swallet.wpb.presentation.format
 
 import di.swallet.wpb.format.mdoc.MdocOpenId4VpHandover
@@ -10,11 +14,7 @@ import org.springframework.stereotype.Service
 
 /**
  * Builds the OpenID4VP `vp_token` map keyed by DCQL query identifier.
- *
- *  - SD-JWT credentials are encoded as full SD-JWT VC presentations including
- *    the Key Binding JWT (HAIP).
- *  - MDOC credentials are encoded via [MdocVpBuilder] and carried as opaque
- *    mdoc payload strings through the adapter boundary.
+ * SD-JWT credentials include key binding; mdoc credentials are opaque payload strings.
  */
 @Service
 class DefaultVpTokenBuilder(
@@ -22,6 +22,9 @@ class DefaultVpTokenBuilder(
     private val mdocVpBuilder: MdocVpBuilder,
 ) : VpTokenBuilder {
 
+    /**
+     * Encodes all selected credentials into a VP token attached to the context.
+     */
     override fun build(context: PresentationContext): PresentationContext {
         val selected = context.selectedCredentials
         if (selected.isEmpty()) {
@@ -48,6 +51,7 @@ class DefaultVpTokenBuilder(
         )
     }
 
+    /** Encodes one selected credential in the format requested by its query. */
     private fun buildSingle(
         selected: SelectedCredential,
         request: di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest,

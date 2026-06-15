@@ -1,3 +1,7 @@
+/**
+ * Development-only mock credential issuance endpoints for local demos.
+ */
+
 package di.swallet.wpb.controller
 
 import com.nimbusds.jwt.JWTClaimsSet
@@ -42,6 +46,9 @@ class MockIssuerController(
     private val transactionLogger: TransactionLogger,
     private val authenticatedHolderGuard: AuthenticatedHolderGuard,
 ) {
+    /**
+     * Issues a plain signed JWT credential for local testing without persisting it.
+     */
     @PostMapping("/credentials/issue/{userId}")
     @Operation(summary = "Issue Mock PID", description = "Simulates the issuance of a Person Identification Data credential signed by the HSM")
     fun issueCredential(
@@ -75,6 +82,9 @@ class MockIssuerController(
         )
     }
 
+    /**
+     * Issues an SD-JWT PID, persists it in the wallet, and binds it to the holder key.
+     */
     @PostMapping("/credentials/issue-sd/{userId}")
     @Operation(summary = "Issue and Store SD-JWT", description = "Generates an SD-JWT and persists it in the database.")
     fun issueSdCredential(@PathVariable userId: String): WalletCredential {

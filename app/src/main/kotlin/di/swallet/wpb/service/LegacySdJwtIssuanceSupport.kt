@@ -1,3 +1,7 @@
+/**
+ * Dev-only helper that issues real key attestations for the legacy SD-JWT issuance endpoint.
+ */
+
 package di.swallet.wpb.service
 
 import di.swallet.wpb.domain.AttestedKeyRecordRepository
@@ -13,8 +17,7 @@ import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
 
 /**
- * Demo-only helper for the legacy `/credentials/issue-sd` path.
- * Registers a real KA (not synthetic) before credential-to-key binding.
+ * Registers a non-synthetic key attestation before legacy SD-JWT credential-to-key binding in dev.
  */
 @Service
 @Profile("dev")
@@ -24,6 +27,9 @@ class LegacySdJwtIssuanceSupport(
     private val attestedKeyRepository: AttestedKeyRecordRepository,
     private val walletUnitLifecycleService: WalletUnitLifecycleService,
 ) {
+    /**
+     * Issues and registers a key attestation for the holder key when none exists yet.
+     */
     fun ensureKaForHolderKey(holderId: String, keyAlias: String, publicKeyBase64: String) {
         if (attestedKeyRepository.findByKeyAlias(keyAlias).isPresent) return
         walletUnitLifecycleService.requireIssuanceEligible(holderId)
@@ -46,6 +52,9 @@ class LegacySdJwtIssuanceSupport(
         keyBindingRuntimeService.registerKeyAttestation(holderId, attestation)
     }
 
+    /**
+     * Decodes a Base64URL-encoded EC public key into an ECPublicKey instance.
+     */
     private fun decodeEcPublicKey(publicKeyBase64: String): ECPublicKey {
         val bytes = Base64.getUrlDecoder().decode(publicKeyBase64)
         val key = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(bytes))

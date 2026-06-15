@@ -1,3 +1,7 @@
+/**
+ * Scheduled job that syncs denormalized credential revocation state from the status list bitstring.
+ */
+
 package di.swallet.wpb.revocation
 
 import di.swallet.wpb.config.StatusListProperties
@@ -10,8 +14,7 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * Background sync of denormalized revocation state (VCR_19).
- * Presentation gates always consult the bitstring in real time.
+ * Periodically mirrors status-list revocation bits into credential revocation state for reporting (VCR_19).
  */
 @Component
 class CredentialRevocationSyncJob(
@@ -21,6 +24,9 @@ class CredentialRevocationSyncJob(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Updates credentials whose status-list bit is revoked but local state is still active.
+     */
     @Scheduled(cron = "\${wpb.status-list.sync-cron:0 0 * * * *}")
     @Transactional
     fun syncRevocationState() {

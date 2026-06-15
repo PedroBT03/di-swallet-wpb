@@ -1,3 +1,7 @@
+/**
+ * Scheduled job that warns holders and prunes old transaction log entries when limits are exceeded.
+ */
+
 package di.swallet.wpb.transactionlog.job
 
 import di.swallet.wpb.config.TransactionLogProperties
@@ -9,6 +13,7 @@ import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+/** Enforces per-holder entry limits and retention windows for the transaction log. */
 @Component
 class TransactionLogRetentionJob(
     private val repository: TransactionLogRepository,
@@ -18,6 +23,7 @@ class TransactionLogRetentionJob(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val warnedHolders = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
+    /** Runs retention enforcement for every holder with stored transaction log entries. */
     @Scheduled(cron = "\${wpb.transaction-log.retention-cron:0 30 2 * * *}")
     fun runRetention() {
         val holderIds = repository.findAll()
@@ -26,6 +32,7 @@ class TransactionLogRetentionJob(
         holderIds.forEach { holderId -> enforceRetention(holderId) }
     }
 
+    /** Warns once when count exceeds the limit, then prunes entries older than the retention cutoff. */
     private fun enforceRetention(holderId: String) {
         val count = transactionLogService.countActive(holderId)
         val maxEntries = properties.maxEntriesPerHolder.toLong()

@@ -1,3 +1,7 @@
+/**
+ * Eager trust snapshot loading at application startup.
+ */
+
 package di.swallet.wpb.presentation.trust
 
 import di.swallet.wpb.trust.core.TrustSnapshotAvailability
@@ -7,8 +11,7 @@ import org.springframework.boot.ApplicationRunner
 import org.springframework.stereotype.Component
 
 /**
- * Eagerly loads the trust snapshot at startup so actuator health and early
- * presentation requests see cached LoTE material without waiting for the scheduler.
+ * Loads trust material during startup so health checks and early requests see cached LoTE data.
  */
 @Component
 class TrustSnapshotStartupLoader(
@@ -16,6 +19,9 @@ class TrustSnapshotStartupLoader(
 ) : ApplicationRunner {
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Refreshes the trust snapshot once at startup and logs whether loading succeeded.
+     */
     override fun run(args: ApplicationArguments?) {
         when (val availability = trustSnapshotService.refresh()) {
             is TrustSnapshotAvailability.Available ->

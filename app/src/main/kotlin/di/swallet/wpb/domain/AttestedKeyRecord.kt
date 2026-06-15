@@ -1,3 +1,7 @@
+/**
+ * JPA entity for holder keys attested under a key attestation record.
+ */
+
 package di.swallet.wpb.domain
 
 import jakarta.persistence.Column
@@ -15,9 +19,7 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * Key entry attested by a specific KA.
- *
- * One KA may contain multiple attested keys (batch issuance support).
+ * HSM key entry covered by a key attestation, including alias, thumbprint, and binding state.
  */
 @Entity
 @Table(name = "attested_keys")
@@ -55,6 +57,7 @@ class AttestedKeyRecord(
     val walletKey: WalletKey? = null,
 )
 
+/** State of an attested holder key from attestation through binding or retirement. */
 enum class AttestedKeyState {
     ATTESTED,
     BOUND,

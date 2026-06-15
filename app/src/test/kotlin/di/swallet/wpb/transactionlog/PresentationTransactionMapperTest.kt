@@ -1,3 +1,7 @@
+/**
+ * Tests presentation transaction mapper.
+ */
+
 package di.swallet.wpb.transactionlog
 
 import di.swallet.wpb.presentation.domain.ClaimPath
@@ -33,6 +37,10 @@ class PresentationTransactionMapperTest {
         RpDnsNameResolver(DefaultVerifierCertificateExtractor()),
     )
 
+    /**
+     * Maps a dispatched presentation context where given_name was selected but no attribute values appear in the context.
+     * Serialized transaction must omit attribute values and list only the claim path keys under presented claims.
+     */
     @Test
     fun `maps claim paths only without attribute values`() {
         val now = Instant.parse("2025-07-29T09:11:20Z")
@@ -89,6 +97,10 @@ class PresentationTransactionMapperTest {
         assertEquals(listOf("given_name"), tx.presentation?.listOfClaimsPresented?.first()?.claims)
     }
 
+    /**
+     * Maps a presentation context carrying an RP registry record with support URIs and supervisory authority contacts.
+     * Transaction must populate interactingPartyContact with country, email, phone, and web channels, and dpaContact with DPA channels.
+     */
     @Test
     fun `classifies interacting party contact and dpa contact`() {
         val now = Instant.parse("2025-07-29T09:11:20Z")

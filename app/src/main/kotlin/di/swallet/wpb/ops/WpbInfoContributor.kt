@@ -1,3 +1,7 @@
+/**
+ * Actuator info contributor exposing non-secret operational configuration details.
+ */
+
 package di.swallet.wpb.ops
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -11,6 +15,9 @@ import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
 import java.util.Optional
 
+/**
+ * Publishes active profile, demo flags, and build metadata on the actuator /info endpoint.
+ */
 @Component
 class WpbInfoContributor(
     private val environment: Environment,
@@ -20,6 +27,9 @@ class WpbInfoContributor(
     private val swaggerProperties: SwaggerProperties,
     private val buildProperties: Optional<BuildProperties>,
 ) : InfoContributor {
+    /**
+     * Adds operational configuration and build details to the actuator info response.
+     */
     override fun contribute(builder: Info.Builder) {
         val operational = linkedMapOf<String, Any>(
             "profile" to environment.activeProfiles.toList(),

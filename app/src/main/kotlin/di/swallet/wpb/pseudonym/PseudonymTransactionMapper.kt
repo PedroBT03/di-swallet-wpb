@@ -1,3 +1,7 @@
+/**
+ * Maps pseudonym credential events to TS10 transaction log entries for audit export.
+ */
+
 package di.swallet.wpb.pseudonym
 
 import di.swallet.wpb.config.PseudonymProperties
@@ -14,10 +18,16 @@ import org.springframework.stereotype.Component
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * Builds TS10 transactions for pseudonym generation, deletion, and authentication events.
+ */
 @Component
 class PseudonymTransactionMapper(
     private val properties: PseudonymProperties,
 ) {
+    /**
+     * Creates a completed TS10 transaction for a newly registered pseudonym passkey.
+     */
     fun toGeneration(credential: PseudonymCredential, publicKeyCose: String, now: Instant = Instant.now()): Ts10Transaction =
         Ts10Transaction(
             transactionIdentifier = UUID.randomUUID().toString(),
@@ -29,6 +39,9 @@ class PseudonymTransactionMapper(
             ),
         )
 
+    /**
+     * Creates a completed TS10 transaction for a deleted pseudonym credential.
+     */
     fun toDeletion(credential: PseudonymCredential, publicKeyCose: String, now: Instant = Instant.now()): Ts10Transaction =
         Ts10Transaction(
             transactionIdentifier = UUID.randomUUID().toString(),
@@ -40,6 +53,9 @@ class PseudonymTransactionMapper(
             ),
         )
 
+    /**
+     * Creates a TS10 transaction for a pseudonymous authentication attempt at a relying party.
+     */
     fun toAuthentication(
         credential: PseudonymCredential,
         publicKeyCose: String,
@@ -65,6 +81,9 @@ class PseudonymTransactionMapper(
             ),
         )
 
+    /**
+     * Builds the TS10 pseudonym value from the COSE public key and optional alias.
+     */
     private fun ts10Pseudonym(credential: PseudonymCredential, publicKeyCose: String): Ts10Pseudonym =
         Ts10Pseudonym(
             value = publicKeyCose,

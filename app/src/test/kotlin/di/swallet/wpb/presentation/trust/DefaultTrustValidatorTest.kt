@@ -1,3 +1,7 @@
+/**
+ * Tests default trust validator.
+ */
+
 package di.swallet.wpb.presentation.trust
 
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
@@ -24,6 +28,7 @@ import java.util.UUID
 
 class DefaultTrustValidatorTest {
 
+    /** Builds a PresentationContext whose authorization request targets the given client id. */
     private fun context(clientId: String): PresentationContext {
         val now = Instant.now()
         return PresentationContext(
@@ -47,21 +52,25 @@ class DefaultTrustValidatorTest {
         )
     }
 
+    /** Wires DefaultTrustValidator with stub resolver, extractor, and certificate validation returning the given result. */
     private fun validator(
         properties: OpenId4VpProperties,
         availability: TrustSnapshotAvailability = TrustSnapshotAvailability.Unavailable("no_snapshot"),
         validationResult: AccessCertificateValidationResult = AccessCertificateValidationResult.Trusted,
     ): DefaultTrustValidator {
         val resolver = object : TrustSnapshotResolver {
+            /** Returns the fixed availability injected by the test helper. */
             override fun currentAvailability(): TrustSnapshotAvailability = availability
         }
         val extractor = object : VerifierCertificateExtractor {
+            /** Supplies a mocked leaf certificate regardless of the authorization request contents. */
             override fun extract(request: ResolvedAuthorizationRequest): VerifierCertificateMaterial? {
                 val cert = mock(X509Certificate::class.java)
                 return VerifierCertificateMaterial(chain = listOf(cert), leaf = cert)
             }
         }
         val validation = object : AccessCertificateValidationService {
+            /** Returns the preconfigured PKIX result without inspecting the certificate material. */
             override fun validate(
                 requestClientId: String,
                 material: VerifierCertificateMaterial,
@@ -71,6 +80,8 @@ class DefaultTrustValidatorTest {
         return DefaultTrustValidator(properties, resolver, extractor, validation)
     }
 
+    /** OpenId4VpProperties configured for demo mode, allow-list, and fail-open behaviour in tests. */
+    /** Returns OpenId4VpProperties configured for demo mode, allow-list, and fail-open behaviour. */
     private fun properties(
         demoMode: Boolean,
         allowedClientIds: String = "",
@@ -81,6 +92,10 @@ class DefaultTrustValidatorTest {
         this.trust.allowFailOpenInDemoMode = allowFailOpenInDemo
     }
 
+    /**
+     * Demo mode is on and the trust snapshot resolver is unavailable.
+     * Validation marks the redirect_uri client trusted with DEGRADED_DEMO_OPEN and a fail-open reason.
+     */
     @Test
     fun `fail-open in demo mode when trust source unavailable`() {
         val validator = validator(properties(demoMode = true))
@@ -90,6 +105,10 @@ class DefaultTrustValidatorTest {
         assertTrue(result.trustDecision?.reason?.contains("fail-open") == true)
     }
 
+    /**
+     * client_id uses an unsupported urn-unknown prefix.
+     * trustDecision is not trusted.
+     */
     @Test
     fun `rejects unsupported prefix`() {
         val validator = validator(properties(demoMode = true))
@@ -97,6 +116,10 @@ class DefaultTrustValidatorTest {
         assertFalse(result.trustDecision?.trusted == true)
     }
 
+    /**
+     * Demo mode is off and no trust snapshot is available.
+     * trustDecision is rejected with a Trust source unavailable reason.
+     */
     @Test
     fun `fail-closed outside demo mode when trust source unavailable`() {
         val validator = validator(properties(demoMode = false))
@@ -105,6 +128,10 @@ class DefaultTrustValidatorTest {
         assertTrue(result.trustDecision?.reason?.contains("Trust source unavailable") == true)
     }
 
+    /**
+     * Snapshot trusts two clients but allowedClientIds lists only verifier-demo-client.
+     * Allowed client passes; unknown-verifier is denied despite being in the snapshot.
+     */
     @Test
     fun `enforces allow list as secondary control`() {
         val snapshot = TrustSnapshot(
@@ -132,6 +159,10 @@ class DefaultTrustValidatorTest {
         assertFalse(denied.trustDecision?.trusted == true)
     }
 
+    /**
+     * Snapshot and allow-list accept the client but PKIX validation returns Rejected.
+     * trustDecision carries the pkix failed reason and is not trusted.
+     */
     @Test
     fun `rejects when certificate validation fails`() {
         val snapshot = TrustSnapshot(

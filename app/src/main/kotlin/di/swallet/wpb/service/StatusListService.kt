@@ -1,3 +1,7 @@
+/**
+ * Manages the persistent revocation bitstring and random index allocation for credentials and keys.
+ */
+
 package di.swallet.wpb.service
 
 import di.swallet.wpb.config.StatusListProperties
@@ -13,11 +17,7 @@ import java.security.SecureRandom
 import java.util.*
 
 /**
- * Service managing the persistent Status List Bitstring.
- * Implements the W3C/eIDAS 2.0 pattern where revocation is tracked via bits.
- * Bit 0 = ACTIVE, Bit 1 = REVOKED.
- *
- * Random index allocation within a fixed capacity (VCR_17).
+ * Tracks revocation and allocation bits in a fixed-capacity status list persisted to the database.
  */
 @Service
 class StatusListService(
@@ -31,7 +31,10 @@ class StatusListService(
     private val listId = "PRIMARY_LIST"
     private val secureRandom = SecureRandom()
 
-  @PostConstruct
+    /**
+     * Loads or creates the primary status list bitstrings from the database on application startup.
+     */
+    @PostConstruct
     fun init() {
         val capacity = properties.capacity
         val storedList = statusListRepository.findById(listId)
@@ -62,8 +65,7 @@ class StatusListService(
     }
 
     /**
-     * Allocates a random index within the fixed capacity (VCR_17).
-     * Retries on collision until a free slot is found.
+     * Allocates a random free index within the configured capacity, retrying on collisions.
      */
     @Transactional
     fun allocateRandomIndex(): Int {
@@ -87,6 +89,9 @@ class StatusListService(
     @Transactional
     fun getNextRevocationIndex(): Int = allocateRandomIndex()
 
+    /**
+     * Marks an index as allocated and revoked, then persists the updated bitstrings.
+     */
     @Transactional
     fun revoke(index: Int) {
         requireIndexInRange(index)
@@ -96,37 +101,67 @@ class StatusListService(
         logger.info("StatusList: Bit at index $index set to REVOKED and saved.")
     }
 
+    /**
+     * Returns true when the revocation bit is set for the given index.
+     */
     fun isRevoked(index: Int): Boolean {
         if (index < 0 || index >= getCapacity()) return false
         return revocationBitset.get(index)
     }
 
+    /**
+     * Returns true when the index has been allocated to a credential or key.
+     */
     fun isAllocated(index: Int): Boolean {
         if (index < 0 || index >= getCapacity()) return false
         return allocatedBitset.get(index)
     }
 
+    /**
+     * Returns the raw revocation bitstring bytes used to build status list JWTs.
+     */
     fun getRawBitstringBytes(): ByteArray = revocationBitset.toByteArray()
 
+    /**
+     * Returns the revocation bitstring encoded as standard Base64.
+     */
     fun getEncodedStatusList(): String =
         Base64.getEncoder().encodeToString(revocationBitset.toByteArray())
 
+    /**
+     * Returns the fixed identifier of the primary status list.
+     */
     fun getListId(): String = listId
 
+    /**
+     * Returns the configured or stored capacity of the status list.
+     */
     fun getCapacity(): Int =
         statusListRepository.findById(listId).map { it.capacity }.orElse(properties.capacity)
 
+    /**
+     * Returns the legacy next-index counter stored with the status list row.
+     */
     fun getCurrentNextIndex(): Int =
         statusListRepository.findById(listId)
             .orElseThrow { RuntimeException("Status list not initialized") }
             .nextIndex
 
+    /**
+     * Returns how many indices are currently marked as allocated.
+     */
     fun getAllocatedCount(): Int = allocatedBitset.cardinality()
 
+    /**
+     * Throws when an index is outside the current status list capacity range.
+     */
     private fun requireIndexInRange(index: Int) {
         require(index in 0 until getCapacity()) { "Index $index out of range [0, ${getCapacity()})" }
     }
 
+    /**
+     * Persists the in-memory revocation and allocation bitstrings to the database.
+     */
     private fun syncToDatabase(nextIndexOverride: Int? = null, capacityOverride: Int? = null) {
         val list = statusListRepository.findById(listId).orElse(StatusList(id = listId))
         list.bitstring = revocationBitset.toByteArray()

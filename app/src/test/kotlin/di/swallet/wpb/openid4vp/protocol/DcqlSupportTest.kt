@@ -1,3 +1,7 @@
+/**
+ * Tests dcql support.
+ */
+
 package di.swallet.wpb.openid4vp.protocol
 
 import di.swallet.wpb.presentation.domain.ClaimPathSegment
@@ -8,6 +12,10 @@ import org.junit.jupiter.api.Test
 
 class DcqlSupportTest {
 
+    /**
+     * Standard DCQL credentials JSON with PID vct hints and two claim paths is parsed.
+     * Single query exposes id, SD-JWT format, type hints, flat claim names, and path segments.
+     */
     @Test
     fun `parses standard DCQL credentials shape`() {
         val json = """
@@ -39,6 +47,10 @@ class DcqlSupportTest {
         )
     }
 
+    /**
+     * DCQL claim path spans address and locality segments.
+     * Parsed path lists both segments and dot-notation address.locality.
+     */
     @Test
     fun `parses multi-segment DCQL path`() {
         val json = """
@@ -55,6 +67,10 @@ class DcqlSupportTest {
         assertEquals("address.locality", path.toDotNotation())
     }
 
+    /**
+     * DCQL path uses a null array wildcard under nationalities.
+     * Second segment is parsed as ClaimPathSegment.Wildcard.
+     */
     @Test
     fun `parses array wildcard segment as null`() {
         val json = """
@@ -71,6 +87,10 @@ class DcqlSupportTest {
         assertEquals(ClaimPathSegment.Wildcard, segments[1])
     }
 
+    /**
+     * Input uses the emulator query array instead of credentials.
+     * Parser synthesizes query_0 with SD-JWT format and the listed field names.
+     */
     @Test
     fun `parses emulator query shape and synthesises ids`() {
         val json = """
@@ -85,6 +105,10 @@ class DcqlSupportTest {
         assertEquals(CredentialFormat.SD_JWT, q.format)
     }
 
+    /**
+     * null, empty, invalid JSON, and empty-object inputs are passed to parse.
+     * Each yields an empty query list.
+     */
     @Test
     fun `falls back to empty list on invalid input`() {
         assertTrue(DcqlSupport.parse(null).isEmpty())
@@ -93,6 +117,10 @@ class DcqlSupportTest {
         assertTrue(DcqlSupport.parse("{}").isEmpty())
     }
 
+    /**
+     * Credential entry declares format mso_mdoc.
+     * Parsed query maps to CredentialFormat.MDOC.
+     */
     @Test
     fun `recognises mdoc format mapping`() {
         val json = """{"credentials":[{"id":"q","format":"mso_mdoc"}]}"""

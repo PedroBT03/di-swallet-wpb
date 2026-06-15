@@ -1,3 +1,7 @@
+/**
+ * Shared test helpers for signed issuer metadata.
+ */
+
 package di.swallet.wpb.issuance.trust
 
 import com.nimbusds.jose.JOSEObjectType
@@ -26,6 +30,8 @@ object SignedIssuerMetadataTestSupport {
         val certificate: X509Certificate,
     )
 
+    /** Generates an ephemeral EC key pair and a self-signed X.509 certificate for signing issuer metadata JWTs. */
+    /** Generates an EC key pair and self-signed X509 certificate for signing issuer metadata JWTs. */
     fun generateIssuerSigningMaterial(commonName: String = "OID4VCI Test Issuer"): IssuerSigningMaterial {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
@@ -45,6 +51,8 @@ object SignedIssuerMetadataTestSupport {
         return IssuerSigningMaterial(keyPair, certificate)
     }
 
+    /** Signs an oauth-authz-req+jwt metadata token for [issuerId], optionally mutating claims before signing. */
+    /** Builds and signs an ES256 oauth-authz-req+jwt for the given issuer, optionally mutating claims before signing. */
     fun signedMetadataJwt(
         issuerId: String,
         signingMaterial: IssuerSigningMaterial,

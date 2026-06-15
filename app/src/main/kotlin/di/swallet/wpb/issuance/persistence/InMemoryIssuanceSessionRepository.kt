@@ -1,3 +1,7 @@
+/**
+ * In-memory issuance session store for tests and local development.
+ */
+
 package di.swallet.wpb.issuance.persistence
 
 import di.swallet.wpb.issuance.domain.IssuanceSession
@@ -16,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
 class InMemoryIssuanceSessionRepository : IssuanceSessionRepository {
     private val sessions = ConcurrentHashMap<UUID, IssuanceSession>()
 
+    /** Rejects duplicate session ids on insert. */
     override fun create(session: IssuanceSession): IssuanceSession {
         val sessionId = session.sessionMeta.sessionId
         val existing = sessions.putIfAbsent(sessionId, session)
@@ -23,6 +28,7 @@ class InMemoryIssuanceSessionRepository : IssuanceSessionRepository {
         return session
     }
 
+    /** Retries on version conflict until the expected version matches and bumps it atomically. */
     override fun update(session: IssuanceSession): IssuanceSession {
         val sessionId = session.sessionMeta.sessionId
         while (true) {
@@ -43,5 +49,6 @@ class InMemoryIssuanceSessionRepository : IssuanceSessionRepository {
         }
     }
 
+    /** Looks up a session without enforcing lifecycle or expiry rules. */
     override fun findById(sessionId: UUID): IssuanceSession? = sessions[sessionId]
 }

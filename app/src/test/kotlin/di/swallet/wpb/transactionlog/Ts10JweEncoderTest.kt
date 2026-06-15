@@ -1,3 +1,7 @@
+/**
+ * Tests ts10 jwe encoder.
+ */
+
 package di.swallet.wpb.transactionlog
 
 import com.nimbusds.jose.JWEObject
@@ -14,6 +18,10 @@ import org.junit.jupiter.api.Test
 class Ts10JweEncoderTest {
     private val encoder = Ts10JweEncoder(ObjectMapper())
 
+    /**
+     * Encrypts a TS10 export containing one presentation transaction with a password-derived JWE.
+     * Decrypted JSON must include the TransactionLog wrapper and the stored transaction identifier.
+     */
     @Test
     fun `export round-trip decrypts TransactionLog structure`() {
         val export = Ts10TransactionLogExport(
@@ -35,6 +43,10 @@ class Ts10JweEncoderTest {
         assertTrue(json.contains("tx-1"))
     }
 
+    /**
+     * Encrypts an empty export to inspect the JWE header parameters.
+     * Header must declare a PBKDF2 iteration count (`p2c`) of exactly 120000.
+     */
     @Test
     fun `export JWE uses PBKDF2 iteration count of at least 120000`() {
         val export = Ts10TransactionLogExport(transactionLog = emptyList())

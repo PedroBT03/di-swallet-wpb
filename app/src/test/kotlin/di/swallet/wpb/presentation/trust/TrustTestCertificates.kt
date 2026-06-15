@@ -1,3 +1,7 @@
+/**
+ * Reusable test certificate chains for presentation trust tests.
+ */
+
 package di.swallet.wpb.presentation.trust
 
 import org.bouncycastle.asn1.x500.X500Name
@@ -21,6 +25,8 @@ import java.util.Date
 object TrustTestCertificates {
     data class CertChain(val root: X509Certificate, val leaf: X509Certificate)
 
+    /** Issues a root CA and leaf verifier certificate chain with the given DNS SAN on the leaf. */
+    /** Issues a two-level EC certificate chain with DNS SAN on the leaf for trust binding tests. */
     fun issueChain(clientIdDns: String = "verifier.example"): CertChain {
         val generator = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
@@ -32,20 +38,28 @@ object TrustTestCertificates {
         return CertChain(root = root, leaf = leaf)
     }
 
+    /** Uppercase hex SHA-256 fingerprint of a certificate for cert_sha256 trust bindings. */
+    /** Returns the uppercase SHA-256 hex digest of the certificate DER bytes. */
     fun sha256Hex(cert: X509Certificate): String =
         MessageDigest.getInstance("SHA-256")
             .digest(cert.encoded)
             .joinToString("") { "%02X".format(it) }
 
+    /** Formats an X509Certificate as a PEM block for embedding in trust documents or JSON. */
+    /** Formats the certificate as a PEM block with base64-encoded DER on a single line. */
     fun pem(cert: X509Certificate): String =
         "-----BEGIN CERTIFICATE-----\n${Base64.getEncoder().encodeToString(cert.encoded)}\n-----END CERTIFICATE-----\n"
 
+    /** Escapes a raw string for safe inclusion as a JSON string literal in test fixtures. */
+    /** Escapes a multi-line PEM string for safe embedding inside JSON string literals. */
     fun jsonString(raw: String): String =
         "\"" + raw
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
             .replace("\n", "\\n") + "\""
 
+    /** Creates a self-signed CA certificate with basicConstraints CA=true for test chains. */
+    /** Creates a self-signed CA certificate with basicConstraints set to CA true. */
     private fun selfSignedCa(keys: KeyPair, subjectDn: String): X509Certificate {
         val subject = X500Name(subjectDn)
         val now = Instant.now()
@@ -62,6 +76,8 @@ object TrustTestCertificates {
         return JcaX509CertificateConverter().getCertificate(builder.build(signer))
     }
 
+    /** Issues a leaf certificate signed by the CA with a DNS subjectAlternativeName for verifier binding. */
+    /** Issues a leaf certificate signed by the CA with a DNS subjectAlternativeName entry. */
     private fun issuedLeaf(
         issuerCert: X509Certificate,
         issuerKeys: KeyPair,

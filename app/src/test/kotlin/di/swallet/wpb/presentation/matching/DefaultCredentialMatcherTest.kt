@@ -1,3 +1,7 @@
+/**
+ * Tests default credential matcher.
+ */
+
 package di.swallet.wpb.presentation.matching
 
 import di.swallet.wpb.domain.WalletCredential
@@ -41,10 +45,12 @@ class DefaultCredentialMatcherTest {
     private val disclosureCipher = DisclosureCipherService(testWalletProperties())
 
     @BeforeEach
+    /** Creates a fresh mocked WalletCredentialRepository before each matcher test. */
     fun setUp() {
         repository = mock(WalletCredentialRepository::class.java)
     }
 
+    /** Instantiates DefaultCredentialMatcher with the shared mdoc stack and the given demo-mode flag. */
     private fun matcher(demoMode: Boolean) = DefaultCredentialMatcher(
         repository,
         mdocCodec,
@@ -55,6 +61,7 @@ class DefaultCredentialMatcherTest {
         credentialRevocationGuard = RevocationTestSupport.noopGuard(),
     )
 
+    /** Builds a minimal PresentationContext whose authorization request embeds the supplied DCQL JSON. */
     private fun context(dcqlJson: String, holderId: String = "holder-1"): PresentationContext {
         val now = Instant.now()
         return PresentationContext(
@@ -82,6 +89,10 @@ class DefaultCredentialMatcherTest {
         )
     }
 
+    /**
+     * Wallet holds an SD-JWT PID with a given_name disclosure and the DCQL query requests that claim.
+     * Matcher returns one candidate with query id, claim list, and wallet credential id populated.
+     */
     @Test
     fun `attaches requested claims to candidates`() {
         val disc = sdJwtService.createDisclosure("given_name", "Pedro")
@@ -104,6 +115,10 @@ class DefaultCredentialMatcherTest {
         assertEquals(42L, candidate.credentialId)
     }
 
+    /**
+     * Wallet credential exposes only given_name while the query asks for address.locality.
+     * Matcher returns no candidates.
+     */
     @Test
     fun `excludes SD-JWT credential that cannot satisfy nested path`() {
         val disc = sdJwtService.createDisclosure("given_name", "Pedro")
@@ -123,6 +138,10 @@ class DefaultCredentialMatcherTest {
         assertTrue(result.credentialCandidates.isEmpty())
     }
 
+    /**
+     * Wallet stores nested address disclosures and the query targets address.locality.
+     * Matcher produces one matching candidate.
+     */
     @Test
     fun `matches SD-JWT credential with nested object disclosures`() {
         val issued = sdJwtService.createNestedObjectDisclosures(
@@ -145,6 +164,10 @@ class DefaultCredentialMatcherTest {
         assertEquals(1, result.credentialCandidates.size)
     }
 
+    /**
+     * Wallet stores a dot-notation address.locality disclosure for a nested DCQL path.
+     * Matcher returns one candidate whose requested path serializes to address.locality.
+     */
     @Test
     fun `matches SD-JWT credential with PID dot-notation disclosure`() {
         val disc = sdJwtService.createDisclosure("address.locality", "Lisbon")
@@ -168,6 +191,10 @@ class DefaultCredentialMatcherTest {
         )
     }
 
+    /**
+     * Wallet contains an mDL mdoc and a non-demo matcher receives an mso_mdoc DCQL query.
+     * Matcher returns one MDOC-format candidate.
+     */
     @Test
     fun `matches mdoc queries in non-demo when wallet contains mdoc credential`() {
         val credential = WalletCredential(
@@ -193,6 +220,10 @@ class DefaultCredentialMatcherTest {
         assertEquals(CredentialFormat.MDOC, result.credentialCandidates.first().format)
     }
 
+    /**
+     * Demo mode is on, the wallet is empty, and an emulator-style query is supplied.
+     * Matcher synthesizes one SD-JWT candidate with query_0 id and requested field names.
+     */
     @Test
     fun `demo mode synthesises candidate when wallet is empty`() {
         `when`(repository.findByUserId("holder-1")).thenReturn(emptyList())

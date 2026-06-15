@@ -1,3 +1,7 @@
+/**
+ * Resolves relying-party deletion contacts from presentation logs or the RP registry.
+ */
+
 package di.swallet.wpb.datadeletion
 
 import di.swallet.wpb.config.DataDeletionRequestProperties
@@ -13,6 +17,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
 
+/** Fully resolved context for initiating a data deletion request. */
 data class ResolvedDeletionContext(
     val presentationTransactionId: String,
     val presentationTime: String,
@@ -24,6 +29,7 @@ data class ResolvedDeletionContext(
     val userNotice: String?,
 )
 
+/** Resolves deletion contacts and validates presentation eligibility for erasure requests. */
 @Component
 class DeletionContactResolver(
     private val transactionLogService: TransactionLogService,
@@ -31,6 +37,7 @@ class DeletionContactResolver(
     private val registryResolver: RpRegistryResolver,
     private val properties: DataDeletionRequestProperties,
 ) {
+    /** Loads the presentation, resolves contacts, and fails when no deletion channel exists. */
     fun resolve(
         holderId: String,
         presentationTransactionId: String,
@@ -73,9 +80,11 @@ class DeletionContactResolver(
         )
     }
 
+    /** Returns true when the presentation stores usable deletion contact information. */
     fun hasStoredDeletionContacts(presentation: Ts10Presentation): Boolean =
         contactBuilder.parseStoredContact(presentation.interactingPartyContact).hasDeletionChannel()
 
+    /** Ensures the transaction is a completed presentation with claims and an RP reference. */
     private fun validateEligiblePresentation(transaction: Ts10Transaction, presentationTransactionId: String): Ts10Presentation {
         if (transaction.transactionType != Ts10TransactionType.Presentation.name) {
             throw ResponseStatusException(
@@ -108,6 +117,7 @@ class DeletionContactResolver(
         return presentation
     }
 
+    /** Looks up support URIs for an RP identifier and classifies them as deletion channels. */
     private fun lookupRegistryContacts(rpIdentifier: String): ParsedDeletionContacts {
         return when (val resolution = registryResolver.lookupByIdentifier(rpIdentifier)) {
             is RegistryResolution.Accepted -> {

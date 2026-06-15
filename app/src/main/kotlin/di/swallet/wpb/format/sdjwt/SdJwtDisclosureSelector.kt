@@ -1,3 +1,7 @@
+/**
+ * SD-JWT selective disclosure creation, hashing, and DCQL path selection.
+ */
+
 package di.swallet.wpb.format.sdjwt
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -16,6 +20,7 @@ class SdJwtDisclosureSelector(
     private val sdJwtService: SdJwtService,
 ) {
 
+    /** Parsed disclosure with claim metadata and its SD-JWT digest. */
     data class ParsedDisclosure(
         val raw: String,
         val claimName: String,
@@ -23,6 +28,7 @@ class SdJwtDisclosureSelector(
         val digest: String,
     )
 
+    /** Decodes stored disclosures and computes digests for path matching. */
     fun parseDisclosures(stored: List<String>): List<ParsedDisclosure> =
         stored.mapNotNull { raw ->
             val claimName = readClaimName(raw) ?: return@mapNotNull null
@@ -34,9 +40,7 @@ class SdJwtDisclosureSelector(
             )
         }
 
-    /**
-     * Returns disclosures matching requested paths (union), expanded with ancestor `_sd` closure.
-     */
+    /** Returns disclosures matching requested paths (union), expanded with ancestor `_sd` closure. */
     fun selectDisclosures(stored: List<String>, paths: List<ClaimPath>): List<String> {
         if (paths.isEmpty()) return emptyList()
         val parsed = parseDisclosures(stored)
@@ -50,6 +54,7 @@ class SdJwtDisclosureSelector(
         return selected.map { it.raw }
     }
 
+    /** Returns true when every requested path can be satisfied including ancestor closure. */
     fun canSatisfy(stored: List<String>, paths: List<ClaimPath>): Boolean {
         if (paths.isEmpty()) return true
         val parsed = parseDisclosures(stored)
@@ -61,6 +66,7 @@ class SdJwtDisclosureSelector(
         }
     }
 
+    /** Tests whether a disclosure satisfies a DCQL claim path directly or via nested values. */
     private fun matchesPath(disclosure: ParsedDisclosure, path: ClaimPath): Boolean {
         if (disclosure.claimName == path.toDotNotation()) return true
         val firstKey = path.segments.first() as? ClaimPathSegment.Key
@@ -70,9 +76,7 @@ class SdJwtDisclosureSelector(
         return matchesNestedLeafInObject(disclosure, path)
     }
 
-    /**
-     * Leaf disclosure inside a nested object (claim name = last key segment only).
-     */
+    /** Leaf disclosure inside a nested object (claim name = last key segment only). */
     private fun matchesNestedLeafInObject(disclosure: ParsedDisclosure, path: ClaimPath): Boolean {
         if (path.segments.size < 2) return false
         if (path.segments.any { it !is ClaimPathSegment.Key }) return false
@@ -81,6 +85,7 @@ class SdJwtDisclosureSelector(
         return disclosure.value != null
     }
 
+    /** Checks path tail segments against the disclosure value when present. */
     private fun valueMatchesPathSuffix(disclosure: ParsedDisclosure, path: ClaimPath): Boolean {
         if (path.segments.size <= 1) return true
         val value = disclosure.value ?: return path.segments.drop(1).all { it is ClaimPathSegment.Key }
@@ -90,6 +95,7 @@ class SdJwtDisclosureSelector(
         }
     }
 
+    /** Walks nested maps/lists to see whether a value satisfies remaining path segments. */
     private fun valueSatisfiesTail(value: Any, tail: List<ClaimPathSegment>): Boolean {
         var current: Any? = value
         for (segment in tail) {
@@ -102,27 +108,32 @@ class SdJwtDisclosureSelector(
         return true
     }
 
+    /** Reads a map key from the current JSON value. */
     private fun navigateKey(current: Any?, key: String): Any? {
         val map = asMap(current) ?: return null
         return map[key]
     }
 
+    /** Reads a list index from the current JSON value. */
     private fun navigateIndex(current: Any?, index: Int): Any? {
         val list = asList(current) ?: return null
         return list.getOrNull(index)
     }
 
+    /** Uses the first list element when a wildcard segment is requested. */
     private fun navigateWildcard(current: Any?): Any? {
         val list = asList(current) ?: return null
         return if (list.isNotEmpty()) list.first() else null
     }
 
+    /** Coerces arbitrary JSON values into a map for path navigation. */
     private fun asMap(value: Any?): Map<*, *>? = when (value) {
         is Map<*, *> -> value
         null -> null
         else -> runCatching { objectMapper.convertValue(value, Map::class.java) }.getOrNull()
     }
 
+    /** Coerces arbitrary JSON values into a list for path navigation. */
     private fun asList(value: Any?): List<*>? = when (value) {
         is List<*> -> value
         is Array<*> -> value.toList()
@@ -130,6 +141,7 @@ class SdJwtDisclosureSelector(
         else -> runCatching { objectMapper.convertValue(value, List::class.java) }.getOrNull()
     }
 
+    /** Verifies parent container disclosures exist for nested leaf selections. */
     private fun hasAncestorClosure(
         all: List<ParsedDisclosure>,
         leaf: ParsedDisclosure,
@@ -146,6 +158,7 @@ class SdJwtDisclosureSelector(
         return true
     }
 
+    /** Adds parent disclosures referenced by `_sd` digests until the set is closed. */
     private fun expandAncestorClosure(
         all: List<ParsedDisclosure>,
         seed: MutableSet<ParsedDisclosure>,
@@ -163,6 +176,7 @@ class SdJwtDisclosureSelector(
         return seed
     }
 
+    /** Indexes parent disclosures by the digests of their nested `_sd` children. */
     private fun buildParentIndex(all: List<ParsedDisclosure>): Map<String, List<ParsedDisclosure>> {
         val index = mutableMapOf<String, MutableList<ParsedDisclosure>>()
         all.forEach { parent ->
@@ -173,6 +187,7 @@ class SdJwtDisclosureSelector(
         return index
     }
 
+    /** Collects `_sd` digest strings from a disclosure value map. */
     private fun sdDigestsInValue(value: Any?): Set<String> {
         val map = asMap(value) ?: return emptySet()
         val sd = map["_sd"] ?: return emptySet()
@@ -180,6 +195,7 @@ class SdJwtDisclosureSelector(
         return list.mapNotNull { it as? String }.toSet()
     }
 
+    /** Reads the claim name from the middle element of a base64url disclosure array. */
     private fun readClaimName(base64UrlDisclosure: String): String? {
         return try {
             val decoded = String(Base64URL(base64UrlDisclosure).decode())
@@ -190,6 +206,7 @@ class SdJwtDisclosureSelector(
         }
     }
 
+    /** Reads the claim value from the third element of a base64url disclosure array. */
     private fun readClaimValue(base64UrlDisclosure: String): Any? {
         return try {
             val decoded = String(Base64URL(base64UrlDisclosure).decode())

@@ -1,3 +1,7 @@
+/**
+ * Tests default key attestation provider.
+ */
+
 package di.swallet.wpb.ka.attestation
 
 import com.nimbusds.jose.crypto.ECDSAVerifier
@@ -29,6 +33,9 @@ class DefaultKeyAttestationProviderTest : BaseIntegrationTest() {
     @Autowired
     lateinit var hsmService: HsmService
 
+    /**
+     * HSM wallet key signs a keyattestation+jwt binding the proof EC key; attestedJkt matches proof thumbprint and JWS verifies.
+     */
     @Test
     fun `issues signed key attestation with proof key binding`() {
         val holderId = "ka-holder-${UUID.randomUUID()}"
@@ -68,6 +75,7 @@ class DefaultKeyAttestationProviderTest : BaseIntegrationTest() {
         assertEquals(Rfc7638JwkThumbprint.fromEcPublicKey(proof), attestation.attestedJkt)
     }
 
+    /** Generates a fresh secp256r1 EC public key to stand in for the credential proof key. */
     private fun proofKey(): ECPublicKey {
         val kp = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
@@ -75,6 +83,7 @@ class DefaultKeyAttestationProviderTest : BaseIntegrationTest() {
         return kp.public as ECPublicKey
     }
 
+    /** Reconstructs an ECPublicKey from the URL-safe Base64 SPKI encoding stored on WalletKey. */
     private fun decodeWalletPublicKey(publicKeyBase64: String): ECPublicKey {
         val bytes = Base64.getUrlDecoder().decode(publicKeyBase64)
         val spec = X509EncodedKeySpec(bytes)

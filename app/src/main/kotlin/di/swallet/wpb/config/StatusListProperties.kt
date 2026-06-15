@@ -1,7 +1,12 @@
+/**
+ * Configuration properties for credential revocation status list publication.
+ */
+
 package di.swallet.wpb.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 
+/** Binds `wpb.status-list.*` settings for Token Status List JWT publication. */
 @ConfigurationProperties(prefix = "wpb.status-list")
 class StatusListProperties {
     /** Fixed bitstring capacity for random index allocation (VCR_17 / TS3 herd privacy). */

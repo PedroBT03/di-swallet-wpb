@@ -1,3 +1,7 @@
+/**
+ * Default OpenID4VP presentation flow orchestrator.
+ */
+
 package di.swallet.wpb.presentation.orchestration
 
 import di.swallet.wpb.consent.AttributeMinimizationEvaluator
@@ -37,6 +41,9 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * Runs the full presentation lifecycle from request resolution through dispatch.
+ */
 @Service
 class DefaultPresentationFlowOrchestrator(
     private val gateway: OpenId4VpGateway,
@@ -61,6 +68,7 @@ class DefaultPresentationFlowOrchestrator(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val sessionTtl: Duration get() = Duration.ofSeconds(sessionTtlSeconds)
 
+    /** Creates a session, resolves the request URI, and runs pre-consent validation steps. */
     override suspend fun startSession(requestUri: String, holderId: String?): PresentationContext {
         if (!holderId.isNullOrBlank()) {
             wscaSciGrantService.grant(holderId)
@@ -76,6 +84,7 @@ class DefaultPresentationFlowOrchestrator(
         }
     }
 
+    /** Marks the session failed and optionally dispatches an authorization error response. */
     private suspend fun handleInvalidResolution(
         baseContext: PresentationContext,
         resolution: AuthorizationRequestResolution.Invalid,
@@ -111,6 +120,7 @@ class DefaultPresentationFlowOrchestrator(
         }
     }
 
+    /** Runs trust, registry, matching, and policy checks until consent is pending or terminal. */
     private suspend fun handleSuccessfulResolution(
         baseContext: PresentationContext,
         resolution: AuthorizationRequestResolution.Success,
@@ -250,12 +260,14 @@ class DefaultPresentationFlowOrchestrator(
         return context
     }
 
+    /** Builds the consent view after verifying the requesting holder owns the session. */
     override suspend fun getConsentView(sessionId: UUID, holderId: String): PresentationConsentView {
         val current = getSession(sessionId)
         consentSessionGuard.requireHolderMatch(current.sessionMeta.holderId, holderId)
         return consentViewBuilder.build(current)
     }
 
+    /** Applies a holder consent decision and continues the lifecycle when consent is granted. */
     override suspend fun submitConsent(sessionId: UUID, decision: ConsentSubmission): PresentationContext {
         val current = getSession(sessionId)
         if (current.state == PresentationState.EXPIRED) {
@@ -273,6 +285,7 @@ class DefaultPresentationFlowOrchestrator(
         }
     }
 
+    /** Rejects the request, records audit data, and dispatches a negative response. */
     private suspend fun handleConsentDenied(current: PresentationContext, decision: ConsentSubmission): PresentationContext {
         val rejected = transitionTo(
             current.copy(
@@ -293,6 +306,7 @@ class DefaultPresentationFlowOrchestrator(
         return dispatchTerminalNegative(persistedRejected, "dispatch.negative")
     }
 
+    /** Builds the VP token and dispatches a positive response after consent is granted. */
     private suspend fun handleConsentGranted(current: PresentationContext, decision: ConsentSubmission): PresentationContext {
         wscaSciGrantService.grant(decision.holderId)
         val selected = consentCredentialSelector.select(current, decision.selectedCredentialIds)
@@ -328,6 +342,7 @@ class DefaultPresentationFlowOrchestrator(
         return after
     }
 
+    /** Loads a session from storage and expires it when the TTL has passed. */
     override suspend fun getSession(sessionId: UUID): PresentationContext {
         val session = repository.findById(sessionId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "PresentationSession $sessionId not found")
@@ -348,6 +363,7 @@ class DefaultPresentationFlowOrchestrator(
         return persisted
     }
 
+    /** Dispatches a negative terminal response for rejected or failed sessions. */
     private suspend fun dispatchTerminalNegative(context: PresentationContext, eventType: String): PresentationContext {
         val requestToken = context.authorizationRequest?.requestToken
             ?: run {
@@ -366,6 +382,7 @@ class DefaultPresentationFlowOrchestrator(
         return after
     }
 
+    /** Moves the session to [next], allowing only whitelisted terminal bridge transitions. */
     private fun transitionTo(
         context: PresentationContext,
         next: PresentationState,
@@ -387,6 +404,7 @@ class DefaultPresentationFlowOrchestrator(
         return context.copy(state = next)
     }
 
+    /** Creates a new presentation context in the RECEIVED state. */
     private fun newContext(holderId: String?, now: Instant): PresentationContext {
         val sessionId = UUID.randomUUID()
         val meta = SessionMetadata(
@@ -404,14 +422,17 @@ class DefaultPresentationFlowOrchestrator(
         )
     }
 
+    /** Persists a newly created session through the repository. */
     private fun persistNew(context: PresentationContext): PresentationContext {
         return repository.create(context.toSession()).toContext()
     }
 
+    /** Persists an updated session through the repository. */
     private fun persistUpdate(context: PresentationContext): PresentationContext {
         return repository.update(context.toSession()).toContext()
     }
 
+    /** Records a lifecycle event in the event store and application logs. */
     private fun record(context: PresentationContext, type: String, attributes: Map<String, String>) {
         val event = SessionEvent(
             sessionId = context.sessionMeta.sessionId,

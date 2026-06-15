@@ -1,3 +1,7 @@
+/**
+ * Data models for the loaded conformance catalog and its scenarios.
+ */
+
 package di.swallet.wpb.conformance.catalog
 
 data class ConformanceCatalog(

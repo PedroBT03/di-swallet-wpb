@@ -1,12 +1,18 @@
+/**
+ * Placeholder hook for future EU WebAuthn pseudonym profile extensions (PA_21).
+ */
+
 package di.swallet.wpb.pseudonym
 
 import org.springframework.stereotype.Component
 
 /**
- * Placeholder for the future EU WebAuthn pseudonym profile (PA_21).
- * No normative extensions are implemented until the Commission specification is published.
+ * Extension point for the future EU WebAuthn pseudonym profile once normative rules are published.
  */
 interface EuPseudonymWebAuthnProfile
 
+/**
+ * No-op implementation used until EU pseudonym WebAuthn profile requirements are available.
+ */
 @Component
 class NoOpEuPseudonymWebAuthnProfile : EuPseudonymWebAuthnProfile

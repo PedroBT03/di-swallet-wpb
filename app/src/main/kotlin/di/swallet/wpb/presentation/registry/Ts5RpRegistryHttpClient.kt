@@ -1,3 +1,7 @@
+/**
+ * HTTP client for TS5 RP registry read endpoints.
+ */
+
 package di.swallet.wpb.presentation.registry
 
 import di.swallet.wpb.config.OpenId4VpProperties
@@ -11,10 +15,7 @@ import java.net.URL
 import java.nio.charset.StandardCharsets
 
 /**
- * TS5 v1.2 client for RP registry read endpoints:
- * - GET /wrp/{identifier}
- * - GET /wrp?identifier=...
- * - GET /wrp/check-intended-use?... (rpidentifier mandatory)
+ * TS5 v1.2 HTTP client for RP registry lookup and intended-use checks.
  */
 @Component
 class Ts5RpRegistryHttpClient(
@@ -23,6 +24,7 @@ class Ts5RpRegistryHttpClient(
 ) : RpRegistryClient {
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /** Fetches an RP record with GET /wrp/{identifier}. */
     override fun getByIdentifier(identifier: String): RegistryHttpResponse? {
         val base = properties.registry.baseUrl.trim().trimEnd('/')
         if (base.isBlank()) return null
@@ -30,6 +32,7 @@ class Ts5RpRegistryHttpClient(
         return fetch(endpoint)
     }
 
+    /** Searches for an RP record with GET /wrp?identifier=.... */
     override fun queryByIdentifier(identifier: String): RegistryHttpResponse? {
         val base = properties.registry.baseUrl.trim().trimEnd('/')
         if (base.isBlank()) return null
@@ -37,6 +40,7 @@ class Ts5RpRegistryHttpClient(
         return fetch(endpoint)
     }
 
+    /** Checks intended use with GET /wrp/check-intended-use. */
     override fun checkIntendedUse(
         rpIdentifier: String,
         intendedUseIdentifier: String?,
@@ -58,6 +62,7 @@ class Ts5RpRegistryHttpClient(
         return fetch("$base/wrp/check-intended-use?$query")
     }
 
+    /** Performs a timed GET request and wraps the HTTP response. */
     private fun fetch(endpoint: String): RegistryHttpResponse = wpbMetrics.timeRegistryLookup {
         validateRemoteUrlPolicy(endpoint)
         val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
@@ -81,6 +86,7 @@ class Ts5RpRegistryHttpClient(
         )
     }
 
+    /** Enforces HTTPS and host allow-list rules for registry URLs. */
     private fun validateRemoteUrlPolicy(rawUrl: String) {
         val uri = runCatching { URI(rawUrl) }.getOrElse {
             throw IllegalArgumentException("registry URL is invalid: ${it.message}")
@@ -102,5 +108,6 @@ class Ts5RpRegistryHttpClient(
         }
     }
 
+    /** URL-encodes a query parameter value. */
     private fun encode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
 }

@@ -1,3 +1,7 @@
+/**
+ * Registers key attestations and binds issued credentials to attested holder keys at runtime.
+ */
+
 package di.swallet.wpb.service
 
 import di.swallet.wpb.domain.AttestedKeyRecord
@@ -18,6 +22,9 @@ import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 
+/**
+ * Persists key attestations, links credentials to attested keys, and advances wallet validation state.
+ */
 @Service
 class KeyBindingRuntimeService(
     private val walletUnitRepository: WalletUnitRepository,
@@ -28,6 +35,9 @@ class KeyBindingRuntimeService(
     private val credentialKeyBindingRepository: CredentialKeyBindingRepository,
     private val walletKeyRepository: WalletKeyRepository,
 ) {
+    /**
+     * Stores a key attestation and its attested key row, returning the existing record when already registered.
+     */
     fun registerKeyAttestation(holderId: String, ka: KeyAttestation): KeyAttestationRecord {
         val walletUnit = walletUnitLifecycleService.requireIssuanceEligible(holderId)
         val existing = keyAttestationRepository.findByAttestationId(attestationId(ka)).orElse(null)
@@ -61,6 +71,9 @@ class KeyBindingRuntimeService(
         return kaRecord
     }
 
+    /**
+     * Binds a credential to an attested key, consumes the key attestation, and may mark the wallet VALID.
+     */
     fun bindCredentialToKey(
         credentialId: Long,
         keyAlias: String,
@@ -128,6 +141,9 @@ class KeyBindingRuntimeService(
         }
     }
 
+    /**
+     * Builds a stable attestation identifier from key ID, issuance time, and attested JWK thumbprint.
+     */
     private fun attestationId(ka: KeyAttestation): String =
         "${ka.keyId}:${ka.issuedAt.epochSecond}:${ka.attestedJkt}"
 }

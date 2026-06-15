@@ -1,3 +1,7 @@
+/**
+ * Public HTTP endpoints for publishing and querying credential revocation status lists.
+ */
+
 package di.swallet.wpb.controller
 
 import di.swallet.wpb.config.StatusListProperties
@@ -35,6 +39,9 @@ class StatusListController(
     private val wpbMetrics: WpbMetrics,
 ) {
 
+    /**
+     * Returns the published status list as a JWT or legacy JSON bitstring payload.
+     */
     @GetMapping("/{listId}")
     @Operation(
         summary = "Get published revocation list",
@@ -72,6 +79,9 @@ class StatusListController(
             .body(jwt)
     }
 
+    /**
+     * Returns whether a single status list index is ACTIVE or REVOKED.
+     */
     @GetMapping("/{listId}/entries/{index}")
     @Operation(
         summary = "Check revocation entry",

@@ -1,3 +1,7 @@
+/**
+ * Tests transaction log service integration test config.
+ */
+
 package di.swallet.wpb.transactionlog
 
 import di.swallet.wpb.conformance.ConformanceScenario
@@ -50,6 +54,10 @@ class TransactionLogServiceIntegrationTest {
     @Autowired lateinit var service: TransactionLogService
     @Autowired lateinit var repository: TransactionLogRepository
 
+    /**
+     * Records a credential-deletion transaction, lists it, exports selected entries as JWE, then soft-deletes.
+     * List shows the credential identifier before deletion; after markDeletedByUser the list is empty while the row remains in the repository.
+     */
     @Test
     @ConformanceScenario("transaction_log_export_deletion")
     fun `record list export and soft delete`() {

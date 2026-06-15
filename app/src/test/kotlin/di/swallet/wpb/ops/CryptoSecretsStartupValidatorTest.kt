@@ -1,3 +1,7 @@
+/**
+ * Tests crypto secrets startup validator.
+ */
+
 package di.swallet.wpb.ops
 
 import di.swallet.wpb.config.SecurityProperties
@@ -9,18 +13,30 @@ import org.junit.jupiter.api.Test
 
 class CryptoSecretsStartupValidatorTest {
 
+    /**
+     * Configures known weak disclosure and transaction-log keys with allowKnownWeakCryptoSecrets
+     * false and expects startup validation to throw IllegalStateException.
+     */
     @Test
     fun `fails when weak disclosure key is used without opt-in`() {
         val validator = validator(allowKnownWeakCryptoSecrets = false)
         assertThrows(IllegalStateException::class.java) { validator.run(null) }
     }
 
+    /**
+     * Uses the same known weak crypto secrets but sets allowKnownWeakCryptoSecrets=true and
+     * expects startup validation to complete without throwing.
+     */
     @Test
     fun `allows weak keys when explicitly opted in`() {
         val validator = validator(allowKnownWeakCryptoSecrets = true)
         assertDoesNotThrow { validator.run(null) }
     }
 
+    /**
+     * Supplies base64-encoded strong disclosure, encryption, and integrity keys and expects
+     * startup validation to pass without needing the weak-secrets opt-in flag.
+     */
     @Test
     fun `passes with strong keys`() {
         val validator = CryptoSecretsStartupValidator(
@@ -38,6 +54,10 @@ class CryptoSecretsStartupValidatorTest {
         assertDoesNotThrow { validator.run(null) }
     }
 
+    /**
+     * Sets transaction log dekMode to holder while keeping a known weak server encryption key
+     * and expects validation to pass because that key check is skipped in holder DEK mode.
+     */
     @Test
     fun `skips weak server encryption key check in holder dek mode`() {
         val validator = CryptoSecretsStartupValidator(
@@ -56,6 +76,10 @@ class CryptoSecretsStartupValidatorTest {
         assertDoesNotThrow { validator.run(null) }
     }
 
+    /**
+     * Builds a CryptoSecretsStartupValidator with known weak disclosure and transaction-log
+     * keys, toggling allowKnownWeakCryptoSecrets for opt-in versus fail-fast scenarios.
+     */
     private fun validator(allowKnownWeakCryptoSecrets: Boolean): CryptoSecretsStartupValidator =
         CryptoSecretsStartupValidator(
             walletProperties = WalletProperties(

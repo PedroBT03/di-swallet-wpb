@@ -1,3 +1,7 @@
+/**
+ * Base Spring Boot integration test with WebAuthn authentication helpers.
+ */
+
 package di.swallet.wpb
 
 import di.swallet.wpb.security.Fido2TestHelper
@@ -21,6 +25,7 @@ abstract class BaseIntegrationTest {
     // Generate a fresh keypair for each test class
     protected val deviceKeyPair = Fido2TestHelper.generateDeviceKeyPair()
 
+    /** Returns empty HTTP headers; subclasses or callers attach authentication via getDynamicHeaders. */
     protected fun createAuthHeaders(): HttpHeaders = HttpHeaders()
 
     /**

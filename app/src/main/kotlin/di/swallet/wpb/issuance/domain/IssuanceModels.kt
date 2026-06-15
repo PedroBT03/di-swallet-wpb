@@ -1,3 +1,7 @@
+/**
+ * Data models for issuance.
+ */
+
 package di.swallet.wpb.issuance.domain
 
 import di.swallet.wpb.openid4vci.protocol.AuthorizationFlowKind
@@ -48,12 +52,14 @@ enum class KaState {
     FAILED,
 }
 
+/** Reference to a wallet instance attestation status list entry. */
 data class WiaStatusReference(
     val listId: String,
     val index: Int,
     val uri: String,
 )
 
+/** Reference to a key attestation status list entry. */
 data class KaStatusReference(
     val listId: String,
     val index: Int,
@@ -79,6 +85,7 @@ data class WalletInstanceAttestation(
     val issuerScope: String? = null,
 )
 
+/** Tracks WIA attestation state and retry counters within an issuance session. */
 data class WiaContext(
     val state: WiaState = WiaState.REQUIRED,
     val attestation: WalletInstanceAttestation? = null,
@@ -104,6 +111,7 @@ data class KeyAttestation(
     val x5c: List<String> = emptyList(),
 )
 
+/** Tracks key attestation state within an issuance session. */
 data class KaContext(
     val state: KaState = KaState.NOT_REQUIRED,
     val attestation: KeyAttestation? = null,
@@ -132,6 +140,7 @@ enum class IssuanceState {
     val isTerminal: Boolean
         get() = this in setOf(NOTIFIED, FAILED, REJECTED, EXPIRED)
 
+    /** Returns whether a transition from the current state to [next] is permitted. */
     fun canTransitionTo(next: IssuanceState): Boolean = when (this) {
         OFFER_RECEIVED -> next in setOf(OFFER_RESOLVED, FAILED, REJECTED, EXPIRED)
         OFFER_RESOLVED -> next in setOf(AUTHORIZATION_PREPARED, AUTHORIZED, FAILED, REJECTED, EXPIRED)
@@ -264,6 +273,7 @@ data class IssuanceSession(
     val error: IssuanceError? = null,
 )
 
+/** Converts a runtime issuance context into its persisted session form. */
 fun IssuanceContext.toSession(): IssuanceSession = IssuanceSession(
     sessionMeta = sessionMeta,
     state = state,
@@ -288,6 +298,7 @@ fun IssuanceContext.toSession(): IssuanceSession = IssuanceSession(
     error = error,
 )
 
+/** Rehydrates a persisted session into the orchestrator runtime context. */
 fun IssuanceSession.toContext(): IssuanceContext = IssuanceContext(
     sessionMeta = sessionMeta,
     state = state,

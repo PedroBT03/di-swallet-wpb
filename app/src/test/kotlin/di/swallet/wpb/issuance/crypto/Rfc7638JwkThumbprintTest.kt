@@ -1,3 +1,7 @@
+/**
+ * Tests rfc7638 jwk thumbprint.
+ */
+
 package di.swallet.wpb.issuance.crypto
 
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -9,6 +13,9 @@ import java.util.Base64
 
 class Rfc7638JwkThumbprintTest {
 
+    /**
+     * EC key thumbprint differs from digests that include alg/kid or arbitrary alias strings.
+     */
     @Test
     fun `thumbprint excludes alg and kid members`() {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {
@@ -32,6 +39,9 @@ class Rfc7638JwkThumbprintTest {
         )
     }
 
+    /**
+     * JWK JSON built from EC coordinates yields the same thumbprint as fromEcPublicKey.
+     */
     @Test
     fun `fromJwkJson matches fromEcPublicKey`() {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {
@@ -40,6 +50,8 @@ class Rfc7638JwkThumbprintTest {
         val publicKey = keyPair.public as java.security.interfaces.ECPublicKey
         val encoder = Base64.getUrlEncoder().withoutPadding()
         val fieldSize = (publicKey.params.curve.field.fieldSize + 7) / 8
+
+        /** Pads and URL-safe-encodes an EC coordinate to the curve field width expected in JWK x/y members. */
         fun coordinate(value: java.math.BigInteger): String {
             val rawInput = value.toByteArray()
             val raw = if (rawInput.size > fieldSize) rawInput.copyOfRange(rawInput.size - fieldSize, rawInput.size) else rawInput
@@ -53,6 +65,9 @@ class Rfc7638JwkThumbprintTest {
         )
     }
 
+    /**
+     * URL-safe encoded SPKI public key yields the same thumbprint as fromEcPublicKey.
+     */
     @Test
     fun `fromPublicKeyBase64 matches fromEcPublicKey`() {
         val keyPair = KeyPairGenerator.getInstance("EC").apply {

@@ -1,3 +1,7 @@
+/**
+ * Default registry validation for OpenID4VP presentation requests.
+ */
+
 package di.swallet.wpb.presentation.registry
 
 import di.swallet.wpb.config.OpenId4VpProperties
@@ -6,6 +10,9 @@ import di.swallet.wpb.presentation.domain.RegistryDecision
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
+/**
+ * Resolves RP registry records and records acceptance or rejection on the context.
+ */
 @Service
 class DefaultRegistryValidator(
     private val properties: OpenId4VpProperties,
@@ -13,6 +20,9 @@ class DefaultRegistryValidator(
 ) : RegistryValidator {
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Skips, accepts, or rejects registry validation based on configuration and trust state.
+     */
     override fun validate(context: PresentationContext): PresentationContext {
         if (!properties.registry.enabled) {
             return context.copy(

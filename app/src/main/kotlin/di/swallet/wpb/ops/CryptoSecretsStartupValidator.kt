@@ -1,3 +1,7 @@
+/**
+ * Startup validator that rejects known weak crypto secrets outside dev and test.
+ */
+
 package di.swallet.wpb.ops
 
 import di.swallet.wpb.config.SecurityProperties
@@ -21,6 +25,9 @@ class CryptoSecretsStartupValidator(
 ) : ApplicationRunner {
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Fails startup when weak crypto secrets are configured without an explicit opt-in flag.
+     */
     override fun run(args: ApplicationArguments?) {
         val violations = WeakCryptoSecretPolicy.violations(
             disclosureEncryptionKey = walletProperties.disclosures.encryptionKey,

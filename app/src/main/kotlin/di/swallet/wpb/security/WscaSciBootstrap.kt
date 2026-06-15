@@ -1,3 +1,7 @@
+/**
+ * Thread-local marker for pre-authentication bootstrap paths that bypass SCI enforcement.
+ */
+
 package di.swallet.wpb.security
 
 /**
@@ -7,6 +11,9 @@ package di.swallet.wpb.security
 object WscaSciBootstrap {
     private val depth = ThreadLocal.withInitial { 0 }
 
+    /**
+     * Runs the block while SCI boundary checks are temporarily disabled.
+     */
     fun <T> allow(block: () -> T): T {
         depth.set(depth.get() + 1)
         return try {
@@ -21,5 +28,8 @@ object WscaSciBootstrap {
         }
     }
 
+    /**
+     * Returns true when the current thread is inside a bootstrap allow block.
+     */
     fun isActive(): Boolean = depth.get() > 0
 }

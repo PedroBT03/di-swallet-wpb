@@ -1,3 +1,7 @@
+/**
+ * Tests default verifier certificate extractor.
+ */
+
 package di.swallet.wpb.presentation.trust
 
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
@@ -13,6 +17,10 @@ import java.util.Base64
 class DefaultVerifierCertificateExtractorTest {
     private val extractor = DefaultVerifierCertificateExtractor()
 
+    /**
+     * Authorization request carries x5c at the top level of verifier_info.
+     * Extraction yields one certificate whose leaf fingerprint matches the encoded chain.
+     */
     @Test
     fun `extracts x5c from top-level verifier_info shape`() {
         val chain = TrustTestCertificates.issueChain()
@@ -24,6 +32,10 @@ class DefaultVerifierCertificateExtractorTest {
         assertEquals(TrustTestCertificates.sha256Hex(chain.leaf), TrustTestCertificates.sha256Hex(material.leaf))
     }
 
+    /**
+     * Authorization request nests x5c under access_certificate.
+     * Extraction returns non-null material with a populated certificate chain.
+     */
     @Test
     fun `extracts x5c from nested access_certificate object`() {
         val chain = TrustTestCertificates.issueChain()
@@ -34,6 +46,10 @@ class DefaultVerifierCertificateExtractorTest {
         assertTrue(material!!.chain.isNotEmpty())
     }
 
+    /**
+     * Authorization request supplies a PEM bundle in certificatePem.
+     * Extraction parses it into a single-entry chain.
+     */
     @Test
     fun `extracts PEM bundle from certificatePem field`() {
         val chain = TrustTestCertificates.issueChain()
@@ -44,12 +60,18 @@ class DefaultVerifierCertificateExtractorTest {
         assertEquals(1, material!!.chain.size)
     }
 
+    /**
+     * Authorization request has no verifier_info payload.
+     * Extraction returns null instead of empty material.
+     */
     @Test
     fun `returns null when verifier info is blank`() {
         val request = resolvedRequest(null)
         assertNull(extractor.extract(request))
     }
 
+    /** ResolvedAuthorizationRequest with optional verifier_info JSON for certificate extraction tests. */
+    /** Builds a ResolvedAuthorizationRequest with optional verifier_info JSON for extractor tests. */
     private fun resolvedRequest(verifierInfoJson: String?): ResolvedAuthorizationRequest =
         ResolvedAuthorizationRequest(
             requestToken = "rt",

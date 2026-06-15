@@ -1,3 +1,7 @@
+/**
+ * Tests simulated open id4 vci gateway.
+ */
+
 package di.swallet.wpb.openid4vci.adapter
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -26,12 +30,14 @@ import java.util.UUID
 class SimulatedOpenId4VciGatewayTest {
     private val codec = MdocTestSupport.stack().codec
 
+    /** Simulated gateway wired with the given properties, doc-type registry, and shared mdoc codec. */
     private fun gateway(properties: OpenId4VciProperties = OpenId4VciProperties()) = SimulatedOpenId4VciGateway(
         properties,
         MdocDocTypeRegistry(),
         codec,
     )
 
+    /** Fixed ES256 proof material with key id "key-1" for simulated issuance calls. */
     private fun proof(): ProofMaterial {
         val kp = KeyPairGenerator.getInstance("EC").apply {
             initialize(ECGenParameterSpec("secp256r1"))
@@ -39,6 +45,7 @@ class SimulatedOpenId4VciGatewayTest {
         return ProofMaterial(keyId = "key-1", publicKey = kp.public as ECPublicKey, algorithm = "ES256")
     }
 
+    /** Placeholder wallet attestation transport accepted by the simulated gateway. */
     private fun wia() = WalletAttestationTransport(
         jwt = "wia.jwt",
         popJwt = "wia.pop",
@@ -46,6 +53,7 @@ class SimulatedOpenId4VciGatewayTest {
         expiresAt = java.time.Instant.now().plusSeconds(3600),
     )
 
+    /** Placeholder key attestation transport whose key id defaults to "key-1" unless overridden. */
     private fun ka(keyId: String = "key-1") = KeyAttestationTransport(
         jwt = "ka.jwt",
         keyId = keyId,
@@ -57,6 +65,10 @@ class SimulatedOpenId4VciGatewayTest {
         statusListIndex = 10,
     )
 
+    /**
+     * Credential offer URI embeds an authorization_code grant without pre-authorized_code.
+     * resolveOffer returns AUTHORIZATION_CODE flow with issuer id and pid_jwt configuration ids.
+     */
     @Test
     fun `resolves authorization_code offer by value`() {
         val gw = gateway()
@@ -70,6 +82,10 @@ class SimulatedOpenId4VciGatewayTest {
         assertTrue(metadata.authorizationServers.any { it.supportsPar })
     }
 
+    /**
+     * Offer grant includes pre-authorized_code with a required tx_code length.
+     * resolveOffer selects PRE_AUTHORIZED_CODE and marks txCodeRequired on the grant.
+     */
     @Test
     fun `resolves pre-authorized_code offer with tx_code`() {
         val gw = gateway()
@@ -82,6 +98,10 @@ class SimulatedOpenId4VciGatewayTest {
         assertTrue(resolved.preAuthorizedGrant!!.txCodeRequired)
     }
 
+    /**
+     * Authorization code flow runs prepare, authorize, and credential request with key attestation.
+     * Access token is present and the issued SD-JWT VC payload contains disclosure separators.
+     */
     @Test
     fun `authorization code happy path issues an SD-JWT VC`() {
         val gw = gateway()
@@ -100,6 +120,10 @@ class SimulatedOpenId4VciGatewayTest {
         assertTrue(issued.rawPayload.contains("~"))
     }
 
+    /**
+     * Authorization is prepared then authorizeWithCode is called with a mismatched state value.
+     * Gateway throws IllegalArgumentException.
+     */
     @Test
     fun `state mismatch on authorization code is rejected`() {
         val gw = gateway()
@@ -113,6 +137,10 @@ class SimulatedOpenId4VciGatewayTest {
         }
     }
 
+    /**
+     * Simulator defers issuance for two poll cycles before completing.
+     * First queryDeferred is StillPending; the second returns Issued.
+     */
     @Test
     fun `deferred outcome can be polled to completion`() {
         val props = OpenId4VciProperties().apply {
@@ -138,6 +166,10 @@ class SimulatedOpenId4VciGatewayTest {
         assertTrue(second is DeferredQueryOutcome.Issued)
     }
 
+    /**
+     * requestCredential is invoked for a fresh session without prior authorization.
+     * Outcome is Failed rather than Issued or Deferred.
+     */
     @Test
     fun `requestCredential without authorization returns failed outcome`() {
         val gw = gateway()
@@ -145,6 +177,10 @@ class SimulatedOpenId4VciGatewayTest {
         assertTrue(outcome is IssuanceOutcome.Failed)
     }
 
+    /**
+     * Offer targets the org.iso.18013.5.1.mDL configuration through the authorization code path.
+     * Issued credential uses MSO_MDOC format and passes issuer-signed validation.
+     */
     @Test
     fun `mdoc credential configuration is issued when requested`() {
         val gw = gateway()
@@ -167,6 +203,10 @@ class SimulatedOpenId4VciGatewayTest {
         assertTrue(codec.validateIssuerSigned(issued.rawPayload))
     }
 
+    /**
+     * Session completes issuance then notify and discard are called.
+     * Subsequent queryDeferred on the same session returns Failed after state is cleared.
+     */
     @Test
     fun `notify and discard drop adapter state`() {
         val gw = gateway()
@@ -183,6 +223,10 @@ class SimulatedOpenId4VciGatewayTest {
         assertTrue(again is DeferredQueryOutcome.Failed)
     }
 
+    /**
+     * Pre-authorized offer requires tx_code but authorizeWithPreAuthorizedCode passes null.
+     * Gateway throws IllegalArgumentException.
+     */
     @Test
     fun `pre-authorized flow without tx_code fails when issuer requires it`() {
         val gw = gateway()
@@ -195,6 +239,10 @@ class SimulatedOpenId4VciGatewayTest {
         }
     }
 
+    /**
+     * resolveMetadata is called with two configuration ids for wallet-initiated discovery.
+     * Returned metadata lists both configurations by id.
+     */
     @Test
     fun `wallet-initiated metadata returns the requested ids`() {
         val gw = gateway()
@@ -203,6 +251,10 @@ class SimulatedOpenId4VciGatewayTest {
         assertEquals(listOf("a", "b"), metadata.credentialConfigurations.map { it.id })
     }
 
+    /**
+     * pid_jwt configuration requires key attestation but requestCredential passes null KA.
+     * Outcome is Failed with code key_attestation_missing.
+     */
     @Test
     fun `device-bound configuration fails when key attestation is missing`() {
         val gw = gateway()

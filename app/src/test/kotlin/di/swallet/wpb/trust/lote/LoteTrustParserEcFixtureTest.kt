@@ -1,3 +1,7 @@
+/**
+ * Tests lote trust parser ec fixture.
+ */
+
 package di.swallet.wpb.trust.lote
 
 import di.swallet.wpb.presentation.trust.TrustTestCertificates
@@ -9,6 +13,10 @@ import java.time.Instant
 class LoteTrustParserEcFixtureTest {
     private val parser = LoteTrustParser()
 
+    /**
+     * Loads the EC TS119602 AccessCA fixture with an injected leaf certificate and root trust anchor.
+     * Parsed entity must expose client ID bindings, cert SHA256, SAN DNS, granted status, and a snapshot with one trust anchor.
+     */
     @Test
     fun `parses EC TS119602 AccessCA fixture with service digital identity bindings`() {
         val chain = TrustTestCertificates.issueChain()

@@ -1,3 +1,7 @@
+/**
+ * Default verifier trust validation for OpenID4VP presentation requests.
+ */
+
 package di.swallet.wpb.presentation.trust
 
 import di.swallet.wpb.presentation.domain.PresentationContext
@@ -10,6 +14,9 @@ import di.swallet.wpb.trust.core.TrustSnapshotResolver
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
+/**
+ * Validates verifier client_id scheme, trust snapshot availability, certificate chain, and allow-lists.
+ */
 @Service
 class DefaultTrustValidator(
     private val properties: OpenId4VpProperties,
@@ -27,6 +34,9 @@ class DefaultTrustValidator(
         "decentralized_identifier",
     )
 
+    /**
+     * Resolves verifier identity and records a trusted, degraded, or rejected trust decision.
+     */
     override fun validate(context: PresentationContext): PresentationContext {
         val request = context.authorizationRequest
             ?: return context.copy(
@@ -134,6 +144,7 @@ class DefaultTrustValidator(
         )
     }
 
+    /** Returns the client_id prefix before the first colon, or `pre-registered` when absent. */
     private fun extractPrefix(clientId: String): String {
         val separator = clientId.indexOf(':')
         if (separator <= 0) return "pre-registered"

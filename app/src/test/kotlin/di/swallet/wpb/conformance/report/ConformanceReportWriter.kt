@@ -1,3 +1,7 @@
+/**
+ * Writes conformance run results to markdown and JSON report files.
+ */
+
 package di.swallet.wpb.conformance.report
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -10,6 +14,7 @@ import java.time.Instant
 object ConformanceReportWriter {
     private val mapper = ObjectMapper().registerKotlinModule()
 
+    /** Merges catalog scenarios with collected results and writes JSON and markdown summary files. */
     fun write(reportDir: Path, results: List<ScenarioResult>, catalog: ConformanceCatalog) {
         Files.createDirectories(reportDir)
         val byId = results.associateBy { it.scenarioId }
@@ -55,6 +60,7 @@ object ConformanceReportWriter {
         Files.writeString(reportDir.resolve("summary.md"), renderMarkdown(summary))
     }
 
+    /** Renders a markdown table of scenario counts and per-scenario status rows including failure details. */
     private fun renderMarkdown(summary: ConformanceSummary): String {
         val sb = StringBuilder()
         sb.appendLine("# DI-Swallet WPB Conformance Report")

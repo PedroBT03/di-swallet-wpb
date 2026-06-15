@@ -1,3 +1,7 @@
+/**
+ * Integration tests for sdk open id4 vci gateway real issuer.
+ */
+
 package di.swallet.wpb.openid4vci.adapter
 
 import di.swallet.wpb.conformance.ConformanceScenario
@@ -18,6 +22,10 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
  */
 class SdkOpenId4VciGatewayRealIssuerIT {
 
+    /**
+     * Strict SDK gateway resolves a real issuer offer when env vars are set.
+     * Offer and metadata expose issuer id, credential configurations, and authorization servers.
+     */
     @Test
     @Tag(ConformanceTags.EXTERNAL)
     @ConformanceScenario("vci_real_issuer_smoke")
@@ -33,6 +41,7 @@ class SdkOpenId4VciGatewayRealIssuerIT {
             sdk.strictResolution = true
         }
         val signer = object : ProofJwtSigner {
+            /** Returns a stub JWT embedding audience and c_nonce; real signing is not required for metadata resolution. */
             override fun sign(proof: ProofMaterial, audience: String, cNonce: String?): String {
                 return "eyJhbGciOiJFUzI1NiJ9.eyJhdWQiOiIkaudienceIiwiY25vbmNlIjoi${cNonce ?: ""}In0.signature"
             }

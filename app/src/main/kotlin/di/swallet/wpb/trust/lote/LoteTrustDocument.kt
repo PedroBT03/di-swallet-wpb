@@ -1,7 +1,12 @@
+/**
+ * Parsed LoTE trust list document structures before conversion to trust snapshots.
+ */
+
 package di.swallet.wpb.trust.lote
 
 import java.time.Instant
 
+/** Parsed LoTE trust list with entities, anchors, and list metadata. */
 data class LoteTrustDocument(
     val entities: List<LoteTrustEntityDocument>,
     val trustAnchorsPem: List<String> = emptyList(),
@@ -12,6 +17,7 @@ data class LoteTrustDocument(
     val schemeType: String? = null,
 )
 
+/** One trusted entity entry extracted from a LoTE document. */
 data class LoteTrustEntityDocument(
     val entityId: String? = null,
     val clientIds: List<String> = emptyList(),

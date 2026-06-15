@@ -1,3 +1,7 @@
+/**
+ * Default wallet policy for OID4VCI credential configuration selection.
+ */
+
 package di.swallet.wpb.issuance.policy
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -20,6 +24,7 @@ class DefaultIssuancePolicy(
     private val properties: OpenId4VciProperties,
 ) : IssuancePolicy {
 
+    /** Denies unsupported formats and configurations not advertised by the issuer. */
     override fun evaluate(context: IssuanceContext): IssuancePolicyDecision {
         val requestedIds = context.credentialConfigurationIds
         if (requestedIds.isEmpty()) {

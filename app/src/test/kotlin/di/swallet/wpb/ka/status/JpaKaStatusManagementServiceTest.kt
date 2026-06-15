@@ -1,3 +1,7 @@
+/**
+ * Tests jpa ka status management service.
+ */
+
 package di.swallet.wpb.ka.status
 
 import di.swallet.wpb.domain.KaStatusIndex
@@ -18,6 +22,7 @@ class JpaKaStatusManagementServiceTest {
     private lateinit var service: JpaKaStatusManagementService
 
     @BeforeEach
+    /** Creates mocked repository and status list collaborators and wires JpaKaStatusManagementService. */
     fun setUp() {
         repository = mock(KaStatusIndexRepository::class.java)
         statusListService = mock(StatusListService::class.java)
@@ -25,6 +30,9 @@ class JpaKaStatusManagementServiceTest {
         service = JpaKaStatusManagementService(repository, statusListService)
     }
 
+    /**
+     * First call persists index 31; second lookup hits repository and does not allocate again.
+     */
     @Test
     fun `reuses persisted index for same holder issuer and attestation fingerprint`() {
         `when`(statusListService.getNextRevocationIndex()).thenReturn(31)
@@ -46,6 +54,9 @@ class JpaKaStatusManagementServiceTest {
         verify(statusListService, times(1)).getNextRevocationIndex()
     }
 
+    /**
+     * revokeHolder for holder-2 calls statusListService.revoke for every persisted KA index.
+     */
     @Test
     fun `revoke holder revokes all persisted indexes`() {
         `when`(repository.findAllByHolderId("holder-2")).thenReturn(
@@ -61,9 +72,11 @@ class JpaKaStatusManagementServiceTest {
         verify(statusListService).revoke(12)
     }
 
+    /** Wraps a persisted [KaStatusIndex] entity in an Optional for repository stub return values. */
     private fun persisted(holderId: String, issuerScope: String, fingerprint: String, index: Int) =
         java.util.Optional.of(persistedEntity(holderId, issuerScope, fingerprint, index))
 
+    /** Builds a KaStatusIndex row for the given holder, issuer scope, attestation fingerprint, and status index. */
     private fun persistedEntity(holderId: String, issuerScope: String, fingerprint: String, index: Int) =
         KaStatusIndex(
             holderId = holderId,

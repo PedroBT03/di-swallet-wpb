@@ -1,3 +1,7 @@
+/**
+ * Default issuer trust validator combining allow-list and signed metadata checks.
+ */
+
 package di.swallet.wpb.issuance.trust
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -18,6 +22,7 @@ class DefaultIssuerTrustValidator(
     private val signedMetadataValidator: IssuerSignedMetadataValidator,
 ) : IssuerTrustValidator {
 
+    /** Checks issuer allow-list membership and signed metadata policy when trusted. */
     override fun validate(metadata: ResolvedIssuerMetadata): IssuanceTrustDecision {
         val allowed = properties.trust.allowedIssuerIds()
         if (allowed.isEmpty()) {
@@ -37,6 +42,7 @@ class DefaultIssuerTrustValidator(
         return applySignedMetadataPolicy(metadata, IssuanceTrustDecision(true, null))
     }
 
+    /** Rejects otherwise trusted issuers when signed metadata verification fails. */
     private fun applySignedMetadataPolicy(
         metadata: ResolvedIssuerMetadata,
         baseDecision: IssuanceTrustDecision,

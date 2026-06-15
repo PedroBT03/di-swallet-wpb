@@ -1,3 +1,7 @@
+/**
+ * Resolves the x5c signing certificate chain used in key attestation JWTs.
+ */
+
 package di.swallet.wpb.ka.trust
 
 import di.swallet.wpb.config.OpenId4VciProperties
@@ -5,6 +9,7 @@ import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.service.HsmService
 import org.springframework.stereotype.Component
 
+/** Selects and validates the x5c chain embedded in key attestation JWT headers. */
 @Component
 class KaSigningCertificateResolver(
     private val properties: OpenId4VciProperties,

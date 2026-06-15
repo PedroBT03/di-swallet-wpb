@@ -1,3 +1,7 @@
+/**
+ * Tests wia jws signature.
+ */
+
 package di.swallet.wpb.wia.attestation
 
 import com.nimbusds.jose.crypto.ECDSAVerifier
@@ -26,6 +30,9 @@ class WiaJwsSignatureTest : BaseIntegrationTest() {
     @Autowired
     lateinit var hsmService: HsmService
 
+    /**
+     * Issued WIA JWT verifies with x5c leaf key; cnfJkt matches wallet public key thumbprint and tampered payload fails verification.
+     */
     @Test
     fun `wallet instance attestation JWS verifies with x5c leaf certificate`() {
         val holderId = "wia-signature-${UUID.randomUUID()}"
@@ -56,6 +63,7 @@ class WiaJwsSignatureTest : BaseIntegrationTest() {
         assertFalse(tampered.verify(ECDSAVerifier(cert.publicKey as ECPublicKey)))
     }
 
+    /** Decodes a standard Base64 DER certificate string into an X509Certificate for JWS verification. */
     private fun parseCertificate(base64Der: String): X509Certificate {
         val certFactory = CertificateFactory.getInstance("X.509")
         return certFactory.generateCertificate(ByteArrayInputStream(Base64.getDecoder().decode(base64Der))) as X509Certificate

@@ -1,3 +1,7 @@
+/**
+ * Tests wallet revocation service.
+ */
+
 package di.swallet.wpb.revocation
 
 import di.swallet.wpb.domain.CredentialRevocationState
@@ -46,6 +50,10 @@ class WalletRevocationServiceTest {
         hsmService = hsmService,
     )
 
+    /**
+     * Revokes a valid wallet unit that has a holder key alias and a status-list revocation index.
+     * Service must revoke the status-list entry, delete the HSM wallet key, and call wallet unit lifecycle revoke.
+     */
     @Test
     fun `revokeWalletUnit deletes holder HSM key after status revocation`() {
         val walletUnit = WalletUnit(id = 1L, walletId = "wallet-1", holderId = "holder-1", state = WalletUnitState.VALID)
@@ -62,6 +70,10 @@ class WalletRevocationServiceTest {
         Mockito.verify(walletUnitLifecycleService).revoke(walletUnit)
     }
 
+    /**
+     * Revokes a WP-managed credential that carries status list index 3.
+     * statusListService.revoke(3) must be called and the saved credential must have REVOKED state.
+     */
     @Test
     fun `revokeCredential marks WP-managed credential revoked`() {
         val credential = WalletCredential(

@@ -78,6 +78,7 @@ class AuthorizationInterceptor(
                     signature = assertionMap["signature"] as String
                 )) {
                     request.setAttribute(WalletSecurityAttributes.AUTHENTICATED_HOLDER_ID, userId)
+                    bindHolderLogKey(request)
                     enforceRequestedHolderBinding(request, userId)
                     return true
                 } else {
@@ -112,6 +113,21 @@ class AuthorizationInterceptor(
                 HttpStatus.FORBIDDEN,
                 "Resource holder does not match authenticated user",
             )
+        }
+    }
+
+    private fun bindHolderLogKey(request: HttpServletRequest) {
+        val header = request.getHeader("X-Wallet-Log-Key")?.takeIf { it.isNotBlank() } ?: return
+        try {
+            val key = Base64.getDecoder().decode(header)
+            if (key.size != 32) {
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "X-Wallet-Log-Key must decode to 32 bytes")
+            }
+            request.setAttribute(WalletSecurityAttributes.HOLDER_LOG_KEY, key)
+        } catch (e: ResponseStatusException) {
+            throw e
+        } catch (e: Exception) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid X-Wallet-Log-Key header")
         }
     }
 }

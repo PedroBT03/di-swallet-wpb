@@ -35,6 +35,7 @@ class TransactionLogServiceIntegrationTestConfig
     Ts10JweEncoder::class,
     MigrationObjectBuilder::class,
     CredentialIssuerResolver::class,
+    di.swallet.wpb.security.HolderLogKeyContext::class,
     JacksonAutoConfiguration::class,
     TransactionLogServiceIntegrationTestConfig::class,
 )

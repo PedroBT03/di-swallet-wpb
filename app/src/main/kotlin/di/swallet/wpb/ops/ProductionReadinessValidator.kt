@@ -5,6 +5,7 @@ import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.config.TransactionLogProperties
 import di.swallet.wpb.config.WalletProperties
+import di.swallet.wpb.transactionlog.crypto.TransactionLogDekMode
 import org.slf4j.LoggerFactory
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
@@ -53,8 +54,10 @@ class ProductionReadinessValidator(
         if (walletProperties.disclosures.encryptionKey == KNOWN_WEAK_DISCLOSURE_KEY) {
             violations += "wallet.disclosures.encryption-key must be overridden in prod"
         }
-        if (transactionLogProperties.encryptionKey == KNOWN_WEAK_TX_ENC_KEY) {
-            violations += "wpb.transaction-log.encryption-key must be overridden in prod"
+        if (transactionLogProperties.resolvedDekMode() == TransactionLogDekMode.SERVER &&
+            transactionLogProperties.encryptionKey == KNOWN_WEAK_TX_ENC_KEY
+        ) {
+            violations += "wpb.transaction-log.encryption-key must be overridden in prod when dek-mode=server"
         }
         if (transactionLogProperties.integrityKey == KNOWN_WEAK_TX_INT_KEY) {
             violations += "wpb.transaction-log.integrity-key must be overridden in prod"

@@ -8,7 +8,9 @@ import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
 import di.swallet.wpb.dpareport.RpDnsNameResolver
 import di.swallet.wpb.dpareport.Ts10DpaContactBuilder
 import di.swallet.wpb.presentation.trust.DefaultVerifierCertificateExtractor
+import di.swallet.wpb.security.HolderLogKeyContext
 import di.swallet.wpb.transactionlog.crypto.TransactionLogCrypto
+import org.mockito.Mockito
 import di.swallet.wpb.transactionlog.domain.Ts10Transaction
 import di.swallet.wpb.transactionlog.domain.TransactionLogEntry
 import di.swallet.wpb.transactionlog.mapper.CredentialDeletionTransactionMapper
@@ -20,7 +22,8 @@ import di.swallet.wpb.ops.metrics.WpbMetricsTestSupport
 import di.swallet.wpb.transactionlog.service.TransactionLogger
 
 object TransactionLogTestSupport {
-    private val crypto = TransactionLogCrypto(TransactionLogProperties())
+    private val holderLogKeyContext = Mockito.mock(HolderLogKeyContext::class.java)
+    private val crypto = TransactionLogCrypto(TransactionLogProperties(), holderLogKeyContext)
     private val classifier = SupportUriClassifier()
     private val contactBuilder = Ts10InteractingPartyContactBuilder(classifier)
     private val dpaContactBuilder = Ts10DpaContactBuilder(classifier)

@@ -2,6 +2,7 @@ package di.swallet.wpb.transactionlog.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.config.TransactionLogProperties
+import di.swallet.wpb.transactionlog.crypto.TransactionLogDekMode
 import di.swallet.wpb.transactionlog.crypto.TransactionLogCrypto
 import di.swallet.wpb.transactionlog.crypto.Ts10JweEncoder
 import di.swallet.wpb.transactionlog.domain.TransactionLogEntry
@@ -45,7 +46,8 @@ class TransactionLogService(
         if (dedupeKey != null && !loggedSessions.add(dedupeKey)) return null
 
         val payloadJson = objectMapper.writeValueAsBytes(transaction)
-        val ciphertext = crypto.encrypt(holderId, payloadJson)
+        val dekMode = crypto.activeDekMode()
+        val ciphertext = crypto.encrypt(holderId, payloadJson, dekMode)
         val occurredAt = Instant.now()
         val transactionId = transaction.transactionIdentifier
 
@@ -67,6 +69,7 @@ class TransactionLogService(
             ts10SchemaVersion = properties.ts10SchemaVersion,
             payloadCiphertext = ciphertext,
             integrityMac = mac,
+            dekMode = dekMode.name,
         )
         return repository.save(entry)
     }
@@ -143,7 +146,14 @@ class TransactionLogService(
 
     private fun decodeEntry(holderId: String, entry: TransactionLogEntry): Ts10Transaction {
         verifyIntegrity(holderId, entry)
-        val plaintext = crypto.decrypt(holderId, entry.payloadCiphertext)
+        val dekMode = TransactionLogDekMode.fromConfig(entry.dekMode)
+        if (!crypto.canDecrypt(dekMode)) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Transaction log payload is holder-encrypted; provide X-Wallet-Log-Key to decrypt",
+            )
+        }
+        val plaintext = crypto.decrypt(holderId, entry.payloadCiphertext, dekMode)
         return objectMapper.readValue(plaintext, Ts10Transaction::class.java)
     }
 

@@ -748,18 +748,25 @@ Indices are chosen uniformly in `[0, capacity)` among unallocated slots. `capaci
 
 **Out of scope (deferred):** Migration import (Mig_06–07b), W2W transaction types, dashboard UI.
 
-**WIAM_12a note:** In this server-side MVP the WPB stores encrypted logs with per-holder DEKs on the server. Export JWE uses a user-provided password (TS10 §5). Full “WP cannot read log contents” requires a client-side or user-held key model and is documented as a known architectural limit.
+**WIAM_12a / holder-held DEKs:** Set `wpb.transaction-log.dek-mode=holder` (default in `prod`) so payload encryption uses a 32-byte key supplied by the WPI in `X-Wallet-Log-Key` on FIDO2-protected requests. The WPB never stores this key and cannot decrypt log payloads without it. Derive the key client-side with PBKDF2-SHA256 (120 000 iterations, salt = SHA-256(holderId)) — see `HolderLogKeyDerivation`. Export JWE still uses a separate user password (TS10 §5). Legacy `dek-mode=server` keeps WPB-derived DEKs for local development only.
 
 ### Configuration knobs (transaction log)
 
 ```
-wpb.transaction-log.encryption-key=<base64 32-byte AES key>
+wpb.transaction-log.dek-mode=server|holder
+wpb.transaction-log.encryption-key=<base64 32-byte AES key; required when dek-mode=server>
 wpb.transaction-log.integrity-key=<base64 32-byte HMAC key>
 wpb.transaction-log.ts10-schema-version=1.2
 wpb.transaction-log.retention-days=365
 wpb.transaction-log.max-entries-per-holder=10000
 wpb.transaction-log.retention-grace-days=30
 wpb.transaction-log.retention-cron=0 30 2 * * *
+```
+
+WPI header when `dek-mode=holder` (alongside FIDO2):
+
+```
+X-Wallet-Log-Key: <Base64 of 32-byte AES key derived from the user's log passphrase>
 ```
 
 ### API endpoints

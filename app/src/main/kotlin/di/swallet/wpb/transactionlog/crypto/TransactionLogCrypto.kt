@@ -1,6 +1,7 @@
 package di.swallet.wpb.transactionlog.crypto
 
 import di.swallet.wpb.config.TransactionLogProperties
+import di.swallet.wpb.security.HolderLogKeyContext
 import org.springframework.stereotype.Component
 import java.security.MessageDigest
 import java.util.Base64
@@ -11,19 +12,16 @@ import javax.crypto.spec.SecretKeySpec
 
 @Component
 class TransactionLogCrypto(
-    properties: TransactionLogProperties,
+    private val properties: TransactionLogProperties,
+    private val holderLogKeyContext: HolderLogKeyContext,
 ) {
-    private val encryptionKey: ByteArray = decodeKey(properties.encryptionKey, "encryption-key")
+    private val serverEncryptionKey: ByteArray = decodeKey(properties.encryptionKey, "encryption-key")
     private val integrityKey: ByteArray = decodeKey(properties.integrityKey, "integrity-key")
 
-    fun holderEncryptionKey(holderId: String): ByteArray {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(encryptionKey, "HmacSHA256"))
-        return mac.doFinal("txlog-dek:$holderId".toByteArray(Charsets.UTF_8))
-    }
+    fun activeDekMode(): TransactionLogDekMode = properties.resolvedDekMode()
 
-    fun encrypt(holderId: String, plaintext: ByteArray): String {
-        val key = holderEncryptionKey(holderId)
+    fun encrypt(holderId: String, plaintext: ByteArray, dekMode: TransactionLogDekMode = activeDekMode()): String {
+        val key = holderEncryptionKey(holderId, dekMode)
         val iv = ByteArray(12)
         java.security.SecureRandom().nextBytes(iv)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -32,12 +30,12 @@ class TransactionLogCrypto(
         return Base64.getEncoder().encodeToString(iv + ciphertext)
     }
 
-    fun decrypt(holderId: String, encoded: String): ByteArray {
+    fun decrypt(holderId: String, encoded: String, dekMode: TransactionLogDekMode): ByteArray {
         val payload = Base64.getDecoder().decode(encoded)
         require(payload.size > 12) { "Invalid transaction log ciphertext" }
         val iv = payload.copyOfRange(0, 12)
         val ciphertext = payload.copyOfRange(12, payload.size)
-        val key = holderEncryptionKey(holderId)
+        val key = holderEncryptionKey(holderId, dekMode)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
         return cipher.doFinal(ciphertext)
@@ -69,9 +67,23 @@ class TransactionLogCrypto(
         return Base64.getEncoder().encodeToString(digest.digest(data))
     }
 
+    fun canDecrypt(dekMode: TransactionLogDekMode): Boolean =
+        dekMode == TransactionLogDekMode.SERVER || holderLogKeyContext.currentKey() != null
+
+    private fun holderEncryptionKey(holderId: String, dekMode: TransactionLogDekMode): ByteArray =
+        when (dekMode) {
+            TransactionLogDekMode.SERVER -> serverDerivedKey(holderId)
+            TransactionLogDekMode.HOLDER -> holderLogKeyContext.requireKey(dekMode)
+        }
+
+    private fun serverDerivedKey(holderId: String): ByteArray {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(serverEncryptionKey, "HmacSHA256"))
+        return mac.doFinal("txlog-dek:$holderId".toByteArray(Charsets.UTF_8))
+    }
+
     private fun decodeKey(encoded: String, label: String): ByteArray {
         val value = encoded.ifBlank {
-            // Dev fallback: deterministic keys for local runs without explicit config.
             Base64.getEncoder().encodeToString("$label-dev-only-32-bytes-key!!".toByteArray(Charsets.UTF_8).copyOf(32))
         }
         return Base64.getDecoder().decode(value).also {

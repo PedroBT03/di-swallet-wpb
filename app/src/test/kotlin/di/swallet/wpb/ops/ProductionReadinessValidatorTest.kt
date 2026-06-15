@@ -26,6 +26,33 @@ class ProductionReadinessValidatorTest {
     }
 
     @Test
+    fun `passes when prod uses holder dek mode even with default server encryption key`() {
+        val env = MockEnvironment().apply {
+            setActiveProfiles("prod")
+            setProperty("wpb.hsm.pin", "prod-pin-secret")
+            setProperty("spring.datasource.password", "prod-db-secret")
+        }
+        val validator = ProductionReadinessValidator(
+            environment = env,
+            openId4VpProperties = OpenId4VpProperties().apply { demoMode = false },
+            openId4VciProperties = OpenId4VciProperties().apply { demoMode = false },
+            walletProperties = WalletProperties(
+                allowUntrustedAttestation = false,
+                disclosures = WalletProperties.DisclosuresProperties(
+                    encryptionKey = "cHJvZC1kaXNjbG9zdXJlLWtleS0zMmJ5dGVzbG9uZw==",
+                ),
+            ),
+            transactionLogProperties = TransactionLogProperties().apply {
+                dekMode = "holder"
+                encryptionKey = ProductionReadinessValidator.KNOWN_WEAK_TX_ENC_KEY
+                integrityKey = "cHJvZC10eC1pbnQta2V5LXRoaXMyYnl0ZXMtbG9uZw=="
+            },
+            dpaReportProperties = DpaReportProperties(),
+        )
+        assertDoesNotThrow { validator.run(null) }
+    }
+
+    @Test
     fun `passes when prod secrets and flags are overridden`() {
         val env = MockEnvironment().apply {
             setActiveProfiles("prod")

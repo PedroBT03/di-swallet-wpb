@@ -34,6 +34,9 @@ class TransactionLogEntry(
     @Column(name = "integrity_mac", nullable = false)
     val integrityMac: String = "",
 
+    @Column(name = "dek_mode", nullable = false)
+    val dekMode: String = "SERVER",
+
     @Column(name = "deleted_by_user", nullable = false)
     var deletedByUser: Boolean = false,
 

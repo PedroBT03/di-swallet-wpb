@@ -191,6 +191,7 @@ class DefaultIssuanceFlowOrchestratorTest {
             ),
             consentSessionGuard = ConsentSessionGuard(),
             transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),
+            wscaSciGrantService = di.swallet.wpb.security.WscaSciTestSupport.grantService(),
         )
         return orchestrator to storage
     }

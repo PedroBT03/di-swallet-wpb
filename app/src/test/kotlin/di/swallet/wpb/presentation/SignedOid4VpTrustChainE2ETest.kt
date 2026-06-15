@@ -155,6 +155,7 @@ class SignedOid4VpTrustChainE2ETest {
                 consentAuditRecorder = consentDeps.consentAuditRecorder,
                 minimizationEvaluator = consentDeps.minimizationEvaluator,
                 wpbMetrics = WpbMetricsTestSupport.noop(),
+            wscaSciGrantService = di.swallet.wpb.security.WscaSciTestSupport.grantService(),
             )
 
             val passed = orchestrator.startSession(requestUri, "holder-1")

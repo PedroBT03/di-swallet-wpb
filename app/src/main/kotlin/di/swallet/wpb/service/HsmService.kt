@@ -5,6 +5,7 @@ import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.domain.WalletUnit
 import di.swallet.wpb.format.sdjwt.KeyBindingJwtSigner
+import di.swallet.wpb.security.WscaAccessGuard
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
@@ -35,7 +36,8 @@ import com.nimbusds.jwt.*
 class HsmService(
     private val walletKeyRepository: WalletKeyRepository,
     private val statusListService: StatusListService,
-    private val hsmProperties: HsmProperties
+    private val hsmProperties: HsmProperties,
+    private val wscaAccessGuard: WscaAccessGuard,
 ) : KeyBindingJwtSigner {
     private val logger = LoggerFactory.getLogger(javaClass)
     private var pkcs11Provider: Provider = Security.getProvider("SunPKCS11")
@@ -74,6 +76,7 @@ class HsmService(
      * The private key is linked to a self-signed certificate for HSM storage compatibility.
      */
     fun generateKeyForUser(userId: String, walletUnit: WalletUnit? = null): WalletKey {
+        wscaAccessGuard.requireSciForHolder(userId)
         try {
             val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
             keyStore.load(null, pin.toCharArray())
@@ -124,6 +127,7 @@ class HsmService(
      * Performs a digital signature on the provided data using the user's private key in the HSM.
      */
     fun signData(userId: String, dataToSign: ByteArray): ByteArray {
+        wscaAccessGuard.requireSciForHolder(userId)
         val walletKey = getUserKey(userId)
         
         // Ensure the key is active before signing
@@ -149,6 +153,7 @@ class HsmService(
     }
 
     fun signDataWithAlias(keyAlias: String, dataToSign: ByteArray): ByteArray {
+        wscaAccessGuard.requireSciForWalletKeyAlias(keyAlias)
         val walletKey = getKeyByAlias(keyAlias)
         validateKeyStatus(walletKey)
         try {
@@ -335,6 +340,7 @@ class HsmService(
      * Used for per-RP pseudonym passkeys (Topic 11 / PA_14).
      */
     fun generateDedicatedEcKey(alias: String): java.security.interfaces.ECPublicKey {
+        wscaAccessGuard.requireSciAuthorization()
         try {
             val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
             keyStore.load(null, pin.toCharArray())
@@ -372,6 +378,7 @@ class HsmService(
     }
 
     fun signEs256WithDedicatedAlias(alias: String, dataToSign: ByteArray): ByteArray {
+        wscaAccessGuard.requireSciForDedicatedAlias(alias)
         try {
             val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
             keyStore.load(null, pin.toCharArray())
@@ -391,6 +398,7 @@ class HsmService(
     }
 
     fun deleteDedicatedKey(alias: String) {
+        wscaAccessGuard.requireSciForDedicatedAlias(alias)
         try {
             val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
             keyStore.load(null, pin.toCharArray())

@@ -6,6 +6,7 @@ import di.swallet.wpb.consent.ConsentCredentialSelector
 import di.swallet.wpb.consent.ConsentSessionGuard
 import di.swallet.wpb.consent.PresentationConsentView
 import di.swallet.wpb.consent.PresentationConsentViewBuilder
+import di.swallet.wpb.security.WscaSciGrantService
 import di.swallet.wpb.ops.metrics.WpbMetrics
 import di.swallet.wpb.observability.SessionEventStore
 import di.swallet.wpb.observability.SessionEvent
@@ -53,6 +54,7 @@ class DefaultPresentationFlowOrchestrator(
     private val consentAuditRecorder: ConsentAuditRecorder,
     private val minimizationEvaluator: AttributeMinimizationEvaluator,
     private val wpbMetrics: WpbMetrics,
+    private val wscaSciGrantService: WscaSciGrantService,
     @param:Value("\${wpb.openid4vp.session.ttl-seconds:600}") private val sessionTtlSeconds: Long = 600,
 ) : PresentationFlowOrchestrator {
 
@@ -60,6 +62,9 @@ class DefaultPresentationFlowOrchestrator(
     private val sessionTtl: Duration get() = Duration.ofSeconds(sessionTtlSeconds)
 
     override suspend fun startSession(requestUri: String, holderId: String?): PresentationContext {
+        if (!holderId.isNullOrBlank()) {
+            wscaSciGrantService.grant(holderId)
+        }
         val now = Instant.now()
         val baseContext = newContext(holderId, now)
         persistNew(baseContext)
@@ -289,6 +294,7 @@ class DefaultPresentationFlowOrchestrator(
     }
 
     private suspend fun handleConsentGranted(current: PresentationContext, decision: ConsentSubmission): PresentationContext {
+        wscaSciGrantService.grant(decision.holderId)
         val selected = consentCredentialSelector.select(current, decision.selectedCredentialIds)
         val minimizationLevel = minimizationEvaluator.evaluate(current).level
         var context = transitionTo(

@@ -41,6 +41,7 @@ import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
 import di.swallet.wpb.wia.attestation.WalletAttestationProvider
 import di.swallet.wpb.wia.validation.WiaValidationException
 import di.swallet.wpb.wia.validation.WiaValidationService
+import di.swallet.wpb.security.WscaSciGrantService
 import di.swallet.wpb.service.KeyBindingRuntimeService
 import di.swallet.wpb.transactionlog.service.TransactionLogger
 import org.slf4j.LoggerFactory
@@ -71,12 +72,16 @@ class DefaultIssuanceFlowOrchestrator(
     private val issuanceConsentViewBuilder: IssuanceConsentViewBuilder,
     private val consentSessionGuard: ConsentSessionGuard,
     private val transactionLogger: TransactionLogger,
+    private val wscaSciGrantService: WscaSciGrantService,
 ) : IssuanceFlowOrchestrator {
 
     private val logger = LoggerFactory.getLogger(javaClass)
     private val sessionTtl: Duration get() = Duration.ofSeconds(properties.sessionTtlSeconds)
 
     override fun resolveOffer(offerUri: String, holderId: String?): IssuanceContext {
+        if (!holderId.isNullOrBlank()) {
+            wscaSciGrantService.grant(holderId)
+        }
         val now = Instant.now()
         val base = newContext(holderId, now).copy(offerUri = offerUri)
         persistNew(base)
@@ -435,6 +440,7 @@ class DefaultIssuanceFlowOrchestrator(
             issuanceConsentDecision = IssuanceConsentDecision(granted = true, reason = decision.reason),
         )
         record(approved, "issuance.consent.granted", mapOf("count" to pending.credentials.size.toString()))
+        wscaSciGrantService.grant(decision.holderId)
         return persistIssued(
             approved,
             pending.credentials,

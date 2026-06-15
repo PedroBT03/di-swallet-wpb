@@ -56,6 +56,7 @@ class ConsentNoAttributeValuesInAuditTest {
             consentAuditRecorder = consentDeps.consentAuditRecorder,
             minimizationEvaluator = consentDeps.minimizationEvaluator,
             wpbMetrics = WpbMetricsTestSupport.noop(),
+        wscaSciGrantService = di.swallet.wpb.security.WscaSciTestSupport.grantService(),
         )
 
         val ctx = orchestrator.startSession("http://verifier/request", "holder-1")

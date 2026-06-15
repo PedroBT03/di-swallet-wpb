@@ -135,6 +135,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
                 consentAuditRecorder = consentDeps.consentAuditRecorder,
                 minimizationEvaluator = consentDeps.minimizationEvaluator,
                 wpbMetrics = WpbMetricsTestSupport.noop(),
+            wscaSciGrantService = di.swallet.wpb.security.WscaSciTestSupport.grantService(),
             )
 
             // Positive: client_id + cert chain + fingerprint align with remote TS119602 document.
@@ -168,6 +169,7 @@ class RemoteLoteTrustOpenId4VpE2ETest {
                 consentAuditRecorder = consentDeps.consentAuditRecorder,
                 minimizationEvaluator = consentDeps.minimizationEvaluator,
                 wpbMetrics = WpbMetricsTestSupport.noop(),
+            wscaSciGrantService = di.swallet.wpb.security.WscaSciTestSupport.grantService(),
             )
             val failed = failingOrchestrator.startSession("http://verifier/req", "holder-1")
             assertEquals(PresentationState.DISPATCHED, failed.state)

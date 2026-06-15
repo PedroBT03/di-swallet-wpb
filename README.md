@@ -139,6 +139,19 @@ The WPB prototype intentionally stops short of full **LoA High** device assuranc
 
 `application-prod.properties` already disables untrusted attestation and enforces secret validation via `ProductionReadinessValidator`; MDS integration and certified WSCD remain out of scope for this academic prototype.
 
+### WI→WSCA boundary (SCI / WWI prototype)
+
+The architecture PDF requires a **Secure Cryptographic Interface** between Wallet Instance logic and the WSCA before any HSM command runs. This prototype enforces that boundary when `wpb.wsca.enforce-sci-boundary=true` (default; enabled in `prod`):
+
+| Mechanism | Purpose |
+|-----------|---------|
+| **FIDO2 success** | Issues a short-lived SCI grant and binds the authenticated holder on the HTTP request |
+| **Holder consent** | Extends the SCI grant for multi-step OID4VP/OID4VCI flows (signing, VP build, credential storage) |
+| **`WscaAccessGuard` on `HsmService`** | Blocks signing and key generation unless a grant or bootstrap context is active |
+| **`WscaSciBootstrap`** | Allows pre-authentication device registration only |
+
+**Prototype limitation:** OID4 session start also issues a holder-scoped grant so issuer/presentation flows can complete without FIDO2 on every HTTP hop. A production deployment should replace this with per-operation FIDO2 or a hardware-bound session token. Internal JVM callers cannot bypass the guard when enforcement is on and no grant is present — but a full RCE could still mutate grants in memory; document as research prototype, not CC-certified separation.
+
 ## OpenID4VP Demo Mode Warning
 Some OpenID4VP shortcuts used for local emulator validation are protected behind:
 

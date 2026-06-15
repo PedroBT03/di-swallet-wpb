@@ -3,6 +3,7 @@ package di.swallet.wpb.security
 import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.config.TrustMarkProperties
 import di.swallet.wpb.ops.metrics.WpbMetrics
+import di.swallet.wpb.security.WscaSciGrantService
 import di.swallet.wpb.service.Fido2Service
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -23,6 +24,7 @@ class AuthorizationInterceptor(
     private val objectMapper: ObjectMapper,
     private val trustMarkProperties: TrustMarkProperties,
     private val wpbMetrics: WpbMetrics,
+    private val wscaSciGrantService: WscaSciGrantService,
 ) : HandlerInterceptor {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -78,6 +80,7 @@ class AuthorizationInterceptor(
                     signature = assertionMap["signature"] as String
                 )) {
                     request.setAttribute(WalletSecurityAttributes.AUTHENTICATED_HOLDER_ID, userId)
+                    wscaSciGrantService.grantForRequest(userId)
                     bindHolderLogKey(request)
                     enforceRequestedHolderBinding(request, userId)
                     return true

@@ -198,6 +198,7 @@ class MdocOpenId4VpRuntimeE2ETest {
             consentAuditRecorder = consentDeps.consentAuditRecorder,
             minimizationEvaluator = consentDeps.minimizationEvaluator,
             wpbMetrics = WpbMetricsTestSupport.noop(),
+        wscaSciGrantService = di.swallet.wpb.security.WscaSciTestSupport.grantService(),
         )
     }
 

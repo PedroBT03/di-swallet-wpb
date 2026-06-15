@@ -131,6 +131,7 @@ class DefaultPresentationFlowOrchestratorTest {
             consentAuditRecorder = consentDeps.consentAuditRecorder,
             minimizationEvaluator = consentDeps.minimizationEvaluator,
             wpbMetrics = WpbMetricsTestSupport.noop(),
+        wscaSciGrantService = di.swallet.wpb.security.WscaSciTestSupport.grantService(),
         )
     }
 

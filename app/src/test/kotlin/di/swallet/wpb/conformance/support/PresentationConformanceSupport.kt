@@ -104,6 +104,7 @@ object PresentationConformanceSupport {
             consentAuditRecorder = consentDeps.consentAuditRecorder,
             minimizationEvaluator = consentDeps.minimizationEvaluator,
             wpbMetrics = WpbMetricsTestSupport.noop(),
+        wscaSciGrantService = di.swallet.wpb.security.WscaSciTestSupport.grantService(),
         )
         return PresentationConformanceHarness(orchestrator, gateway, repository)
     }

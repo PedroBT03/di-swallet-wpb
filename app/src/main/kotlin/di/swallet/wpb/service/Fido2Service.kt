@@ -6,6 +6,7 @@ import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.domain.UserDevice
 import di.swallet.wpb.domain.UserDeviceRepository
 import di.swallet.wpb.security.ChallengeService
+import di.swallet.wpb.security.WscaSciBootstrap
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -60,30 +61,29 @@ class Fido2Service(
      * TODO: PRODUCTION - Verified Onboarding.
      * This binding must be preceded by a High LoA identity check (e.g., via CMD or Citizen Card).
      */
-    fun registerDevice(userId: String, credentialId: String, publicKeyBase64: String): UserDevice {
-        val existing = userDeviceRepository.findByCredentialId(credentialId)
-        if (existing.isPresent) return existing.get()
+    fun registerDevice(userId: String, credentialId: String, publicKeyBase64: String): UserDevice =
+        WscaSciBootstrap.allow {
+            val existing = userDeviceRepository.findByCredentialId(credentialId)
+            if (existing.isPresent) return@allow existing.get()
 
-        // Validate that the key is plausible COSE before persisting
-        val keyBytes = try {
-            Base64.getUrlDecoder().decode(publicKeyBase64.trim())
-        } catch (e: IllegalArgumentException) {
-            throw IllegalArgumentException("FIDO2: publicKeyBase64 is not valid Base64URL for user $userId")
-        }
-        // COSE EC2 key map starts with 0xa5 (map of 5 entries)
-        if (keyBytes.isEmpty() || keyBytes[0] != 0xa5.toByte()) {
-            throw IllegalArgumentException("FIDO2: publicKeyBase64 does not appear to be a valid COSE EC2 key for user $userId")
-        }
+            val keyBytes = try {
+                Base64.getUrlDecoder().decode(publicKeyBase64.trim())
+            } catch (e: IllegalArgumentException) {
+                throw IllegalArgumentException("FIDO2: publicKeyBase64 is not valid Base64URL for user $userId")
+            }
+            if (keyBytes.isEmpty() || keyBytes[0] != 0xa5.toByte()) {
+                throw IllegalArgumentException("FIDO2: publicKeyBase64 does not appear to be a valid COSE EC2 key for user $userId")
+            }
 
-        val device = UserDevice(
-            userId = userId,
-            credentialId = credentialId,
-            publicKeyBase64 = publicKeyBase64,
-            userHandle = Base64.getUrlEncoder().withoutPadding().encodeToString(userId.toByteArray())
-        )
-        logger.info("FIDO2: Binding hardware credential $credentialId to user $userId")
-        return userDeviceRepository.save(device)
-    }
+            val device = UserDevice(
+                userId = userId,
+                credentialId = credentialId,
+                publicKeyBase64 = publicKeyBase64,
+                userHandle = Base64.getUrlEncoder().withoutPadding().encodeToString(userId.toByteArray()),
+            )
+            logger.info("FIDO2: Binding hardware credential $credentialId to user $userId")
+            userDeviceRepository.save(device)
+        }
 
     /**
      * Starts the standard WebAuthn ceremony by generating an AssertionRequest.

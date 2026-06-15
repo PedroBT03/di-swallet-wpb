@@ -179,6 +179,7 @@ class Ts5RegistryOpenId4VpE2ETest {
                 consentAuditRecorder = consentDeps.consentAuditRecorder,
                 minimizationEvaluator = consentDeps.minimizationEvaluator,
                 wpbMetrics = WpbMetricsTestSupport.noop(),
+            wscaSciGrantService = di.swallet.wpb.security.WscaSciTestSupport.grantService(),
             )
 
             // Positive: trust is valid and TS5 check-intended-use is true.

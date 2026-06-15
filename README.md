@@ -147,7 +147,11 @@ The WPB prototype intentionally stops short of full **LoA High** device assuranc
 
 ### Crypto secrets (all profiles)
 
-`CryptoSecretsStartupValidator` applies the same pattern to `wallet.disclosures.encryption-key`, `wpb.transaction-log.integrity-key`, and `wpb.transaction-log.encryption-key` (when `dek-mode=server`). Known weak defaults are rejected unless `wpb.security.allow-known-weak-crypto-secrets=true` (dev/test only). Base `application.properties` requires `WALLET_DISCLOSURES_ENCRYPTION_KEY` and `WPB_TRANSACTION_LOG_*` env vars; documented demo keys live in `application-dev.properties` only.
+`CryptoSecretsStartupValidator` applies the same pattern to `wallet.disclosures.encryption-key`, `wpb.transaction-log.integrity-key`, and `wpb.transaction-log.encryption-key` (when `dek-mode=server`). Known weak defaults are rejected unless `wpb.security.allow-known-weak-crypto-secrets=true` (dev/test only). Base `application.properties` requires `WALLET_DISCLOSURES_ENCRYPTION_KEY` and `WPB_TRANSACTION_LOG_*` env vars; documented demo keys live in `application-dev.properties` only. `TransactionLogCrypto` rejects **blank** keys explicitly (no silent dev fallback).
+
+### FIDO2 challenges (cluster-safe)
+
+`ChallengeService` persists WebAuthn `AssertionRequest` rows in PostgreSQL (`fido2_assertion_challenges`, Flyway `V7`). Challenges are keyed by **challenge value**, so parallel ceremonies for the same holder no longer overwrite each other. Verification matches `clientDataJSON.challenge` to the stored row; expired rows are purged on a schedule. This supports horizontal scaling when all instances share the same database.
 
 ### WI→WSCA boundary (SCI / WWI prototype)
 

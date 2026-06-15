@@ -2,10 +2,12 @@ package di.swallet.wpb.service
 
 import com.yubico.webauthn.*
 import com.yubico.webauthn.data.*
+import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.domain.UserDevice
 import di.swallet.wpb.domain.UserDeviceRepository
 import di.swallet.wpb.security.ChallengeService
+import di.swallet.wpb.security.Fido2ChallengeSupport
 import di.swallet.wpb.security.WscaSciBootstrap
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
@@ -20,7 +22,8 @@ import java.util.*
 class Fido2Service(
     private val userDeviceRepository: UserDeviceRepository,
     private val challengeService: ChallengeService,
-    private val walletProperties: WalletProperties
+    private val walletProperties: WalletProperties,
+    private val objectMapper: ObjectMapper,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -110,7 +113,13 @@ class Fido2Service(
         authenticatorData: String,
         signature: String
     ): Boolean {
-        val assertionRequest = challengeService.getRequest(userId) ?: return false
+        val challengeKey = try {
+            Fido2ChallengeSupport.extractChallengeKey(clientDataJSON, objectMapper)
+        } catch (e: Exception) {
+            logger.warn("SecurityPolicy: Could not extract FIDO2 challenge from clientDataJSON: ${e.message}")
+            return false
+        }
+        val assertionRequest = challengeService.getRequest(userId, challengeKey) ?: return false
 
         return try {
             // Build the response components as defined in the W3C WebAuthn specification
@@ -148,8 +157,7 @@ class Fido2Service(
             logger.error("SecurityPolicy: WebAuthn verification failed: ${e.message}")
             false
         } finally {
-            // Challenge is single-use — always removed regardless of outcome
-            challengeService.removeRequest(userId)
+            challengeService.removeRequest(userId, challengeKey)
         }
     }
 

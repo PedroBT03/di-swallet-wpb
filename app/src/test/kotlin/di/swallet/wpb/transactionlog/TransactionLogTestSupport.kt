@@ -1,7 +1,7 @@
 package di.swallet.wpb.transactionlog
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import di.swallet.wpb.config.TransactionLogProperties
+import di.swallet.wpb.testTransactionLogProperties
 import di.swallet.wpb.transactionlog.CredentialIssuerResolver
 import di.swallet.wpb.datadeletion.SupportUriClassifier
 import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
@@ -23,7 +23,7 @@ import di.swallet.wpb.transactionlog.service.TransactionLogger
 
 object TransactionLogTestSupport {
     private val holderLogKeyContext = Mockito.mock(HolderLogKeyContext::class.java)
-    private val crypto = TransactionLogCrypto(TransactionLogProperties(), holderLogKeyContext)
+    private val crypto = TransactionLogCrypto(testTransactionLogProperties(), holderLogKeyContext)
     private val classifier = SupportUriClassifier()
     private val contactBuilder = Ts10InteractingPartyContactBuilder(classifier)
     private val dpaContactBuilder = Ts10DpaContactBuilder(classifier)

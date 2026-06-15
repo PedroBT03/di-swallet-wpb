@@ -2,6 +2,7 @@ package di.swallet.wpb.transactionlog
 
 import di.swallet.wpb.config.TransactionLogProperties
 import di.swallet.wpb.security.HolderLogKeyContext
+import di.swallet.wpb.testTransactionLogProperties
 import di.swallet.wpb.security.WalletSecurityAttributes
 import di.swallet.wpb.transactionlog.crypto.HolderLogKeyDerivation
 import di.swallet.wpb.transactionlog.crypto.TransactionLogCrypto
@@ -23,7 +24,7 @@ class TransactionLogHolderDekModeTest {
 
     @Test
     fun `holder mode encrypts with supplied key and WPB cannot decrypt without it`() {
-        val properties = TransactionLogProperties().apply { dekMode = "holder" }
+        val properties = testTransactionLogProperties { dekMode = "holder" }
         val crypto = crypto(properties)
 
         val plaintext = """{"transactionIdentifier":"tx-1"}""".toByteArray()
@@ -44,7 +45,7 @@ class TransactionLogHolderDekModeTest {
 
     @Test
     fun `server mode remains backward compatible`() {
-        val crypto = crypto(TransactionLogProperties())
+        val crypto = crypto(testTransactionLogProperties())
         val plaintext = "legacy-payload".toByteArray()
         val ciphertext = crypto.encrypt(holderId, plaintext)
         assertTrue(crypto.canDecrypt(TransactionLogDekMode.SERVER))

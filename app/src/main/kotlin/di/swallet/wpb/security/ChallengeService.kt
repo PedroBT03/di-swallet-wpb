@@ -1,81 +1,71 @@
 package di.swallet.wpb.security
 
 import com.yubico.webauthn.AssertionRequest
-import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Service
-import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import di.swallet.wpb.config.WalletProperties
+import di.swallet.wpb.domain.Fido2AssertionChallenge
+import di.swallet.wpb.domain.Fido2AssertionChallengeRepository
+import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 /**
- * Stateful service to manage single-use WebAuthn Assertion Requests.
- * Challenges expire after a configurable TTL to prevent replay attacks.
+ * Durable WebAuthn assertion challenge store (cluster-safe via shared database).
+ * Multiple concurrent challenges per holder are keyed by challenge value.
  */
 @Service
 class ChallengeService(
-    private val walletProperties: WalletProperties
+    private val walletProperties: WalletProperties,
+    private val challengeRepository: Fido2AssertionChallengeRepository,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    private data class StoredRequest(
-        val request: AssertionRequest,
-        val expiresAt: Instant
-    )
-
-    private val requestStore = ConcurrentHashMap<String, StoredRequest>()
-
     private val ttlSeconds get() = walletProperties.challenge.ttlSeconds
 
-    // Background cleanup of expired challenges
-    init {
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(
-            { purgeExpired() },
-            ttlSeconds, ttlSeconds, TimeUnit.SECONDS
-        )
-    }
-
-    /**
-     * Stores a new assertion request for the given user ID. If a challenge already exists, it will be replaced.
-     */
+    @Transactional
     fun storeRequest(userId: String, request: AssertionRequest) {
-        if (requestStore.containsKey(userId)) {
-            logger.warn("SecurityPolicy: Challenge already active for user $userId — replacing")
-        }
-
-        requestStore[userId] = StoredRequest(
-            request = request,
-            expiresAt = Instant.now().plusSeconds(ttlSeconds)
+        val challengeKey = request.publicKeyCredentialRequestOptions.challenge.base64Url
+        val expiresAtEpochMillis = System.currentTimeMillis() + ttlSeconds * 1000L
+        challengeRepository.save(
+            Fido2AssertionChallenge(
+                userId = userId,
+                challengeKey = challengeKey,
+                requestJson = AssertionRequestCodec.encode(request),
+                expiresAtEpochMillis = expiresAtEpochMillis,
+            ),
         )
+        logger.debug("SecurityPolicy: Stored FIDO2 challenge for user {} (key={})", userId, challengeKey)
     }
 
-    /**
-     * Returns the request only if it exists and has not expired.
-     */
-    fun getRequest(userId: String): AssertionRequest? {
-        val stored = requestStore[userId] ?: return null
-        if (Instant.now().isAfter(stored.expiresAt)) {
-            requestStore.remove(userId)
-            logger.warn("SecurityPolicy: Challenge expired for user $userId")
+    @Transactional(readOnly = true)
+    fun getRequest(userId: String, challengeKey: String): AssertionRequest? {
+        val stored = challengeRepository.findByUserIdAndChallengeKey(userId, challengeKey).orElse(null)
+            ?: return null
+        if (System.currentTimeMillis() > stored.expiresAtEpochMillis) {
+            challengeRepository.deleteByUserIdAndChallengeKey(userId, challengeKey)
+            logger.warn("SecurityPolicy: Challenge expired for user {}", userId)
             return null
         }
-        return stored.request
+        return AssertionRequestCodec.decode(stored.requestJson)
     }
 
-    fun removeRequest(userId: String) {
-        requestStore.remove(userId)
+    @Transactional
+    fun removeRequest(userId: String, challengeKey: String) {
+        challengeRepository.deleteByUserIdAndChallengeKey(userId, challengeKey)
     }
 
-    fun getRawChallenge(userId: String): String? {
-        return getRequest(userId)?.publicKeyCredentialRequestOptions?.challenge?.base64Url
-    }
+    fun getRawChallenge(userId: String, challengeKey: String): String? =
+        getRequest(userId, challengeKey)?.publicKeyCredentialRequestOptions?.challenge?.base64Url
 
-    private fun purgeExpired() {
-        val now = Instant.now()
-        val expired = requestStore.entries.filter { now.isAfter(it.value.expiresAt) }.map { it.key }
-        expired.forEach { requestStore.remove(it) }
-        if (expired.isNotEmpty()) logger.info("SecurityPolicy: Purged ${expired.size} expired challenge(s)")
+    @Scheduled(
+        fixedDelayString = "\${wallet.challenge.ttl-seconds:120}000",
+        initialDelayString = "\${wallet.challenge.ttl-seconds:120}000",
+    )
+    @Transactional
+    fun purgeExpired() {
+        val removed = challengeRepository.deleteExpired(System.currentTimeMillis())
+        if (removed > 0) {
+            logger.info("SecurityPolicy: Purged {} expired FIDO2 challenge(s)", removed)
+        }
     }
 }

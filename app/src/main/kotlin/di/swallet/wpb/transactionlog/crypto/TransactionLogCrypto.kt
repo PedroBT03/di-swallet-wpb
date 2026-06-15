@@ -15,8 +15,10 @@ class TransactionLogCrypto(
     private val properties: TransactionLogProperties,
     private val holderLogKeyContext: HolderLogKeyContext,
 ) {
-    private val serverEncryptionKey: ByteArray = decodeKey(properties.encryptionKey, "encryption-key")
-    private val integrityKey: ByteArray = decodeKey(properties.integrityKey, "integrity-key")
+    private val integrityKey: ByteArray = decodeRequiredKey(properties.integrityKey, "integrity-key")
+    private val serverEncryptionKey: ByteArray by lazy {
+        decodeRequiredKey(properties.encryptionKey, "encryption-key")
+    }
 
     fun activeDekMode(): TransactionLogDekMode = properties.resolvedDekMode()
 
@@ -82,11 +84,11 @@ class TransactionLogCrypto(
         return mac.doFinal("txlog-dek:$holderId".toByteArray(Charsets.UTF_8))
     }
 
-    private fun decodeKey(encoded: String, label: String): ByteArray {
-        val value = encoded.ifBlank {
-            Base64.getEncoder().encodeToString("$label-dev-only-32-bytes-key!!".toByteArray(Charsets.UTF_8).copyOf(32))
+    private fun decodeRequiredKey(encoded: String, label: String): ByteArray {
+        require(encoded.isNotBlank()) {
+            "wpb.transaction-log.$label must be configured (empty value rejected)"
         }
-        return Base64.getDecoder().decode(value).also {
+        return Base64.getDecoder().decode(encoded).also {
             require(it.size == 32) { "wpb.transaction-log.$label must decode to 32 bytes" }
         }
     }

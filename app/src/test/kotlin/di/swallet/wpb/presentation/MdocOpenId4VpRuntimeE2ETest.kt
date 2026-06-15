@@ -5,6 +5,7 @@ import di.swallet.wpb.conformance.ConformanceTest
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.config.WalletProperties
+import di.swallet.wpb.testWalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.issuance.storage.JpaIssuedCredentialStorage
@@ -72,7 +73,7 @@ class MdocOpenId4VpRuntimeE2ETest {
         val storage = JpaIssuedCredentialStorage(
             repository = credentialRepository,
             walletKeyRepository = stack.walletKeyRepository,
-            disclosureCipher = DisclosureCipherService(WalletProperties()),
+            disclosureCipher = DisclosureCipherService(testWalletProperties()),
             mdocCredentialCodec = mdocCodec,
             mdocDocTypeRegistry = mdocRegistry,
             keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),
@@ -157,7 +158,7 @@ class MdocOpenId4VpRuntimeE2ETest {
         )
         val sdJwtBuilder = SdJwtVpBuilder(
             walletCredentialRepository = repository,
-            disclosureCipherService = DisclosureCipherService(WalletProperties()),
+            disclosureCipherService = DisclosureCipherService(testWalletProperties()),
             disclosureSelector = PresentationTestSupport.disclosureSelector,
             keyBindingJwtSigner = object : KeyBindingJwtSigner {
                 override fun signKeyBindingJwt(userId: String, payload: Map<String, Any>): String = "kb.jwt.stub"

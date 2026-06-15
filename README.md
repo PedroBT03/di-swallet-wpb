@@ -145,6 +145,10 @@ The WPB prototype intentionally stops short of full **LoA High** device assuranc
 
 `HsmPinStartupValidator` runs on **every** profile and rejects the known SoftHSM demo PIN (`1234`) unless `wpb.hsm.allow-known-weak-pin=true` is set explicitly. That opt-in is enabled only in `application-dev.properties` and `application-test.properties` (CI/local). Staging and production must set `HSM_PIN` to a non-default secret; `ProductionReadinessValidator` enforces the same rule again when `prod` is active. The PIN is still held in memory as a `String` for PKCS#11 — externalize via environment variables and restrict host access to the HSM socket.
 
+### Crypto secrets (all profiles)
+
+`CryptoSecretsStartupValidator` applies the same pattern to `wallet.disclosures.encryption-key`, `wpb.transaction-log.integrity-key`, and `wpb.transaction-log.encryption-key` (when `dek-mode=server`). Known weak defaults are rejected unless `wpb.security.allow-known-weak-crypto-secrets=true` (dev/test only). Base `application.properties` requires `WALLET_DISCLOSURES_ENCRYPTION_KEY` and `WPB_TRANSACTION_LOG_*` env vars; documented demo keys live in `application-dev.properties` only.
+
 ### WI→WSCA boundary (SCI / WWI prototype)
 
 The architecture PDF requires a **Secure Cryptographic Interface** between Wallet Instance logic and the WSCA before any HSM command runs. This prototype enforces that boundary when `wpb.wsca.enforce-sci-boundary=true` (default; enabled in `prod`):

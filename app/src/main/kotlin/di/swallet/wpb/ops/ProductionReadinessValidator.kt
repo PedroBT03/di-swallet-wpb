@@ -5,7 +5,6 @@ import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.config.TransactionLogProperties
 import di.swallet.wpb.config.WalletProperties
-import di.swallet.wpb.transactionlog.crypto.TransactionLogDekMode
 import org.slf4j.LoggerFactory
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
@@ -41,6 +40,13 @@ class ProductionReadinessValidator(
             violations += "wallet.allow-untrusted-attestation must be false in prod"
         }
 
+        violations += WeakCryptoSecretPolicy.violations(
+            disclosureEncryptionKey = walletProperties.disclosures.encryptionKey,
+            transactionLogEncryptionKey = transactionLogProperties.encryptionKey,
+            transactionLogIntegrityKey = transactionLogProperties.integrityKey,
+            dekMode = transactionLogProperties.resolvedDekMode(),
+        ).map { "$it must be overridden in prod" }
+
         val hsmPin = environment.getProperty("wpb.hsm.pin").orEmpty()
         if (hsmPin.isBlank() || hsmPin == WeakSecretDefaults.KNOWN_WEAK_HSM_PIN) {
             violations += "wpb.hsm.pin must be set to a non-default secret"
@@ -49,18 +55,6 @@ class ProductionReadinessValidator(
         val dbPassword = environment.getProperty("spring.datasource.password").orEmpty()
         if (dbPassword.isBlank() || dbPassword == WeakSecretDefaults.KNOWN_WEAK_DB_PASSWORD) {
             violations += "spring.datasource.password must be set to a non-default secret"
-        }
-
-        if (walletProperties.disclosures.encryptionKey == WeakSecretDefaults.KNOWN_WEAK_DISCLOSURE_KEY) {
-            violations += "wallet.disclosures.encryption-key must be overridden in prod"
-        }
-        if (transactionLogProperties.resolvedDekMode() == TransactionLogDekMode.SERVER &&
-            transactionLogProperties.encryptionKey == WeakSecretDefaults.KNOWN_WEAK_TX_ENC_KEY
-        ) {
-            violations += "wpb.transaction-log.encryption-key must be overridden in prod when dek-mode=server"
-        }
-        if (transactionLogProperties.integrityKey == WeakSecretDefaults.KNOWN_WEAK_TX_INT_KEY) {
-            violations += "wpb.transaction-log.integrity-key must be overridden in prod"
         }
 
         if (!openId4VciProperties.ka.enforceProductionTrustPolicy) {

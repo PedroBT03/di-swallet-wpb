@@ -29,6 +29,11 @@
       "sourceType": "di.swallet.wpb.config.HsmProperties"
     },
     {
+      "name": "wpb.security",
+      "type": "di.swallet.wpb.config.SecurityProperties",
+      "sourceType": "di.swallet.wpb.config.SecurityProperties"
+    },
+    {
       "name": "wpb.openid4vp",
       "type": "di.swallet.wpb.config.OpenId4VpProperties",
       "sourceType": "di.swallet.wpb.config.OpenId4VpProperties"
@@ -144,7 +149,7 @@
       "type": "java.lang.String",
       "sourceType": "di.swallet.wpb.config.WalletProperties$DisclosuresProperties",
       "description": "Base64-encoded AES-256 key used to encrypt SD-JWT disclosures at rest.",
-      "defaultValue": "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY="
+      "defaultValue": ""
     },
     {
       "name": "wpb.hsm.library",
@@ -165,6 +170,13 @@
       "type": "java.lang.Boolean",
       "sourceType": "di.swallet.wpb.config.HsmProperties",
       "description": "Explicit opt-in for the SoftHSM demo PIN (1234). Must remain false outside local dev and CI.",
+      "defaultValue": false
+    },
+    {
+      "name": "wpb.security.allow-known-weak-crypto-secrets",
+      "type": "java.lang.Boolean",
+      "sourceType": "di.swallet.wpb.config.SecurityProperties",
+      "description": "Explicit opt-in for documented weak disclosure and transaction-log keys. Must remain false outside local dev and CI.",
       "defaultValue": false
     },
     {

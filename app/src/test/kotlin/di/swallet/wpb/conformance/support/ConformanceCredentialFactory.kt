@@ -7,12 +7,12 @@ import di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest
 import di.swallet.wpb.presentation.PresentationTestSupport
 import di.swallet.wpb.presentation.domain.ClaimPath
 import di.swallet.wpb.service.format.DisclosureCipherService
-import di.swallet.wpb.config.WalletProperties
+import di.swallet.wpb.testWalletProperties
 
 object ConformanceCredentialFactory {
     private val objectMapper = ObjectMapper()
     private val sdJwtService = SdJwtService(objectMapper)
-    private val disclosureCipher = DisclosureCipherService(WalletProperties())
+    private val disclosureCipher = DisclosureCipherService(testWalletProperties())
 
     fun walletCredentialsForRequest(
         request: ResolvedAuthorizationRequest,

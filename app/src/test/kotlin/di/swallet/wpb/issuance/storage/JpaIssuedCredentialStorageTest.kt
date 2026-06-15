@@ -1,6 +1,7 @@
 package di.swallet.wpb.issuance.storage
 
 import di.swallet.wpb.config.WalletProperties
+import di.swallet.wpb.testWalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.WalletKeyRepository
@@ -24,7 +25,7 @@ import org.mockito.Mockito.`when`
 
 class JpaIssuedCredentialStorageTest {
 
-    private fun cipher() = DisclosureCipherService(WalletProperties())
+    private fun cipher() = DisclosureCipherService(testWalletProperties())
     private val binding = MdocTestSupport.holderBinding()
     private val mdocCodec = MdocTestSupport.stack(holderBindings = listOf(binding)).codec
     private val mdocRegistry = MdocDocTypeRegistry()

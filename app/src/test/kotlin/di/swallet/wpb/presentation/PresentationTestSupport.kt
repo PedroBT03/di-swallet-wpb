@@ -2,6 +2,7 @@ package di.swallet.wpb.presentation
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.config.WalletProperties
+import di.swallet.wpb.testWalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
@@ -14,7 +15,7 @@ import di.swallet.wpb.service.format.DisclosureCipherService
 object PresentationTestSupport {
     private val objectMapper = ObjectMapper()
     private val sdJwtService = SdJwtService(objectMapper)
-    private val disclosureCipher = DisclosureCipherService(WalletProperties())
+    private val disclosureCipher = DisclosureCipherService(testWalletProperties())
     val disclosureSelector = SdJwtDisclosureSelector(objectMapper, sdJwtService)
 
     fun credentialMatcher(

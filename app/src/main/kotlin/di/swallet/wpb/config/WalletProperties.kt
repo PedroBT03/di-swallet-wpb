@@ -25,6 +25,6 @@ data class WalletProperties(
     )
 
     data class DisclosuresProperties(
-        val encryptionKey: String = "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY="
+        var encryptionKey: String = "",
     )
 }

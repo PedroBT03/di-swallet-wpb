@@ -8,6 +8,7 @@ import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.format.sdjwt.SdJwtDisclosureSelector
 import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.config.WalletProperties
+import di.swallet.wpb.testWalletProperties
 import di.swallet.wpb.openid4vp.protocol.PresentationResponseMode
 import di.swallet.wpb.presentation.domain.ClaimPath
 import di.swallet.wpb.service.format.DisclosureCipherService
@@ -37,7 +38,7 @@ class DefaultCredentialMatcherTest {
     private val objectMapper = ObjectMapper()
     private val sdJwtService = SdJwtService(objectMapper)
     private val disclosureSelector = SdJwtDisclosureSelector(objectMapper, sdJwtService)
-    private val disclosureCipher = DisclosureCipherService(WalletProperties())
+    private val disclosureCipher = DisclosureCipherService(testWalletProperties())
 
     @BeforeEach
     fun setUp() {

@@ -1,6 +1,7 @@
 package di.swallet.wpb.presentation
 
 import di.swallet.wpb.config.WalletProperties
+import di.swallet.wpb.testWalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
@@ -71,7 +72,7 @@ class IssuerSignedMdocBindingE2ETest {
         val storage = JpaIssuedCredentialStorage(
             repository = repository,
             walletKeyRepository = stack.walletKeyRepository,
-            disclosureCipher = DisclosureCipherService(WalletProperties()),
+            disclosureCipher = DisclosureCipherService(testWalletProperties()),
             mdocCredentialCodec = codec,
             mdocDocTypeRegistry = registry,
             keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),

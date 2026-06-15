@@ -11,6 +11,7 @@ import di.swallet.wpb.config.HsmProperties
 import di.swallet.wpb.config.MdocProperties
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.config.SecurityProperties
 import di.swallet.wpb.config.StatusListProperties
 import di.swallet.wpb.config.TransactionLogProperties
 import di.swallet.wpb.config.WalletBindingProperties
@@ -30,6 +31,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
     WalletBindingProperties::class,
     StatusListProperties::class,
     TransactionLogProperties::class,
+    SecurityProperties::class,
     WscaSciProperties::class,
     DataDeletionRequestProperties::class,
     DpaReportProperties::class,

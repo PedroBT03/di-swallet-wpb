@@ -6,6 +6,7 @@ import di.swallet.wpb.config.ConsentProperties
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.config.WalletProperties
+import di.swallet.wpb.testWalletProperties
 import di.swallet.wpb.service.format.DisclosureCipherService
 import org.mockito.Mockito.mock
 
@@ -60,7 +61,7 @@ object ConsentTestSupport {
 
     fun pendingCredentialStore(): PendingCredentialStore =
         PendingCredentialStore(
-            DisclosureCipherService(WalletProperties()),
+            DisclosureCipherService(testWalletProperties()),
             ObjectMapper().findAndRegisterModules().registerKotlinModule(),
         )
 

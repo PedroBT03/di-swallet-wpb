@@ -4,6 +4,7 @@ import { HealthPage } from "./pages/HealthPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { WalletPage } from "./pages/WalletPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 export default function App() {
@@ -13,16 +14,7 @@ export default function App() {
         <Route index element={<HealthPage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="onboarding" element={<OnboardingPage />} />
-        <Route
-          path="wallet"
-          element={
-            <PlaceholderPage
-              title="Wallet"
-              phase={2}
-              description="Credential storage, disclosures, and wallet management."
-            />
-          }
-        />
+        <Route path="wallet" element={<WalletPage />} />
         <Route
           path="present"
           element={

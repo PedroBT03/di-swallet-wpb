@@ -4,11 +4,11 @@ import { getWalletKey } from "../api/wallet";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { walletRpId, walletRpName } from "../auth/webauthn";
-import type { WalletKeySummary } from "../types/fido2";
+import type { WalletKeyRecord } from "../types/wallet";
 
 export function SettingsPage() {
   const { session, busy, error, clearError, unlock, reregisterPasskey, signOut, forgetDevice } = useAuth();
-  const [testResult, setTestResult] = useState<WalletKeySummary | null>(null);
+  const [testResult, setTestResult] = useState<WalletKeyRecord | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
 
   async function handleTestAuth() {

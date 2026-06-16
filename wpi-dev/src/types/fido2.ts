@@ -11,12 +11,3 @@ export interface AuthChallengeResponse {
   challenge: string;
   info?: string;
 }
-
-export interface WalletKeySummary {
-  id?: number;
-  userId: string;
-  keyAlias: string;
-  publicKeyBase64: string;
-  revocationIndex: number;
-  createdAt?: string;
-}

@@ -3,20 +3,28 @@ import { bytesToBase64Url } from "./base64";
 
 const HOLDER_ID_KEY = "wpi-dev.holderId";
 const CREDENTIAL_ID_KEY = "wpi-dev.credentialId";
+const USER_DEVICE_ID_KEY = "wpi-dev.userDeviceId";
 const REMEMBERED_SESSION_KEY = "wpi-dev.rememberedSession";
 
 export interface HolderSession {
   holderId: string;
   credentialId: string;
+  userDeviceId?: number;
 }
 
 export function loadSession(): HolderSession | null {
   const holderId = sessionStorage.getItem(HOLDER_ID_KEY);
   const credentialId = sessionStorage.getItem(CREDENTIAL_ID_KEY);
+  const userDeviceIdRaw = sessionStorage.getItem(USER_DEVICE_ID_KEY);
   if (!holderId || !credentialId) {
     return null;
   }
-  return { holderId, credentialId };
+  const userDeviceId = userDeviceIdRaw ? Number(userDeviceIdRaw) : undefined;
+  return {
+    holderId,
+    credentialId,
+    userDeviceId: Number.isFinite(userDeviceId) ? userDeviceId : undefined,
+  };
 }
 
 /** Last successful holder on this browser (survives sign-out). */
@@ -39,6 +47,11 @@ export function loadRememberedSession(): HolderSession | null {
 export function saveSession(session: HolderSession): void {
   sessionStorage.setItem(HOLDER_ID_KEY, session.holderId);
   sessionStorage.setItem(CREDENTIAL_ID_KEY, session.credentialId);
+  if (session.userDeviceId != null) {
+    sessionStorage.setItem(USER_DEVICE_ID_KEY, String(session.userDeviceId));
+  } else {
+    sessionStorage.removeItem(USER_DEVICE_ID_KEY);
+  }
   localStorage.setItem(REMEMBERED_SESSION_KEY, JSON.stringify(session));
 }
 
@@ -46,6 +59,7 @@ export function saveSession(session: HolderSession): void {
 export function clearSession(): void {
   sessionStorage.removeItem(HOLDER_ID_KEY);
   sessionStorage.removeItem(CREDENTIAL_ID_KEY);
+  sessionStorage.removeItem(USER_DEVICE_ID_KEY);
 }
 
 export function forgetRememberedSession(): void {

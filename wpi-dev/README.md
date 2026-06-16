@@ -36,6 +36,19 @@ Open [http://localhost:5173](http://localhost:5173). The **Health** page calls `
 
 If WebAuthn fails, confirm `http://localhost:5173` is listed in `wallet.origins` on WPB.
 
+### Wallet dashboard
+
+Open **Wallet** after signing in. Typical demo flow:
+
+1. **Initialize wallet** — creates wallet unit + DPoP binding (needs FIDO2 device id from passkey registration).
+2. **Ensure HSM key** — generates holder key in SoftHSM (or returns existing).
+3. **Issue demo PID** — requires wallet state **OPERATIONAL** (or VALID) and an HSM key.
+4. **Sign test** — remote signature inside the HSM.
+
+Protected actions show an “Authenticating with passkey…” banner while WebAuthn runs.
+
+On **Wallet**, use **Unlock & sync from server** once to load key and credentials (single passkey). **Refresh view** replays cached data without asking again. **Ensure HSM key** returns the existing key if one is already stored.
+
 - WPB Swagger (direct): [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
 
 ## Proxy

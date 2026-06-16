@@ -44,9 +44,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const passkey = await registerPasskey(trimmed);
-    await registerDevice(trimmed, passkey.credentialId, passkey.publicKeyBase64);
+    const device = await registerDevice(trimmed, passkey.credentialId, passkey.publicKeyBase64);
 
-    const nextSession = { holderId: trimmed, credentialId: passkey.credentialId };
+    const nextSession: HolderSession = {
+      holderId: trimmed,
+      credentialId: passkey.credentialId,
+      userDeviceId: device.id,
+    };
     saveSession(nextSession);
     setSession(nextSession);
     setRememberedSession(nextSession);
@@ -70,7 +74,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ? await assertPasskey(trimmed, credentialId, challengeResponse.challenge)
         : await assertPasskeyDiscoverable(trimmed, challengeResponse.challenge);
 
-      const nextSession = { holderId: trimmed, credentialId: assertion.id };
+      const nextSession: HolderSession = {
+        holderId: trimmed,
+        credentialId: assertion.id,
+        userDeviceId:
+          remembered?.holderId === trimmed ? remembered.userDeviceId : undefined,
+      };
       saveSession(nextSession);
       setSession(nextSession);
       setRememberedSession(nextSession);

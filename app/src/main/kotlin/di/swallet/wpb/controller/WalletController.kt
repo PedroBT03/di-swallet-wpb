@@ -20,6 +20,8 @@ import di.swallet.wpb.service.format.DisclosureCipherService
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.domain.WalletKeyRepository
+import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.domain.UserDevice
 import di.swallet.wpb.security.AuthenticatedHolderGuard
 import di.swallet.wpb.revocation.CredentialRevocationGuard
@@ -65,6 +67,31 @@ data class PidKeyBindRequest(
     val pidPubJwk: String,
 )
 
+/** Read-only wallet dashboard payload for WPI clients (no encoded credential bodies). */
+data class WalletCredentialSummary(
+    val id: Long,
+    val credentialType: String,
+    val issuedAt: java.time.LocalDateTime,
+    val revocationState: String,
+    val deviceBound: Boolean,
+    val statusListId: String?,
+    val statusListIndex: Int?,
+    val encodedPreview: String,
+)
+
+/** Holder wallet unit metadata for WPI dashboards. */
+data class WalletUnitSummary(
+    val walletId: String,
+    val state: String,
+)
+
+/** Holder wallet key plus credential summaries in a single authenticated read. */
+data class WalletSummaryResponse(
+    val key: WalletKey?,
+    val credentials: List<WalletCredentialSummary>,
+    val walletUnit: WalletUnitSummary?,
+)
+
 /**
  * Wallet Provider Interface (WPI) implementation.
  * Manages keys and credential issuance flows.
@@ -77,6 +104,8 @@ class WalletController(
     private val presentationService: PresentationService,
     private val disclosureCipherService: DisclosureCipherService,
     private val credentialRepository: WalletCredentialRepository,
+    private val walletKeyRepository: WalletKeyRepository,
+    private val walletUnitRepository: WalletUnitRepository,
     private val statusListService: StatusListService,
     private val fido2Service: Fido2Service,
     private val deviceBindingService: DeviceBindingService,
@@ -190,6 +219,10 @@ class WalletController(
     @Operation(summary = "Generate Hardware-backed Key", description = "Creates an EC KeyPair inside the Remote HSM for the user")
     fun createKey(@PathVariable userId: String): WalletKey {
         authenticatedHolderGuard.requireSelf(userId)
+        val existing = walletKeyRepository.findByUserId(userId)
+        if (existing.isPresent) {
+            return existing.get()
+        }
         return hsmService.generateKeyForUser(userId)
     }
 
@@ -334,6 +367,24 @@ class WalletController(
     // --- SECTION 5: DATA RETRIEVAL ---
 
     /**
+     * Returns holder key metadata (if any) and credential summaries in one round trip.
+     */
+    @GetMapping("/summary/{userId}")
+    @Operation(
+        summary = "Wallet dashboard summary",
+        description = "Read-only holder overview for WPI dashboards without full credential payloads.",
+    )
+    fun getWalletSummary(@PathVariable userId: String): WalletSummaryResponse {
+        authenticatedHolderGuard.requireSelf(userId)
+        val key = runCatching { hsmService.getUserKey(userId) }.getOrNull()
+        val credentials = credentialRepository.findByUserId(userId).map(::toCredentialSummary)
+        val walletUnit = walletUnitRepository.findFirstByHolderId(userId).orElse(null)?.let { unit ->
+            WalletUnitSummary(walletId = unit.walletId, state = unit.state.name)
+        }
+        return WalletSummaryResponse(key = key, credentials = credentials, walletUnit = walletUnit)
+    }
+
+    /**
      * Endpoint to retrieve all issued credentials for a user.
      */
     @GetMapping("/credentials/{userId}")
@@ -341,5 +392,23 @@ class WalletController(
     fun getCredentials(@PathVariable userId: String): List<WalletCredential> {
         authenticatedHolderGuard.requireSelf(userId)
         return credentialRepository.findByUserId(userId)
+    }
+
+    private fun toCredentialSummary(credential: WalletCredential): WalletCredentialSummary {
+        val preview = if (credential.encodedData.length > 48) {
+            credential.encodedData.take(48) + "…"
+        } else {
+            credential.encodedData
+        }
+        return WalletCredentialSummary(
+            id = credential.id ?: error("WalletCredential persisted without id"),
+            credentialType = credential.credentialType,
+            issuedAt = credential.issuedAt,
+            revocationState = credential.revocationState.name,
+            deviceBound = credential.deviceBound,
+            statusListId = credential.statusListId,
+            statusListIndex = credential.statusListIndex,
+            encodedPreview = preview,
+        )
     }
 }

@@ -1,3 +1,4 @@
+import type { UserDeviceRecord } from "../types/wallet";
 import type { AuthChallengeResponse } from "../types/fido2";
 import { apiFetch } from "./client";
 
@@ -11,13 +12,16 @@ export function registerDevice(
   holderId: string,
   credentialId: string,
   publicKeyBase64: string,
-): Promise<unknown> {
+): Promise<UserDeviceRecord> {
   const params = new URLSearchParams({
     credentialId,
     publicKeyBase64,
   });
-  return apiFetch(`/api/v1/wallet/auth/register/${encodeURIComponent(holderId)}?${params}`, {
-    method: "POST",
-    raw: true,
-  });
+  return apiFetch<UserDeviceRecord>(
+    `/api/v1/wallet/auth/register/${encodeURIComponent(holderId)}?${params}`,
+    {
+      method: "POST",
+      raw: true,
+    },
+  );
 }

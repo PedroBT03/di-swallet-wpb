@@ -1,13 +1,18 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { HealthPage } from "./pages/HealthPage";
+import { OnboardingPage } from "./pages/OnboardingPage";
+import { LoginPage } from "./pages/LoginPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<HealthPage />} />
+        <Route path="login" element={<LoginPage />} />
+        <Route path="onboarding" element={<OnboardingPage />} />
         <Route
           path="wallet"
           element={
@@ -58,16 +63,7 @@ export default function App() {
             />
           }
         />
-        <Route
-          path="settings"
-          element={
-            <PlaceholderPage
-              title="Settings"
-              phase={1}
-              description="FIDO2 registration and holder authentication."
-            />
-          }
-        />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

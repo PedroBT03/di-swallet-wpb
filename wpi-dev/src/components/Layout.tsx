@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
+import { AuthStatus } from "./AuthStatus";
 
 const navItems = [
   { to: "/", label: "Health", end: true },
@@ -18,6 +19,7 @@ export function Layout() {
           <span className="app-header__title">WPI Dev</span>
           <span className="app-header__subtitle">DI-Swallet lab UI</span>
         </div>
+        <AuthStatus />
         <nav className="app-nav" aria-label="Main">
           {navItems.map(({ to, label, ...rest }) => (
             <NavLink

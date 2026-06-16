@@ -28,6 +28,14 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). The **Health** page calls `GET /actuator/health` through the Vite proxy and should show **UP** when WPB is running.
 
+### Holder passkey (phase 1)
+
+1. **New holder** (header → *New holder*, or `/onboarding`) — pick a holder id and register a passkey.
+2. **Log in** (header → *Log in*, or `/login`) — existing holder id + passkey unlock (no re-registration).
+3. **Sign out** ends the UI session; **Log in** restores it using the passkey remembered on this browser.
+
+If WebAuthn fails, confirm `http://localhost:5173` is listed in `wallet.origins` on WPB.
+
 - WPB Swagger (direct): [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
 
 ## Proxy

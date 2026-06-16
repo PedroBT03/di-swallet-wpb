@@ -13,21 +13,21 @@ import org.springframework.stereotype.Component
 @Component
 @ConfigurationProperties(prefix = "wallet")
 data class WalletProperties(
-    val rp: RpProperties = RpProperties(),
-    val origins: String = "http://localhost,http://localhost:8080,https://localhost",
-    val allowUntrustedAttestation: Boolean = true,
-    val challenge: ChallengeProperties = ChallengeProperties(),
-    val disclosures: DisclosuresProperties = DisclosuresProperties()
+    var rp: RpProperties = RpProperties(),
+    var origins: String = "http://localhost,http://localhost:8080,http://localhost:5173,https://localhost",
+    var allowUntrustedAttestation: Boolean = true,
+    var challenge: ChallengeProperties = ChallengeProperties(),
+    var disclosures: DisclosuresProperties = DisclosuresProperties()
 ) {
     /** WebAuthn relying party id and display name. */
     data class RpProperties(
-        val id: String = "localhost",
-        val name: String = "DI-Swallet Wallet Provider"
+        var id: String = "localhost",
+        var name: String = "DI-Swallet Wallet Provider"
     )
 
     /** TTL for stored FIDO2 assertion challenges. */
     data class ChallengeProperties(
-        val ttlSeconds: Long = 120
+        var ttlSeconds: Long = 120
     )
 
     /** AES key used to encrypt SD-JWT disclosures at rest. */

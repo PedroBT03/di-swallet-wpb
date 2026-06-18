@@ -4,6 +4,7 @@
 
 package di.swallet.wpb.security
 
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
@@ -18,10 +19,10 @@ class Oid4SessionAccessGuard(
     /**
      * Rejects the call when the session holder is missing or not the authenticated user.
      */
-    fun requireSessionHolder(holderId: String?) {
+    fun requireSessionHolder(holderId: String?, request: HttpServletRequest? = null) {
         if (holderId.isNullOrBlank()) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "OID4 session is not bound to a holder")
         }
-        authenticatedHolderGuard.requireSelf(holderId)
+        authenticatedHolderGuard.requireSelf(holderId, request)
     }
 }

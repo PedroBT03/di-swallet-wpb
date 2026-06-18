@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
+import org.springframework.web.context.request.RequestContextHolder
+import org.springframework.web.context.request.ServletRequestAttributes
 import org.springframework.web.servlet.HandlerInterceptor
 import java.util.Base64
 
@@ -87,6 +89,8 @@ class AuthorizationInterceptor(
                     signature = assertionMap["signature"] as String
                 )) {
                     request.setAttribute(WalletSecurityAttributes.AUTHENTICATED_HOLDER_ID, userId)
+                    AuthenticatedHolderRequestBinder.bind(userId)
+                    bindRequestContext(request)
                     wscaSciGrantService.grantForRequest(userId)
                     bindHolderLogKey(request)
                     enforceRequestedHolderBinding(request, userId)
@@ -106,6 +110,29 @@ class AuthorizationInterceptor(
 
         logger.warn("SecurityPolicy: Unauthorized access attempt to ${request.requestURI}")
         throw UnauthorizedWalletException("Invalid or expired FIDO2 authorization context")
+    }
+
+    /**
+     * Clears per-request holder binding when the HTTP exchange completes.
+     */
+    override fun afterCompletion(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        handler: Any,
+        ex: Exception?,
+    ) {
+        AuthenticatedHolderRequestBinder.clear()
+    }
+
+    /**
+     * Ensures controller code and request-scoped beans read the same servlet request
+     * instance that received FIDO2 attributes in preHandle.
+     */
+    private fun bindRequestContext(request: HttpServletRequest) {
+        val current = RequestContextHolder.getRequestAttributes()
+        if (current !is ServletRequestAttributes || current.request !== request) {
+            RequestContextHolder.setRequestAttributes(ServletRequestAttributes(request), true)
+        }
     }
 
     /**

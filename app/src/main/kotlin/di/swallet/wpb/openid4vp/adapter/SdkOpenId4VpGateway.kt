@@ -75,6 +75,14 @@ class SdkOpenId4VpGateway(
 
     /** Resolves a verifier request URI through the SDK, with demo-mode fallback parsing. */
     override suspend fun resolveRequestUri(requestUri: String): AuthorizationRequestResolution {
+        if (demoMode && looksLikeLocalEmulatorRequestUri(requestUri)) {
+            when (val emulatorResolution = resolveRequestUriFallback(requestUri)) {
+                is AuthorizationRequestResolution.Success -> return emulatorResolution
+                is AuthorizationRequestResolution.Invalid -> return emulatorResolution
+                null -> Unit
+            }
+        }
+
         return when (val resolution = openId4Vp.resolveRequestUri(requestUri)) {
             is Resolution.Success -> {
                 val sdkRequest = resolution.requestObject
@@ -108,11 +116,23 @@ class SdkOpenId4VpGateway(
     /** Parses authorization request JSON directly when demo-mode fallback is enabled. */
     private fun resolveRequestUriFallback(requestUri: String): AuthorizationRequestResolution? {
         return try {
-            val raw = URI(requestUri).toURL().readText()
+            val raw = fetchRequestBody(requestUri)
             val jsonText = decodeJwtPayloadIfNeeded(raw)
             val element = Json.parseToJsonElement(jsonText).jsonObject
-            val clientId = element["client_id"]?.jsonPrimitive?.contentOrNull
-                ?: return invalidFallback("MissingClientId")
+            val clientId = extractClientId(element)
+                ?: run {
+                    val emulatorError = element["error"]?.jsonPrimitive?.contentOrNull
+                    if (emulatorError != null) {
+                        return invalidFallback(
+                            "VerifierEmulatorError",
+                            "Verifier emulator returned an error: $emulatorError",
+                        )
+                    }
+                    return invalidFallback(
+                        "MissingClientId",
+                        "Authorization request is missing client_id (check verifier-emulator is running and pip install -r requirements.txt)",
+                    )
+                }
             val responseMode = when (element["response_mode"]?.jsonPrimitive?.contentOrNull) {
                 "direct_post" -> PresentationResponseMode.DIRECT_POST
                 "direct_post.jwt" -> PresentationResponseMode.DIRECT_POST_JWT
@@ -150,7 +170,7 @@ class SdkOpenId4VpGateway(
                     credentialQueries = parsedQueries,
                 ),
                 transactionDataJson = element["transaction_data"]?.toString(),
-                verifierInfoJson = element["verifier_info"]?.toString(),
+                verifierInfoJson = encodeVerifierInfoJson(element["verifier_info"]),
             )
             fallbackRequestStore[requestToken] = FallbackRequest(
                 requestToken = requestToken,
@@ -181,10 +201,50 @@ class SdkOpenId4VpGateway(
     }
 
     /** Builds an invalid fallback resolution with a fresh error token. */
-    private fun invalidFallback(code: String): AuthorizationRequestResolution.Invalid {
+    private fun invalidFallback(code: String, message: String = code): AuthorizationRequestResolution.Invalid {
         val token = UUID.randomUUID().toString()
-        val envelope = AuthorizationRequestErrorEnvelope(token, code, code)
+        val envelope = AuthorizationRequestErrorEnvelope(token, code, message)
         return AuthorizationRequestResolution.Invalid(envelope)
+    }
+
+    /** Fetches the authorization request body from a request_uri with basic HTTP status checks. */
+    private fun fetchRequestBody(requestUri: String): String {
+        val connection = URI(requestUri).toURL().openConnection() as HttpURLConnection
+        connection.connectTimeout = 5_000
+        connection.readTimeout = 5_000
+        connection.requestMethod = "GET"
+        val status = connection.responseCode
+        val body = (if (status in 200..299) connection.inputStream else connection.errorStream)
+            ?.bufferedReader()
+            ?.use { it.readText() }
+            .orEmpty()
+        if (status !in 200..299) {
+            throw IllegalStateException("HTTP $status from $requestUri: $body")
+        }
+        return body
+    }
+
+    /** Reads client_id from common authorization request JSON shapes. */
+    private fun extractClientId(element: JsonObject): String? =
+        element["client_id"]?.jsonPrimitive?.contentOrNull
+            ?: element["clientId"]?.jsonPrimitive?.contentOrNull
+
+    /** Serializes verifier_info for PKIX extraction downstream. */
+    private fun encodeVerifierInfoJson(verifierInfo: kotlinx.serialization.json.JsonElement?): String? {
+        if (verifierInfo == null) return null
+        return Json.encodeToString(kotlinx.serialization.json.JsonElement.serializer(), verifierInfo)
+    }
+
+    /** True for the local Flask verifier emulator used in thesis demos. */
+    private fun looksLikeLocalEmulatorRequestUri(requestUri: String): Boolean {
+        return runCatching {
+            val uri = URI(requestUri)
+            val host = uri.host?.lowercase()
+            val path = uri.path.orEmpty()
+            val localHost = host in setOf("localhost", "127.0.0.1", "[::1]", "::1")
+            val emulatorPath = path.startsWith("/request/")
+            localHost && (emulatorPath || requestUri.contains(":8081"))
+        }.getOrDefault(false)
     }
 
     /** Dispatches a positive presentation response through the SDK or demo fallback path. */

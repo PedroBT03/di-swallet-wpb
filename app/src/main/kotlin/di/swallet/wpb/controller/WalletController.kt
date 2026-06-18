@@ -23,7 +23,11 @@ import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.WalletKeyRepository
 import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.domain.UserDevice
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ObjectNode
+import com.yubico.webauthn.AssertionRequest
 import di.swallet.wpb.security.AuthenticatedHolderGuard
+import jakarta.servlet.http.HttpServletRequest
 import di.swallet.wpb.revocation.CredentialRevocationGuard
 import di.swallet.wpb.revocation.WalletRevocationService
 import di.swallet.wpb.transactionlog.service.TransactionLogger
@@ -114,6 +118,7 @@ class WalletController(
     private val transactionLogger: TransactionLogger,
     private val walletCredentialDeletionService: WalletCredentialDeletionService,
     private val authenticatedHolderGuard: AuthenticatedHolderGuard,
+    private val objectMapper: ObjectMapper,
 ) {
 
     // --- SECTION 1: AUTHENTICATION & ONBOARDING ---
@@ -132,9 +137,10 @@ class WalletController(
     fun registerDevice(
         @PathVariable userId: String,
         @RequestParam credentialId: String,
-        @RequestParam publicKeyBase64: String
+        @RequestParam publicKeyBase64: String,
+        @RequestParam(defaultValue = "false") replaceExisting: Boolean,
     ): UserDevice {
-        return fido2Service.registerDevice(userId, credentialId, publicKeyBase64)
+        return fido2Service.registerDevice(userId, credentialId, publicKeyBase64, replaceExisting)
     }
 
     /**
@@ -143,15 +149,35 @@ class WalletController(
      */
     @GetMapping("/auth/challenge/{userId}")
     @Operation(summary = "Get Auth Challenge", description = "Generates a unique nonce for FIDO2/WebAuthn authorization.")
-    fun getChallenge(@PathVariable userId: String): Map<String, String> {
-        val assertionRequest = fido2Service.startAuthentication(userId)
-        
-        val challenge = assertionRequest.publicKeyCredentialRequestOptions.challenge.base64Url
-        
+    fun getChallenge(
+        @PathVariable userId: String,
+        @RequestParam(required = false) credentialId: String?,
+    ): Map<String, Any> {
+        val assertionRequest = fido2Service.startAuthentication(userId, credentialId)
+        return buildChallengeResponse(userId, assertionRequest)
+    }
+
+    private fun buildChallengeResponse(userId: String, assertionRequest: AssertionRequest): Map<String, Any> {
+        val options = assertionRequest.publicKeyCredentialRequestOptions
+        val optionsRoot = objectMapper.readTree(options.toCredentialsGetJson())
+        val optionsNode = (optionsRoot.get("publicKey") ?: optionsRoot).deepCopy<ObjectNode>()
+        if (optionsNode.has("extensions") && optionsNode.get("extensions").isEmpty) {
+            optionsNode.remove("extensions")
+        }
+        if (!optionsNode.has("userVerification")) {
+            optionsNode.put("userVerification", "preferred")
+        }
+        if (!optionsNode.has("timeout")) {
+            optionsNode.put("timeout", 60_000)
+        }
+        @Suppress("UNCHECKED_CAST")
+        val optionsMap = objectMapper.convertValue(optionsNode, Map::class.java) as Map<String, Any>
+
         return mapOf(
             "userId" to userId,
-            "challenge" to challenge,
-            "info" to "Sign this challenge using your device to authorize the next operation."
+            "challenge" to options.challenge.base64Url,
+            "publicKeyCredentialRequestOptions" to optionsMap,
+            "info" to "Sign this challenge using your device to authorize the next operation.",
         )
     }
 
@@ -217,8 +243,8 @@ class WalletController(
      */
     @PostMapping("/keys/{userId}")
     @Operation(summary = "Generate Hardware-backed Key", description = "Creates an EC KeyPair inside the Remote HSM for the user")
-    fun createKey(@PathVariable userId: String): WalletKey {
-        authenticatedHolderGuard.requireSelf(userId)
+    fun createKey(@PathVariable userId: String, httpRequest: HttpServletRequest): WalletKey {
+        authenticatedHolderGuard.requireSelf(userId, httpRequest)
         val existing = walletKeyRepository.findByUserId(userId)
         if (existing.isPresent) {
             return existing.get()
@@ -231,8 +257,8 @@ class WalletController(
      */
     @GetMapping("/keys/{userId}")
     @Operation(summary = "Get Wallet Metadata", description = "Retrieves the public key and status of a user's wallet")
-    fun getKey(@PathVariable userId: String): WalletKey {
-        authenticatedHolderGuard.requireSelf(userId)
+    fun getKey(@PathVariable userId: String, httpRequest: HttpServletRequest): WalletKey {
+        authenticatedHolderGuard.requireSelf(userId, httpRequest)
         return hsmService.getUserKey(userId)
     }
 

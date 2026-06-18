@@ -186,7 +186,7 @@ Some OpenID4VP shortcuts used for local emulator validation are protected behind
 
 When `wpb.openid4vp.demo-mode=true`, the backend enables demo-only behavior such as:
 
-- accepting a demo pre-registered verifier client (`verifier-demo-client`)
+- resolving emulator authorization requests (ES256 JWT + `verifier_info.x5c`) with PKIX trust against bundled `demo-lote.json`
 - synthetic credential candidates when the wallet has no matching credentials
 - fallback request resolution/dispatch paths for emulator scenarios
 
@@ -235,8 +235,8 @@ They are either stubbed, partially implemented, or guarded by `demo-mode`.
 | **ISO mdoc presentations are not built**: `CredentialFormat.MDOC` candidates throw `UnsupportedOperationException` from `DefaultVpTokenBuilder`. mdoc is declared in the SDK configuration but no encoder is wired. | ISO 18013-5 mdoc support is deferred to the dedicated mdoc section below. | ISO mdoc presentation encoding |
 | **Trust validation is a thin baseline**: client-id prefix scheme allow-list plus a static comma-separated trust list. No certificate-chain validation, no List of Trusted Entities (LoTE) lookup, no access-certificate evaluation. | Baseline only needs to reject obviously malformed verifiers and document the boundary. | Trust framework integration (LoTE) |
 | **Response encryption is not negotiated per-request**: `EncryptionParameters` is generated as a fresh random Diffie-Hellman value per dispatch rather than derived from verifier metadata / JWKS. | The wallet still wires the SDK's `ResponseEncryptionConfiguration` (ECDH-ES / A256GCM) and the SDK handles the cryptographic envelope; only the wallet-side contribution is simplified. | Future hardening pass |
-| **Demo-mode fallback resolver** parses authorization requests as plain JSON or HS256 JWTs (used by the local emulator). It is off by default and rejects when not enabled. | Required to exercise the protocol end-to-end without operating a full signed-request verifier. | Removed when a real signed verifier is integrated |
-| **Verifier emulator** signs request objects with a shared HS256 secret rather than ES256 + JWKS. | It is a local development aid only. | Replaced by a real verifier in interop tests |
+| **Demo-mode fallback resolver** parses authorization requests as plain JSON or signed JWTs (local emulator uses ES256). It is off by default and rejects when not enabled. | Required to exercise the protocol end-to-end without operating a full HAIP verifier deployment. | Removed when a production signed verifier is integrated |
+| **Verifier emulator** signs requests with a dev EC key and embeds an access certificate in `verifier_info.x5c` for PKIX trust against `demo-lote.json`. | Exercises real trust validation in thesis demos; keys are not production material. | Replaced by a national verifier in interop tests |
 | **Sessions are stored in memory** (`InMemoryPresentationSessionRepository`) and the SDK adapter keeps `ResolvedRequestObject` in a per-instance `ConcurrentHashMap`. | A single instance is enough for protocol validation. | Durable transaction log |
 | **Policy engine blocks server-side** (trust + registry intended-use); holder-facing minimisation warnings are in consent views. | Registry enforcement is server-side; consent views surface warnings in the WPI. | Implemented |
 | **Consent submit requires FIDO2** on `POST /openid4vp/consent` and `POST /openid4vci/consent` (RPA_08). | Gate at approval moment, not at authorize. | Implemented |

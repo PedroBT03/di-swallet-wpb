@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.domain.UserDevice
 import di.swallet.wpb.domain.UserDeviceRepository
+import di.swallet.wpb.domain.DeviceWalletBindingRepository
 import di.swallet.wpb.security.ChallengeService
 import di.swallet.wpb.security.Fido2ChallengeSupport
 import di.swallet.wpb.security.WscaSciBootstrap
@@ -24,6 +25,7 @@ import java.util.*
 @Service
 class Fido2Service(
     private val userDeviceRepository: UserDeviceRepository,
+    private val deviceWalletBindingRepository: DeviceWalletBindingRepository,
     private val challengeService: ChallengeService,
     private val walletProperties: WalletProperties,
     private val objectMapper: ObjectMapper,
@@ -67,8 +69,29 @@ class Fido2Service(
      * TODO: PRODUCTION - Verified Onboarding.
      * This binding must be preceded by a High LoA identity check (e.g., via CMD or Citizen Card).
      */
-    fun registerDevice(userId: String, credentialId: String, publicKeyBase64: String): UserDevice =
+    fun registerDevice(
+        userId: String,
+        credentialId: String,
+        publicKeyBase64: String,
+        replaceExisting: Boolean = false,
+    ): UserDevice =
         WscaSciBootstrap.allow {
+            if (replaceExisting) {
+                userDeviceRepository.findByUserId(userId)
+                    .filter { it.credentialId != credentialId }
+                    .filter { device ->
+                        val deviceId = device.id ?: return@filter true
+                        !deviceWalletBindingRepository.existsByUserDevice_Id(deviceId)
+                    }
+                    .forEach { stale ->
+                        logger.info(
+                            "FIDO2: Removing unbound stale credential {} for user {}",
+                            stale.credentialId,
+                            userId,
+                        )
+                        userDeviceRepository.delete(stale)
+                    }
+            }
             val existing = userDeviceRepository.findByCredentialId(credentialId)
             if (existing.isPresent) return@allow existing.get()
 
@@ -93,15 +116,48 @@ class Fido2Service(
 
     /**
      * Starts the standard WebAuthn ceremony by generating an AssertionRequest.
+     * When [credentialId] is set, the ceremony is narrowed to that passkey so the browser
+     * cannot pick a different registered device for the same holder.
      */
-    fun startAuthentication(userId: String): AssertionRequest {
+    fun startAuthentication(userId: String, credentialId: String? = null): AssertionRequest {
         val request = rp.startAssertion(
             StartAssertionOptions.builder()
-                .username(Optional.of(userId))
-                .build()
+                .username(userId)
+                .build(),
         )
-        challengeService.storeRequest(userId, request)
-        return request
+        val narrowed = narrowAssertionRequest(request, userId, credentialId)
+        challengeService.storeRequest(userId, narrowed)
+        return narrowed
+    }
+
+    private fun narrowAssertionRequest(
+        request: AssertionRequest,
+        userId: String,
+        credentialId: String?,
+    ): AssertionRequest {
+        if (credentialId.isNullOrBlank()) {
+            return request
+        }
+        val device = userDeviceRepository.findByCredentialId(credentialId)
+        if (device.isPresent && device.get().userId != userId) {
+            throw IllegalArgumentException("FIDO2: credential $credentialId is not registered for user $userId")
+        }
+        val targetId = com.yubico.webauthn.data.ByteArray.fromBase64Url(credentialId)
+        val narrowedOptions = request.publicKeyCredentialRequestOptions.toBuilder()
+            .allowCredentials(
+                listOf(
+                    PublicKeyCredentialDescriptor.builder()
+                        .id(targetId)
+                        .type(PublicKeyCredentialType.PUBLIC_KEY)
+                        .build(),
+                ),
+            )
+            .userVerification(UserVerificationRequirement.PREFERRED)
+            .build()
+        return request.toBuilder()
+            .publicKeyCredentialRequestOptions(narrowedOptions)
+            .username(userId)
+            .build()
     }
 
     /**

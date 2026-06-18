@@ -19,4 +19,7 @@ interface DeviceWalletBindingRepository : JpaRepository<DeviceWalletBinding, Lon
 
     /** Returns bindings of a specific type for one wallet unit. */
     fun findByWalletUnitIdAndBindingType(walletUnitId: Long, bindingType: DeviceBindingType): List<DeviceWalletBinding>
+
+    /** True when a wallet binding still references the given FIDO2 device row. */
+    fun existsByUserDevice_Id(userDeviceId: Long): Boolean
 }

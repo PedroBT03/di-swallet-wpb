@@ -2,10 +2,9 @@ import { startAuthentication, startRegistration } from "@simplewebauthn/browser"
 import type {
   AuthenticationResponseJSON,
   PublicKeyCredentialCreationOptionsJSON,
-  PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/types";
 import { decode } from "cbor-x";
-import type { Fido2AssertionPayload } from "../types/fido2";
+import type { AuthChallengeResponse, Fido2AssertionPayload } from "../types/fido2";
 import { base64UrlToBytes, bytesToBase64Url, stringToBase64Url } from "./base64";
 
 export const walletRpId = import.meta.env.VITE_WALLET_RP_ID ?? "localhost";
@@ -94,37 +93,32 @@ export async function registerPasskey(holderId: string): Promise<RegisterPasskey
   };
 }
 
-/** Signs a server-issued challenge with a known credential id. */
-export async function assertPasskey(
-  holderId: string,
-  credentialId: string,
-  challenge: string,
-): Promise<Fido2AssertionPayload> {
-  const options: PublicKeyCredentialRequestOptionsJSON = {
-    challenge,
-    rpId: walletRpId,
-    allowCredentials: [{ id: credentialId, type: "public-key" }],
-    userVerification: "preferred",
-    timeout: 60_000,
-  };
-
-  const assertion = await startAuthentication({ optionsJSON: options });
-  return toAssertionPayload(holderId, assertion);
+function normalizeRequestOptions(
+  raw: AuthChallengeResponse["publicKeyCredentialRequestOptions"],
+): AuthChallengeResponse["publicKeyCredentialRequestOptions"] {
+  if (raw && typeof raw === "object" && "publicKey" in raw) {
+    const wrapped = raw as { publicKey?: AuthChallengeResponse["publicKeyCredentialRequestOptions"] };
+    if (wrapped.publicKey) {
+      return wrapped.publicKey;
+    }
+  }
+  return raw;
 }
 
-/** Signs a challenge with a discoverable passkey when no credential id is stored locally. */
-export async function assertPasskeyDiscoverable(
+/**
+ * Signs the server-issued WebAuthn ceremony. The options must come from WPB
+ * (GET /auth/challenge) so finishAssertion matches the stored AssertionRequest.
+ */
+export async function assertWithServerChallenge(
   holderId: string,
-  challenge: string,
+  challengeResponse: AuthChallengeResponse,
 ): Promise<Fido2AssertionPayload> {
-  const options: PublicKeyCredentialRequestOptionsJSON = {
-    challenge,
-    rpId: walletRpId,
-    userVerification: "preferred",
-    timeout: 60_000,
-  };
-
-  const assertion = await startAuthentication({ optionsJSON: options });
+  if (!challengeResponse.publicKeyCredentialRequestOptions) {
+    throw new Error("WPB challenge response is missing publicKeyCredentialRequestOptions.");
+  }
+  const assertion = await startAuthentication({
+    optionsJSON: normalizeRequestOptions(challengeResponse.publicKeyCredentialRequestOptions),
+  });
   return toAssertionPayload(holderId, assertion);
 }
 

@@ -4,6 +4,7 @@ import { HealthPage } from "./pages/HealthPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { PresentPage } from "./pages/PresentPage";
 import { WalletPage } from "./pages/WalletPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
@@ -15,16 +16,7 @@ export default function App() {
         <Route path="login" element={<LoginPage />} />
         <Route path="onboarding" element={<OnboardingPage />} />
         <Route path="wallet" element={<WalletPage />} />
-        <Route
-          path="present"
-          element={
-            <PlaceholderPage
-              title="Present"
-              phase={3}
-              description="OID4VP presentation flows and consent views."
-            />
-          }
-        />
+        <Route path="present" element={<PresentPage />} />
         <Route
           path="issue"
           element={

@@ -22,6 +22,11 @@ pkcs11.cfg
 # Dev/CI fixtures (non-secret, stable test keys only)
 !app/src/main/resources/mdoc/dev-issuer-key.pem
 !app/src/main/resources/trust/demo-anchor.pem
+!app/src/main/resources/trust/demo-verifier-access.pem
+!verifier-emulator/trust/demo-anchor.pem
+!verifier-emulator/trust/demo-verifier-access.pem
+!verifier-emulator/trust/demo-ca.key
+!verifier-emulator/trust/demo-verifier.key
 !app/src/main/resources/status-list/dev-signing-key.pem
 *.crt
 *.jks

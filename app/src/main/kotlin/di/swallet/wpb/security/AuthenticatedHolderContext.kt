@@ -18,19 +18,31 @@ class AuthenticatedHolderContext {
     /**
      * Returns the authenticated holder id from the request, if FIDO2 auth succeeded.
      */
-    fun currentHolderId(request: HttpServletRequest? = currentRequest()): String? =
-        request?.getAttribute(WalletSecurityAttributes.AUTHENTICATED_HOLDER_ID) as? String
+    fun currentHolderId(explicitRequest: HttpServletRequest? = null): String? {
+        AuthenticatedHolderRequestBinder.currentHolderId()?.let { return it }
+        for (candidate in requestCandidates(explicitRequest)) {
+            val holderId = candidate.getAttribute(WalletSecurityAttributes.AUTHENTICATED_HOLDER_ID) as? String
+            if (!holderId.isNullOrBlank()) {
+                return holderId
+            }
+        }
+        return null
+    }
 
     /**
      * Returns the authenticated holder id or throws when no FIDO2 context is present.
      */
-    fun requireCurrentHolderId(request: HttpServletRequest? = currentRequest()): String =
-        currentHolderId(request)
+    fun requireCurrentHolderId(explicitRequest: HttpServletRequest? = null): String =
+        currentHolderId(explicitRequest)
             ?: throw UnauthorizedWalletException("Missing authenticated holder context")
 
     /**
-     * Returns the current servlet request when running inside a web request context.
+     * Tries every servlet request object that may represent the active HTTP call.
      */
-    private fun currentRequest(): HttpServletRequest? =
-        (RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes)?.request
+    private fun requestCandidates(explicitRequest: HttpServletRequest?): List<HttpServletRequest> {
+        val candidates = linkedSetOf<HttpServletRequest>()
+        (RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes)?.request?.let { candidates.add(it) }
+        explicitRequest?.let { candidates.add(it) }
+        return candidates.toList()
+    }
 }

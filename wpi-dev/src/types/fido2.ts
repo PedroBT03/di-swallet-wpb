@@ -6,8 +6,12 @@ export interface Fido2AssertionPayload {
   signature: string;
 }
 
+import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/types";
+
 export interface AuthChallengeResponse {
   userId: string;
   challenge: string;
+  /** Server-issued WebAuthn options. Must be passed unchanged to startAuthentication. */
+  publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptionsJSON;
   info?: string;
 }

@@ -9,6 +9,8 @@ const REMEMBERED_SESSION_KEY = "wpi-dev.rememberedSession";
 export interface HolderSession {
   holderId: string;
   credentialId: string;
+  /** COSE public key from passkey registration. Used to re-bind WPB after DB resets. */
+  publicKeyBase64?: string;
   userDeviceId?: number;
 }
 
@@ -16,6 +18,7 @@ export function loadSession(): HolderSession | null {
   const holderId = sessionStorage.getItem(HOLDER_ID_KEY);
   const credentialId = sessionStorage.getItem(CREDENTIAL_ID_KEY);
   const userDeviceIdRaw = sessionStorage.getItem(USER_DEVICE_ID_KEY);
+  const remembered = loadRememberedSession();
   if (!holderId || !credentialId) {
     return null;
   }
@@ -23,6 +26,7 @@ export function loadSession(): HolderSession | null {
   return {
     holderId,
     credentialId,
+    publicKeyBase64: remembered?.holderId === holderId ? remembered.publicKeyBase64 : undefined,
     userDeviceId: Number.isFinite(userDeviceId) ? userDeviceId : undefined,
   };
 }

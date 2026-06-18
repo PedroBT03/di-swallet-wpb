@@ -6,6 +6,7 @@ package di.swallet.wpb.security
 
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.WalletUnitRepository
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
@@ -22,8 +23,8 @@ class AuthenticatedHolderGuard(
     /**
      * Rejects the call when the requested holder id is not the authenticated holder.
      */
-    fun requireSelf(requestedHolderId: String?) {
-        val authenticated = holderContext.requireCurrentHolderId()
+    fun requireSelf(requestedHolderId: String?, request: HttpServletRequest? = null) {
+        val authenticated = holderContext.requireCurrentHolderId(request)
         if (requestedHolderId.isNullOrBlank() || requestedHolderId != authenticated) {
             throw ResponseStatusException(
                 HttpStatus.FORBIDDEN,
@@ -35,8 +36,8 @@ class AuthenticatedHolderGuard(
     /**
      * Rejects the call when the credential does not belong to the authenticated holder.
      */
-    fun requireCredentialOwned(credentialId: Long) {
-        val authenticated = holderContext.requireCurrentHolderId()
+    fun requireCredentialOwned(credentialId: Long, request: HttpServletRequest? = null) {
+        val authenticated = holderContext.requireCurrentHolderId(request)
         val credential = credentialRepository.findById(credentialId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Credential $credentialId not found") }
         if (credential.userId != authenticated) {
@@ -50,8 +51,8 @@ class AuthenticatedHolderGuard(
     /**
      * Rejects the call when the wallet unit does not belong to the authenticated holder.
      */
-    fun requireWalletUnitOwned(walletId: String) {
-        val authenticated = holderContext.requireCurrentHolderId()
+    fun requireWalletUnitOwned(walletId: String, request: HttpServletRequest? = null) {
+        val authenticated = holderContext.requireCurrentHolderId(request)
         val walletUnit = walletUnitRepository.findByWalletId(walletId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet unit $walletId not found") }
         if (walletUnit.holderId != authenticated) {

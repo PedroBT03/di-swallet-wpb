@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { fetchAuthChallenge, registerDevice } from "../api/auth";
 import { ApiError } from "../api/client";
 import { clearSession, forgetRememberedSession, loadRememberedSession, loadSession, saveSession, withAuth, type HolderSession } from "../auth/session";
-import { assertPasskey, assertPasskeyDiscoverable, formatWebAuthnError, registerPasskey } from "../auth/webauthn";
+import { assertWithServerChallenge, formatWebAuthnError, registerPasskey } from "../auth/webauthn";
 
 interface AuthContextValue {
   session: HolderSession | null;
@@ -44,11 +44,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const passkey = await registerPasskey(trimmed);
-    const device = await registerDevice(trimmed, passkey.credentialId, passkey.publicKeyBase64);
+    const device = await registerDevice(
+      trimmed,
+      passkey.credentialId,
+      passkey.publicKeyBase64,
+      true,
+    );
 
     const nextSession: HolderSession = {
       holderId: trimmed,
       credentialId: passkey.credentialId,
+      publicKeyBase64: passkey.publicKeyBase64,
       userDeviceId: device.id,
     };
     saveSession(nextSession);
@@ -66,17 +72,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const remembered = loadRememberedSession();
-      const credentialId =
-        remembered?.holderId === trimmed ? remembered.credentialId : undefined;
 
-      const challengeResponse = await fetchAuthChallenge(trimmed);
-      const assertion = credentialId
-        ? await assertPasskey(trimmed, credentialId, challengeResponse.challenge)
-        : await assertPasskeyDiscoverable(trimmed, challengeResponse.challenge);
+      const challengeResponse = await fetchAuthChallenge(
+        trimmed,
+        remembered?.holderId === trimmed ? remembered.credentialId : undefined,
+      );
+      const assertion = await assertWithServerChallenge(trimmed, challengeResponse);
+
+      const publicKeyBase64 =
+        remembered?.holderId === trimmed ? remembered.publicKeyBase64 : undefined;
+      if (publicKeyBase64) {
+        await registerDevice(trimmed, assertion.id, publicKeyBase64, true);
+      }
 
       const nextSession: HolderSession = {
         holderId: trimmed,
         credentialId: assertion.id,
+        publicKeyBase64,
         userDeviceId:
           remembered?.holderId === trimmed ? remembered.userDeviceId : undefined,
       };
@@ -133,12 +145,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setBusy(true);
     setError(null);
     try {
-      const challengeResponse = await fetchAuthChallenge(session.holderId);
-      const assertion = await assertPasskey(
+      const challengeResponse = await fetchAuthChallenge(
         session.holderId,
         session.credentialId,
-        challengeResponse.challenge,
       );
+      const assertion = await assertWithServerChallenge(session.holderId, challengeResponse);
       return withAuth(assertion);
     } catch (err) {
       const message = normalizeApiError(err);

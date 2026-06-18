@@ -15,6 +15,7 @@ import di.swallet.wpb.security.AuthenticatedHolderGuard
 import di.swallet.wpb.security.Oid4SessionAccessGuard
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
+import kotlinx.coroutines.runBlocking
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -57,12 +58,12 @@ class OpenId4VpController(
         summary = "Get presentation consent view for WPI",
         description = "Preferred endpoint for holder consent screens. Requires matching holderId.",
     )
-    suspend fun getConsentView(
+    fun getConsentView(
         @PathVariable id: UUID,
         @RequestParam holderId: String,
     ): PresentationConsentView {
         oid4SessionAccessGuard.requireSessionHolder(holderId)
-        return presentationFlowOrchestrator.getConsentView(id, holderId)
+        return runBlocking { presentationFlowOrchestrator.getConsentView(id, holderId) }
     }
 
     /**
@@ -70,12 +71,16 @@ class OpenId4VpController(
      */
     @PostMapping("/consent")
     @Operation(summary = "Submit holder consent (requires FIDO2)")
-    suspend fun consent(@RequestBody request: ConsentSubmission): PresentationContext {
+    fun consent(
+        @RequestBody request: ConsentSubmission,
+    ): PresentationContext {
         authenticatedHolderGuard.requireSelf(request.holderId)
-        return presentationFlowOrchestrator.submitConsent(
-            sessionId = UUID.fromString(request.sessionId),
-            decision = request,
-        )
+        return runBlocking {
+            presentationFlowOrchestrator.submitConsent(
+                sessionId = UUID.fromString(request.sessionId),
+                decision = request,
+            )
+        }
     }
 
     /**
@@ -86,8 +91,10 @@ class OpenId4VpController(
         summary = "Get presentation session",
         description = "Low-level lifecycle context. WPI consent UI should use GET /session/{id}/consent-view instead.",
     )
-    suspend fun getSession(@PathVariable id: UUID): PresentationContext {
-        val session = presentationFlowOrchestrator.getSession(id)
+    fun getSession(
+        @PathVariable id: UUID,
+    ): PresentationContext {
+        val session = runBlocking { presentationFlowOrchestrator.getSession(id) }
         oid4SessionAccessGuard.requireSessionHolder(session.sessionMeta.holderId)
         return session
     }
@@ -97,8 +104,10 @@ class OpenId4VpController(
      */
     @GetMapping("/session/{id}/events")
     @Operation(summary = "Get session events")
-    suspend fun getSessionEvents(@PathVariable id: UUID): List<SessionEvent> {
-        val session = presentationFlowOrchestrator.getSession(id)
+    fun getSessionEvents(
+        @PathVariable id: UUID,
+    ): List<SessionEvent> {
+        val session = runBlocking { presentationFlowOrchestrator.getSession(id) }
         oid4SessionAccessGuard.requireSessionHolder(session.sessionMeta.holderId)
         return eventStore.getEvents(id)
     }

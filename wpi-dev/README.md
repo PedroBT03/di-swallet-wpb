@@ -49,6 +49,17 @@ Protected actions show an “Authenticating with passkey…” banner while WebA
 
 On **Wallet**, use **Unlock & sync from server** once to load key and credentials (single passkey). **Refresh view** replays cached data without asking again. **Ensure HSM key** returns the existing key if one is already stored.
 
+### OpenID4VP present
+
+1. Start WPB with demo-mode: `./gradlew :app:bootRun --args='--wpb.openid4vp.demo-mode=true'`
+2. Start the verifier emulator (`verifier-emulator/`). It signs requests with **ES256** and embeds the verifier **access certificate** in `verifier_info.x5c` (PKIX trust against `demo-lote.json` — not skipped).
+2. Start the verifier emulator (`verifier-emulator/`, port **8081**).
+3. On **Wallet**, issue a demo PID (PID scenarios need a matching credential).
+4. Open **Present** — pick a demo scenario or paste a `request_uri`, then **Start presentation**.
+5. Review the consent screen (claim paths only — no attribute values), then **Approve** or **Reject** (passkey).
+
+Session state, `PresentationContext`, and audit events are shown at the bottom after the flow runs.
+
 - WPB Swagger (direct): [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
 
 ## Proxy

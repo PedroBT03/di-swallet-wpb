@@ -60,7 +60,7 @@ curl http://localhost:8081/logs | jq .
 
 What to expect
 
-- When wallet resolves a `request_uri`, the emulator logs an event with `served authorization request` and replies with the JSON request.
+- When wallet resolves a `request_uri`, the emulator logs an event with `served authorization request … with verifier_info.x5c` and returns an **ES256-signed JWT** embedding `verifier_info.x5c` (access certificate).
 - For `direct_post`, the emulator logs the received JSON and validates basic fields (`state`).
 - For redirect flows, the emulator shows the received query/POST body.
 

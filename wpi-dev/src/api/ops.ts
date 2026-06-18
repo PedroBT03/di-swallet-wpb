@@ -18,3 +18,9 @@ export function parseOpenId4VpDemoMode(info: WpbOperationalInfo): boolean | null
   const value = info.operational?.demoMode?.openid4vp;
   return typeof value === "boolean" ? value : null;
 }
+
+/** Returns OID4VCI demo-mode flag when present; null when the backend did not report it. */
+export function parseOpenId4VciDemoMode(info: WpbOperationalInfo): boolean | null {
+  const value = info.operational?.demoMode?.openid4vci;
+  return typeof value === "boolean" ? value : null;
+}

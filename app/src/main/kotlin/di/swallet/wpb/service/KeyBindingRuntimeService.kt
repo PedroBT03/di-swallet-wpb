@@ -15,6 +15,7 @@ import di.swallet.wpb.domain.KeyAttestationRecordRepository
 import di.swallet.wpb.domain.KeyAttestationState
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.WalletKeyRepository
+import di.swallet.wpb.domain.WalletUnit
 import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.issuance.domain.KeyAttestation
 import org.springframework.http.HttpStatus
@@ -37,27 +38,34 @@ class KeyBindingRuntimeService(
 ) {
     /**
      * Stores a key attestation and its attested key row, returning the existing record when already registered.
+     * Re-enters with the same HSM key alias update the attested key row instead of violating key_alias uniqueness.
      */
     fun registerKeyAttestation(holderId: String, ka: KeyAttestation): KeyAttestationRecord {
         val walletUnit = walletUnitLifecycleService.requireIssuanceEligible(holderId)
-        val existing = keyAttestationRepository.findByAttestationId(attestationId(ka)).orElse(null)
-        if (existing != null) return existing
+        val stableId = attestationId(ka)
+        keyAttestationRepository.findByAttestationId(stableId).orElse(null)?.let { return it }
 
         val walletKey = walletKeyRepository.findByKeyAlias(ka.keyId).orElse(null)
-        val kaRecord = keyAttestationRepository.save(
-            KeyAttestationRecord(
-                walletUnit = walletUnit,
-                attestationId = attestationId(ka),
-                jwt = ka.jwt,
-                keyStorage = ka.keyStorage,
-                statusListUri = ka.status.uri,
-                statusListIndex = ka.status.index,
-                technicalExpiresAt = ka.tokenExpiresAt,
-                statusMaintenanceExpiresAt = ka.statusExpiresAt,
-                issuedAt = ka.issuedAt,
-                state = KeyAttestationState.AVAILABLE,
-            ),
-        )
+        val kaRecord = keyAttestationRepository.save(buildKeyAttestationRecord(walletUnit, ka, stableId))
+
+        val existingAttested = attestedKeyRepository.findByKeyAlias(ka.keyId).orElse(null)
+        if (existingAttested != null) {
+            attestedKeyRepository.save(
+                AttestedKeyRecord(
+                    id = existingAttested.id,
+                    keyAttestation = kaRecord,
+                    keyId = existingAttested.keyId,
+                    keyAlias = existingAttested.keyAlias,
+                    keyThumbprint = ka.attestedJkt,
+                    batchPosition = existingAttested.batchPosition,
+                    createdAt = existingAttested.createdAt,
+                    state = AttestedKeyState.ATTESTED,
+                    walletKey = walletKey ?: existingAttested.walletKey,
+                ),
+            )
+            return kaRecord
+        }
+
         attestedKeyRepository.save(
             AttestedKeyRecord(
                 keyAttestation = kaRecord,
@@ -70,6 +78,24 @@ class KeyBindingRuntimeService(
         )
         return kaRecord
     }
+
+    private fun buildKeyAttestationRecord(
+        walletUnit: WalletUnit,
+        ka: KeyAttestation,
+        stableId: String,
+    ): KeyAttestationRecord =
+        KeyAttestationRecord(
+            walletUnit = walletUnit,
+            attestationId = stableId,
+            jwt = ka.jwt,
+            keyStorage = ka.keyStorage,
+            statusListUri = ka.status.uri,
+            statusListIndex = ka.status.index,
+            technicalExpiresAt = ka.tokenExpiresAt,
+            statusMaintenanceExpiresAt = ka.statusExpiresAt,
+            issuedAt = ka.issuedAt,
+            state = KeyAttestationState.AVAILABLE,
+        )
 
     /**
      * Binds a credential to an attested key, consumes the key attestation, and may mark the wallet VALID.

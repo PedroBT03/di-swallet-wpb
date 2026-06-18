@@ -60,6 +60,17 @@ On **Wallet**, use **Unlock & sync from server** once to load key and credential
 
 Session state, `PresentationContext`, and audit events are shown at the bottom after the flow runs.
 
+### OpenID4VCI issue
+
+1. WPB with simulated issuer: `wpb.openid4vci.demo-mode=true` (default in `dev` profile).
+2. On **Wallet**, initialize the wallet unit (device-bound credentials such as `pid_jwt` need an HSM key).
+3. Open **Issue** — pick a demo scenario or paste a `credential_offer_uri`, then **Resolve offer**.
+4. Use **Continue** to advance authorization and credential request (pre-authorized demo uses `tx_code` **1234**).
+5. **Unlock & load storage consent** (passkey), review claim preview, then **Approve storage** or **Reject**.
+6. Optionally **Notify issuer**, then open **Wallet** → **Unlock & sync from server** to see the new credential.
+
+Issuance session state, `IssuanceContext`, and audit events appear in the debug panels.
+
 - WPB Swagger (direct): [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
 
 ## Proxy

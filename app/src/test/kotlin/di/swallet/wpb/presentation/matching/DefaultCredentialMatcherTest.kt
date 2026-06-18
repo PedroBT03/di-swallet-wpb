@@ -221,6 +221,34 @@ class DefaultCredentialMatcherTest {
     }
 
     /**
+     * OID4VCI stores configuration id pid_jwt while DCQL requests vct_values PID.
+     * Matcher still returns the wallet credential as a candidate.
+     */
+    @Test
+    fun `matches OID4VCI pid_jwt credential against PID vct hint`() {
+        val disc = sdJwtService.createDisclosure("given_name", "Alice")
+        val encrypted = disclosureCipher.encrypt(listOf(disc))
+        val credential = WalletCredential(
+            id = 55L,
+            userId = "holder-1",
+            credentialType = "pid_jwt",
+            encodedData = "jwt",
+            encryptedDisclosures = encrypted,
+        )
+        `when`(repository.findByUserId("holder-1")).thenReturn(listOf(credential))
+
+        val result = matcher(demoMode = false).match(
+            context(
+                """{"credentials":[{"id":"pid","format":"vc+sd-jwt","meta":{"vct_values":["PID"]},"claims":[{"path":["given_name"]}]}]}""",
+            ),
+        )
+        val candidate = result.credentialCandidates.single()
+        assertEquals("pid", candidate.queryId)
+        assertEquals(55L, candidate.credentialId)
+        assertEquals("pid_jwt", candidate.credentialType)
+    }
+
+    /**
      * Demo mode is on, the wallet is empty, and an emulator-style query is supplied.
      * Matcher synthesizes one SD-JWT candidate with query_0 id and requested field names.
      */

@@ -79,8 +79,11 @@ class DefaultCredentialMatcher(
         wallet: List<di.swallet.wpb.domain.WalletCredential>,
     ): List<CredentialCandidate> {
         val typeFilter: (di.swallet.wpb.domain.WalletCredential) -> Boolean = { credential ->
-            query.credentialTypeHints.isEmpty() ||
-                query.credentialTypeHints.any { hint -> hint.equals(credential.credentialType, ignoreCase = true) }
+            CredentialTypeHintMatcher.sdJwtTypeMatches(
+                hints = query.credentialTypeHints,
+                credentialType = credential.credentialType,
+                issuerJwt = credential.encodedData,
+            )
         }
         return wallet.asSequence()
             .filter { !credentialRevocationGuard.isRevoked(it) }
@@ -131,8 +134,10 @@ class DefaultCredentialMatcher(
                 val credentialPk = credential.id ?: return@mapNotNull null
                 val decoded = mdocCredentialCodec.decode(credential.encodedData) ?: return@mapNotNull null
                 val effectiveDocType = if (decoded.docType == "unknown") credential.credentialType else decoded.docType
-                val docTypeMatches = query.credentialTypeHints.isEmpty() ||
-                    query.credentialTypeHints.any { hint -> hint.equals(effectiveDocType, ignoreCase = true) }
+                val docTypeMatches = CredentialTypeHintMatcher.mdocTypeMatches(
+                    hints = query.credentialTypeHints,
+                    docType = effectiveDocType,
+                )
                 if (!docTypeMatches) return@mapNotNull null
                 val definition = mdocDocTypeRegistry.resolve(effectiveDocType)
                 val canonicalRequested = query.requestedClaimPaths.map { path ->

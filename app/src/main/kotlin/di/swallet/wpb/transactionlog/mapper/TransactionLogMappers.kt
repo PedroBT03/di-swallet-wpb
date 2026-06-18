@@ -60,13 +60,21 @@ class PresentationTransactionMapper(
         val intendedUse = registry?.intendedUses?.firstOrNull()
         val dpa = registry?.supervisoryAuthority
 
+        val authRequest = context.authorizationRequest
+
         val presentation = Ts10Presentation(
             interactingPartyIdentifier = registry?.identifier?.let {
                 Ts10Identifier(type = "http://data.europa.eu/eudi/id/EUID", identifier = it)
+            } ?: authRequest?.clientId?.takeIf { it.isNotBlank() }?.let {
+                Ts10Identifier(type = "openid_client_id", identifier = it)
             },
-            interactingPartyName = registry?.tradeName ?: context.verifierIdentity?.displayName,
+            interactingPartyName = registry?.tradeName
+                ?: context.verifierIdentity?.displayName
+                ?: authRequest?.clientId,
             interactingPartyContact = buildContact(registry),
-            registrarURL = registry?.registryUri ?: context.registryDecision?.sourceEndpoint,
+            registrarURL = registry?.registryUri
+                ?: context.registryDecision?.sourceEndpoint?.takeIf { it.isNotBlank() }
+                ?: authRequest?.requestUri,
             purpose = intendedUse?.purpose.orEmpty().map { Ts10MultiLangString(content = it) },
             privacyPolicy = intendedUse?.privacyPolicyUris?.firstOrNull()?.let {
                 Ts10Policy(

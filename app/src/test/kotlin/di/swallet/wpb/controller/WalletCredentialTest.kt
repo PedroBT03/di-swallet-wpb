@@ -8,6 +8,7 @@ import di.swallet.wpb.BaseIntegrationTest
 import di.swallet.wpb.domain.CredentialBindingFormat
 import di.swallet.wpb.domain.CredentialKeyBindingRepository
 import di.swallet.wpb.domain.WalletCredential
+import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.wallet.WalletTestSupport
 import di.swallet.wpb.controller.WalletInitRequest
 import org.assertj.core.api.Assertions.assertThat
@@ -20,6 +21,9 @@ class WalletCredentialTest : BaseIntegrationTest() {
 
     @Autowired
     private lateinit var credentialKeyBindingRepository: CredentialKeyBindingRepository
+
+    @Autowired
+    private lateinit var walletCredentialRepository: WalletCredentialRepository
 
     /**
      * Initialises a wallet, creates a key, issues an SD-JWT, and checks the stored payload
@@ -74,5 +78,43 @@ class WalletCredentialTest : BaseIntegrationTest() {
         assertThat(listResponse.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(listResponse.body).isNotEmpty
         logger.info("Result: Credential successfully retrieved from database storage")
+    }
+
+    /**
+     * Deletes a device-bound credential after removing its key binding without violating FK constraints.
+     */
+    @Test
+    fun `should delete credential and its key binding`() {
+        val testUserId = "user-delete-test-${UUID.randomUUID()}"
+
+        val initEntity = HttpEntity(
+            WalletInitRequest(holderId = testUserId, platform = "test", devicePubJwk = WalletTestSupport.ecPublicJwk()),
+            getDynamicHeaders(testUserId),
+        )
+        assertThat(restTemplate.postForEntity("/api/v1/wallet/init", initEntity, Map::class.java).statusCode)
+            .isEqualTo(HttpStatus.OK)
+
+        val keyGenEntity = HttpEntity<String>(getDynamicHeaders(testUserId))
+        assertThat(
+            restTemplate.postForEntity("/api/v1/wallet/keys/$testUserId", keyGenEntity, String::class.java).statusCode,
+        ).isEqualTo(HttpStatus.OK)
+
+        val issueResponse = restTemplate.postForEntity(
+            "/api/v1/wallet/credentials/issue-sd/$testUserId",
+            HttpEntity<String>(getDynamicHeaders(testUserId)),
+            WalletCredential::class.java,
+        )
+        assertThat(issueResponse.statusCode).isEqualTo(HttpStatus.OK)
+        val credentialId = issueResponse.body?.id!!
+
+        val deleteResponse = restTemplate.exchange(
+            "/api/v1/wallet/credentials/$credentialId",
+            HttpMethod.DELETE,
+            HttpEntity<String>(getDynamicHeaders(testUserId)),
+            Map::class.java,
+        )
+        assertThat(deleteResponse.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(walletCredentialRepository.findById(credentialId)).isEmpty
+        assertThat(credentialKeyBindingRepository.findByCredentialId(credentialId)).isEmpty
     }
 }

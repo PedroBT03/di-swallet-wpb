@@ -7,6 +7,7 @@ package di.swallet.wpb.datadeletion
 import di.swallet.wpb.transactionlog.domain.Ts10ClaimInfo
 import di.swallet.wpb.transactionlog.domain.Ts10Presentation
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionResult
+import di.swallet.wpb.transactionlog.domain.Ts10PresentationPartyRef
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionType
 import di.swallet.wpb.transactionlog.service.TransactionLogService
 import di.swallet.wpb.transactionlog.service.TransactionLogger
@@ -30,7 +31,7 @@ data class DataDeletionInitiateRequest(
     val presentationTransactionId: String,
     val claimsToDelete: List<Ts10ClaimInfo>? = null,
     val deleteAllPresented: Boolean = false,
-    val consentRegistryLookup: Boolean = false,
+    val consentRegistryLookup: Boolean = true,
 )
 
 /** One actionable deletion contact channel returned to the wallet UI. */
@@ -41,7 +42,7 @@ data class DataDeletionActionResponse(
 
 /** Result of initiating a deletion request with contact actions and user notices. */
 data class DataDeletionInitiateResponse(
-    val transactionId: String,
+    val transactionId: String?,
     val sourcePresentationTransactionId: String,
     val rpIdentifier: String?,
     val rpName: String?,
@@ -104,15 +105,20 @@ class DataDeletionRequestService(
             claims = claimsToLog,
             deleteAllPresented = request.deleteAllPresented,
         )
-        val transaction = mapper.toTransaction(
-            rpIdentifier = context.rpIdentifier,
-            rpName = context.rpName,
-            claims = claimsToLog,
-        )
-        transactionLogger.logDataDeletionRequest(request.holderId, transaction)
+        val transactionId = if (actions.isNotEmpty()) {
+            val transaction = mapper.toTransaction(
+                rpIdentifier = context.rpIdentifier,
+                rpName = context.rpName,
+                claims = claimsToLog,
+            )
+            transactionLogger.logDataDeletionRequest(request.holderId, transaction)
+            transaction.transactionIdentifier
+        } else {
+            null
+        }
 
         return DataDeletionInitiateResponse(
-            transactionId = transaction.transactionIdentifier,
+            transactionId = transactionId,
             sourcePresentationTransactionId = context.presentationTransactionId,
             rpIdentifier = context.rpIdentifier,
             rpName = context.rpName,
@@ -127,8 +133,7 @@ class DataDeletionRequestService(
     /** Returns true when the presentation has claims and an interacting party reference. */
     private fun isEligiblePresentation(presentation: Ts10Presentation): Boolean {
         if (presentation.listOfClaimsPresented.isEmpty()) return false
-        return !presentation.interactingPartyIdentifier?.identifier.isNullOrBlank() ||
-            !presentation.registrarURL.isNullOrBlank()
+        return Ts10PresentationPartyRef.hasReference(presentation)
     }
 
     /** Validates requested claims against what was actually presented. */

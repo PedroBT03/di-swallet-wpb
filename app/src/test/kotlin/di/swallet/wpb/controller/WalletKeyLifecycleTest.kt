@@ -40,6 +40,52 @@ class WalletKeyLifecycleTest : BaseIntegrationTest() {
     }
 
     /**
+     * Creates a key, revokes it, ensures a replacement key, then signs successfully again.
+     */
+    @Test
+    fun `should rotate revoked key when ensure is called again`() {
+        val userId = "rotate-user-${UUID.randomUUID()}"
+        val authEntity = { HttpEntity<String>(getDynamicHeaders(userId)) }
+
+        val firstKey = restTemplate.postForEntity(
+            "/api/v1/wallet/keys/$userId",
+            authEntity(),
+            WalletKey::class.java,
+        )
+        assertThat(firstKey.statusCode).isEqualTo(HttpStatus.OK)
+        val revokedAlias = firstKey.body?.keyAlias
+
+        restTemplate.postForEntity(
+            "/api/v1/wallet/keys/$userId/revoke",
+            authEntity(),
+            Map::class.java,
+        )
+
+        val signBlocked = restTemplate.postForEntity(
+            "/api/v1/wallet/sign/$userId",
+            HttpEntity(mapOf("data" to "blocked"), getDynamicHeaders(userId)),
+            Map::class.java,
+        )
+        assertThat(signBlocked.statusCode).isEqualTo(HttpStatus.FORBIDDEN)
+
+        val rotatedKey = restTemplate.postForEntity(
+            "/api/v1/wallet/keys/$userId",
+            authEntity(),
+            WalletKey::class.java,
+        )
+        assertThat(rotatedKey.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(rotatedKey.body?.keyAlias).isNotEqualTo(revokedAlias)
+
+        val signOk = restTemplate.postForEntity(
+            "/api/v1/wallet/sign/$userId",
+            HttpEntity(mapOf("data" to "allowed"), getDynamicHeaders(userId)),
+            Map::class.java,
+        )
+        assertThat(signOk.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(signOk.body?.get("signature")).isNotNull
+    }
+
+    /**
      * Creates a key, revokes it via the status-list bitstring, then attempts to sign and
      * expects HTTP 403 because the revoked bit blocks further HSM use.
      */

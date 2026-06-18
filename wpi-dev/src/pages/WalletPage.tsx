@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   createWalletKey,
+  deleteCredential,
   fetchWalletSummary,
   initWalletUnit,
   issueDemoSdCredential,
+  revokeCredential,
   revokeWalletKey,
   signData,
 } from "../api/wallet";
@@ -48,6 +50,7 @@ export function WalletPage() {
   const [signInput, setSignInput] = useState("Hello from WPI Dev");
   const [signResult, setSignResult] = useState<SignResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lastRaw, setLastRaw] = useState<unknown>(null);
 
   const applyCache = useCallback((cache: WalletCache) => {
@@ -66,6 +69,7 @@ export function WalletPage() {
     async (action: () => Promise<void>) => {
       clearError();
       setError(null);
+      setSuccessMessage(null);
       try {
         await action();
       } catch (err) {
@@ -79,23 +83,27 @@ export function WalletPage() {
     applyCache(cacheRef.current);
   }
 
+  async function performSync() {
+    const summary = await withProtectedAction((headers) =>
+      fetchWalletSummary(holderId, headers),
+    );
+    const syncedAt = new Date().toISOString();
+    cacheRef.current = {
+      key: summary.key,
+      credentials: summary.credentials,
+      syncedAt,
+    };
+    applyCache(cacheRef.current);
+    const mergedWallet = mergeWalletStateFromSummary(holderId, summary.walletUnit);
+    if (mergedWallet) {
+      setWalletState(mergedWallet);
+    }
+    setLastRaw(summary);
+  }
+
   async function syncFromServer() {
     await runAction(async () => {
-      const summary = await withProtectedAction((headers) =>
-        fetchWalletSummary(holderId, headers),
-      );
-      const syncedAt = new Date().toISOString();
-      cacheRef.current = {
-        key: summary.key,
-        credentials: summary.credentials,
-        syncedAt,
-      };
-      applyCache(cacheRef.current);
-      const mergedWallet = mergeWalletStateFromSummary(holderId, summary.walletUnit);
-      if (mergedWallet) {
-        setWalletState(mergedWallet);
-      }
-      setLastRaw(summary);
+      await performSync();
     });
   }
 
@@ -123,13 +131,19 @@ export function WalletPage() {
 
   async function handleCreateKey() {
     await runAction(async () => {
+      const previousAlias = cacheRef.current.key?.keyAlias;
+      const wasRevoked = cacheRef.current.key?.revoked === true;
       const key = await withProtectedAction((headers) => createWalletKey(holderId, headers));
-      cacheRef.current = {
-        ...cacheRef.current,
-        key,
-        syncedAt: cacheRef.current.syncedAt,
-      };
-      setWalletKey(key);
+      await performSync();
+      if (wasRevoked || (previousAlias && previousAlias !== key.keyAlias)) {
+        setSuccessMessage(
+          "A new active HSM key replaced the revoked one. You can sign and issue credentials again.",
+        );
+      } else if (previousAlias) {
+        setSuccessMessage("Existing HSM key is active and ready.");
+      } else {
+        setSuccessMessage("HSM key created successfully.");
+      }
       setLastRaw(key);
     });
   }
@@ -137,6 +151,36 @@ export function WalletPage() {
   async function handleRevokeKey() {
     await runAction(async () => {
       const result = await withProtectedAction((headers) => revokeWalletKey(holderId, headers));
+      if (cacheRef.current.key) {
+        cacheRef.current = {
+          ...cacheRef.current,
+          key: { ...cacheRef.current.key, revoked: true },
+        };
+        setWalletKey(cacheRef.current.key);
+      }
+      setLastRaw(result);
+      await performSync();
+      setSuccessMessage(
+        `HSM key revoked successfully (status list index ${result.index}). ` +
+          "Signing and issuance with this key are now blocked.",
+      );
+    });
+  }
+
+  async function handleDeleteCredential(credentialId: number) {
+    if (!window.confirm(`Delete credential #${credentialId} from this wallet? This cannot be undone.`)) {
+      return;
+    }
+    await runAction(async () => {
+      const result = await withProtectedAction((headers) => deleteCredential(credentialId, headers));
+      setLastRaw(result);
+      await syncFromServer();
+    });
+  }
+
+  async function handleRevokeCredential(credentialId: number) {
+    await runAction(async () => {
+      const result = await withProtectedAction((headers) => revokeCredential(credentialId, headers));
       setLastRaw(result);
       await syncFromServer();
     });
@@ -170,6 +214,12 @@ export function WalletPage() {
 
   async function handleSign(event: React.FormEvent) {
     event.preventDefault();
+    if (walletKey?.revoked) {
+      setError(
+        "This HSM key has been revoked and can no longer sign data. Unlock & sync to refresh status, or create a new key.",
+      );
+      return;
+    }
     await runAction(async () => {
       const result = await withProtectedAction((headers) =>
         signData(holderId, signInput, headers),
@@ -178,6 +228,8 @@ export function WalletPage() {
       setLastRaw(result);
     });
   }
+
+  const keyRevoked = walletKey?.revoked === true;
 
   const issuanceReady = isIssuanceEligible(walletState?.state);
 
@@ -196,6 +248,12 @@ export function WalletPage() {
         {error && (
           <div className="alert alert--error" role="alert">
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="alert alert--success" role="status">
+            {successMessage}
           </div>
         )}
 
@@ -300,7 +358,8 @@ export function WalletPage() {
           <section className="card wallet-section">
             <h2 className="card__title">HSM key</h2>
             <p className="hint">
-              Create returns the existing key if one is already stored for this holder.
+              Creates a new key when none exists. If the current key is revoked, Ensure issues a
+              replacement and marks it active again.
             </p>
             {walletKey ? (
               <dl className="details-list">
@@ -311,18 +370,39 @@ export function WalletPage() {
                   </dd>
                 </div>
                 <div className="details-list__row">
+                  <dt>Status</dt>
+                  <dd>
+                    <span
+                      className={`status-badge status-badge--${keyRevoked ? "down" : "up"}`}
+                    >
+                      {keyRevoked ? "REVOKED" : "ACTIVE"}
+                    </span>
+                  </dd>
+                </div>
+                <div className="details-list__row">
                   <dt>Revocation index</dt>
                   <dd>{walletKey.revocationIndex}</dd>
                 </div>
                 <div className="details-list__row">
                   <dt>Public key</dt>
                   <dd>
-                    <code className="details-list__truncate">{walletKey.publicKeyBase64}</code>
+                    <code
+                      className="details-list__truncate"
+                      title={walletKey.publicKeyBase64}
+                    >
+                      {walletKey.publicKeyBase64}
+                    </code>
                   </dd>
                 </div>
               </dl>
             ) : (
               <p className="hint">No key in cache. Use Unlock & sync or create a new HSM key.</p>
+            )}
+            {keyRevoked && (
+              <div className="alert alert--info" role="status">
+                This key is revoked on the status list. Signing and issuance are blocked until you create
+                a new HSM key for this holder.
+              </div>
             )}
             <div className="toolbar toolbar--compact">
               <button type="button" onClick={() => void handleCreateKey()} disabled={busy}>
@@ -332,7 +412,7 @@ export function WalletPage() {
                 type="button"
                 className="button button--danger"
                 onClick={() => void handleRevokeKey()}
-                disabled={busy || !walletKey}
+                disabled={busy || !walletKey || keyRevoked}
               >
                 Revoke key
               </button>
@@ -341,7 +421,12 @@ export function WalletPage() {
 
           <section className="card wallet-section">
             <h2 className="card__title">Credentials</h2>
-            <p className="hint">Demo SD-JWT PID via mock issuer (dev profile only).</p>
+            <p className="hint">
+              <strong>Delete from wallet</strong> removes the PID and encrypted payload from WPB
+              storage. <strong>Revoke</strong> marks it invalid on the status list but keeps the
+              row. To ask a verifier to erase data they received, use{" "}
+              <Link to="/privacy">Privacy → Data deletion</Link>.
+            </p>
             {!issuanceReady && (
               <div className="alert alert--info">
                 Initialize the wallet unit before issuing. Current state:{" "}
@@ -382,6 +467,24 @@ export function WalletPage() {
                       {credential.deviceBound && <span>device-bound</span>}
                     </div>
                     <code className="credential-list__preview">{credential.encodedPreview}</code>
+                    <div className="toolbar toolbar--compact">
+                      <button
+                        type="button"
+                        className="button button--danger button--sm"
+                        disabled={busy}
+                        onClick={() => void handleDeleteCredential(credential.id)}
+                      >
+                        Delete from wallet
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--secondary button--sm"
+                        disabled={busy || credential.revocationState === "REVOKED"}
+                        onClick={() => void handleRevokeCredential(credential.id)}
+                      >
+                        Revoke
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -390,6 +493,11 @@ export function WalletPage() {
 
           <section className="card wallet-section">
             <h2 className="card__title">Sign test</h2>
+            {keyRevoked && (
+              <div className="alert alert--info" role="status">
+                Signing is disabled because the HSM key is revoked.
+              </div>
+            )}
             <form className="form" onSubmit={(event) => void handleSign(event)}>
               <label className="form__field">
                 <span className="form__label">Payload</span>
@@ -401,7 +509,10 @@ export function WalletPage() {
                   disabled={busy}
                 />
               </label>
-              <button type="submit" disabled={busy || signInput.trim().length === 0}>
+              <button
+                type="submit"
+                disabled={busy || signInput.trim().length === 0 || keyRevoked}
+              >
                 Sign in HSM
               </button>
             </form>

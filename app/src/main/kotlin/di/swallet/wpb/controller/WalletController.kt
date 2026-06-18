@@ -89,9 +89,20 @@ data class WalletUnitSummary(
     val state: String,
 )
 
+/** Read-only HSM key metadata for WPI dashboards, including revocation status. */
+data class WalletKeySummary(
+    val id: Long?,
+    val userId: String,
+    val keyAlias: String,
+    val publicKeyBase64: String,
+    val revocationIndex: Int,
+    val createdAt: java.time.LocalDateTime?,
+    val revoked: Boolean,
+)
+
 /** Holder wallet key plus credential summaries in a single authenticated read. */
 data class WalletSummaryResponse(
-    val key: WalletKey?,
+    val key: WalletKeySummary?,
     val credentials: List<WalletCredentialSummary>,
     val walletUnit: WalletUnitSummary?,
 )
@@ -242,14 +253,15 @@ class WalletController(
      * Endpoint to generate a hardware-backed cryptographic key for a specific user.
      */
     @PostMapping("/keys/{userId}")
-    @Operation(summary = "Generate Hardware-backed Key", description = "Creates an EC KeyPair inside the Remote HSM for the user")
-    fun createKey(@PathVariable userId: String, httpRequest: HttpServletRequest): WalletKey {
+    @Operation(
+        summary = "Generate Hardware-backed Key",
+        description = "Creates an EC KeyPair inside the Remote HSM, reuses an active key, or rotates when the current key is revoked.",
+    )
+    fun createKey(@PathVariable userId: String, httpRequest: HttpServletRequest): WalletKeySummary {
         authenticatedHolderGuard.requireSelf(userId, httpRequest)
-        val existing = walletKeyRepository.findByUserId(userId)
-        if (existing.isPresent) {
-            return existing.get()
-        }
-        return hsmService.generateKeyForUser(userId)
+        val walletUnit = walletUnitRepository.findFirstByHolderId(userId).orElse(null)
+        val key = hsmService.ensureKeyForUser(userId, walletUnit)
+        return toKeySummary(key)
     }
 
     /**
@@ -402,13 +414,23 @@ class WalletController(
     )
     fun getWalletSummary(@PathVariable userId: String): WalletSummaryResponse {
         authenticatedHolderGuard.requireSelf(userId)
-        val key = runCatching { hsmService.getUserKey(userId) }.getOrNull()
+        val key = runCatching { hsmService.getUserKey(userId) }.getOrNull()?.let(::toKeySummary)
         val credentials = credentialRepository.findByUserId(userId).map(::toCredentialSummary)
         val walletUnit = walletUnitRepository.findFirstByHolderId(userId).orElse(null)?.let { unit ->
             WalletUnitSummary(walletId = unit.walletId, state = unit.state.name)
         }
         return WalletSummaryResponse(key = key, credentials = credentials, walletUnit = walletUnit)
     }
+
+    private fun toKeySummary(key: WalletKey): WalletKeySummary = WalletKeySummary(
+        id = key.id,
+        userId = key.userId,
+        keyAlias = key.keyAlias,
+        publicKeyBase64 = key.publicKeyBase64,
+        revocationIndex = key.revocationIndex,
+        createdAt = key.createdAt,
+        revoked = statusListService.isRevoked(key.revocationIndex),
+    )
 
     /**
      * Endpoint to retrieve all issued credentials for a user.

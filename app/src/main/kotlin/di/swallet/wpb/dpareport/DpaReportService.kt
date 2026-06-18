@@ -5,6 +5,7 @@
 package di.swallet.wpb.dpareport
 
 import di.swallet.wpb.transactionlog.domain.Ts10Transaction
+import di.swallet.wpb.transactionlog.domain.Ts10PresentationPartyRef
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionType
 import di.swallet.wpb.transactionlog.service.TransactionLogService
 import di.swallet.wpb.transactionlog.service.TransactionLogSummary
@@ -27,7 +28,7 @@ data class EligibleDpaReportPresentation(
 data class DpaReportInitiateRequest(
     val holderId: String,
     val presentationTransactionId: String,
-    val consentRegistryLookup: Boolean = false,
+    val consentRegistryLookup: Boolean = true,
 )
 
 /** One actionable DPA contact channel returned to the wallet UI. */
@@ -134,6 +135,5 @@ class DpaReportService(
 
     /** Returns true when the presentation stores an RP identifier or registrar URL. */
     private fun hasPartyRef(presentation: di.swallet.wpb.transactionlog.domain.Ts10Presentation): Boolean =
-        !presentation.interactingPartyIdentifier?.identifier.isNullOrBlank() ||
-            !presentation.registrarURL.isNullOrBlank()
+        Ts10PresentationPartyRef.hasReference(presentation)
 }

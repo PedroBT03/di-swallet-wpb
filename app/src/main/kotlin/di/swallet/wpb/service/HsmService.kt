@@ -75,44 +75,86 @@ class HsmService(
     }
 
     /**
+     * Returns the holder's active HSM key, creating one when missing or rotating when revoked.
+     */
+    fun ensureKeyForUser(userId: String, walletUnit: WalletUnit? = null): WalletKey {
+        wscaAccessGuard.requireSciForHolder(userId)
+        val existing = walletKeyRepository.findByUserId(userId)
+        if (!existing.isPresent) {
+            return generateKeyForUser(userId, walletUnit)
+        }
+        val key = existing.get()
+        if (!statusListService.isRevoked(key.revocationIndex)) {
+            return key
+        }
+        logger.info("WSCA: Rotating revoked key for user $userId")
+        return rotateRevokedKey(key)
+    }
+
+    /**
      * Generates an EC KeyPair inside the HSM and stores its metadata.
      * The private key is linked to a self-signed certificate for HSM storage compatibility.
      */
     fun generateKeyForUser(userId: String, walletUnit: WalletUnit? = null): WalletKey {
         wscaAccessGuard.requireSciForHolder(userId)
         try {
-            val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
-            keyStore.load(null, pin.toCharArray())
-
-            val alias = "key-$userId-${System.currentTimeMillis()}"
-
-            // 1. Generate KeyPair inside HSM
-            val keyPairGen = KeyPairGenerator.getInstance("EC", pkcs11Provider)
-            keyPairGen.initialize(ECGenParameterSpec("secp256r1"))
-            val keyPair = keyPairGen.generateKeyPair()
-
-            // 2. Generate required certificate chain
-            val chain = arrayOf(generateSelfSignedCertificate(keyPair))
-
-            // 3. Persist key handle in HSM
-            keyStore.setKeyEntry(alias, keyPair.private, null, chain)
-
-            // 4. Save metadata to database
-            val pubKeyBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(keyPair.public.encoded)
+            val material = createHsmKeyMaterial(userId)
             val walletKey = WalletKey(
                 userId = userId,
-                keyAlias = alias,
-                publicKeyBase64 = pubKeyBase64,
+                keyAlias = material.alias,
+                publicKeyBase64 = material.publicKeyBase64,
                 revocationIndex = statusListService.getNextRevocationIndex(),
                 walletUnit = walletUnit,
             )
 
-            logger.info("WSCA: Key created for user $userId with alias $alias")
+            logger.info("WSCA: Key created for user $userId with alias ${material.alias}")
             return walletKeyRepository.save(walletKey)
         } catch (e: Exception) {
             logger.error("WSCA: Key generation failed for user $userId: ${e.message}")
-            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "HSM Error: ${e.message}")
+            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "HSM key generation failed: ${e.message}")
         }
+    }
+
+    private fun rotateRevokedKey(existing: WalletKey): WalletKey {
+        try {
+            val material = createHsmKeyMaterial(existing.userId)
+            runCatching { deleteKeyEntry(existing.keyAlias) }
+                .onFailure { logger.warn("WSCA: Could not delete revoked HSM alias ${existing.keyAlias}: ${it.message}") }
+
+            return walletKeyRepository.save(
+                WalletKey(
+                    id = existing.id,
+                    userId = existing.userId,
+                    keyAlias = material.alias,
+                    publicKeyBase64 = material.publicKeyBase64,
+                    revocationIndex = statusListService.getNextRevocationIndex(),
+                    createdAt = java.time.LocalDateTime.now(),
+                    walletUnit = existing.walletUnit,
+                ),
+            )
+        } catch (e: Exception) {
+            logger.error("WSCA: Key rotation failed for user ${existing.userId}: ${e.message}")
+            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "HSM key rotation failed: ${e.message}")
+        }
+    }
+
+    private data class HsmKeyMaterial(val alias: String, val publicKeyBase64: String)
+
+    private fun createHsmKeyMaterial(userId: String): HsmKeyMaterial {
+        val keyStore = KeyStore.getInstance("PKCS11", pkcs11Provider)
+        keyStore.load(null, pin.toCharArray())
+
+        val alias = "key-$userId-${System.currentTimeMillis()}"
+
+        val keyPairGen = KeyPairGenerator.getInstance("EC", pkcs11Provider)
+        keyPairGen.initialize(ECGenParameterSpec("secp256r1"))
+        val keyPair = keyPairGen.generateKeyPair()
+
+        val chain = arrayOf(generateSelfSignedCertificate(keyPair))
+        keyStore.setKeyEntry(alias, keyPair.private, null, chain)
+
+        val pubKeyBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(keyPair.public.encoded)
+        return HsmKeyMaterial(alias, pubKeyBase64)
     }
 
     /**
@@ -122,7 +164,10 @@ class HsmService(
     fun validateKeyStatus(walletKey: WalletKey) {
         if (statusListService.isRevoked(walletKey.revocationIndex)) {
             logger.warn("Security: Blocked operation attempt using revoked key for user ${walletKey.userId}")
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Key has been revoked in the status list bitstring")
+            throw ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "This holder HSM key has been revoked and cannot be used for signing, issuance, or presentation.",
+            )
         }
     }
 

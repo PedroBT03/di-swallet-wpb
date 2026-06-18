@@ -3,6 +3,7 @@ import { fetchAuthChallenge, registerDevice } from "../api/auth";
 import { ApiError } from "../api/client";
 import { clearSession, forgetRememberedSession, loadRememberedSession, loadSession, saveSession, withAuth, type HolderSession } from "../auth/session";
 import { assertWithServerChallenge, formatWebAuthnError, registerPasskey } from "../auth/webauthn";
+import { formatApiError } from "../utils/apiError";
 
 interface AuthContextValue {
   session: HolderSession | null;
@@ -22,7 +23,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function normalizeApiError(error: unknown): string {
   if (error instanceof ApiError) {
-    return typeof error.body === "string" ? error.body : error.message;
+    return formatApiError(error);
   }
   return formatWebAuthnError(error);
 }

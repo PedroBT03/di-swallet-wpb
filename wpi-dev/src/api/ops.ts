@@ -6,6 +6,9 @@ export interface WpbOperationalInfo {
       openid4vp?: boolean;
       openid4vci?: boolean;
     };
+    transactionLog?: {
+      dekMode?: string;
+    };
   };
 }
 
@@ -23,4 +26,15 @@ export function parseOpenId4VpDemoMode(info: WpbOperationalInfo): boolean | null
 export function parseOpenId4VciDemoMode(info: WpbOperationalInfo): boolean | null {
   const value = info.operational?.demoMode?.openid4vci;
   return typeof value === "boolean" ? value : null;
+}
+
+/** Returns transaction log DEK mode when reported by actuator /info. */
+export function parseTransactionLogDekMode(
+  info: WpbOperationalInfo,
+): "server" | "holder" | null {
+  const raw = info.operational?.transactionLog?.dekMode?.toLowerCase();
+  if (raw === "server" || raw === "holder") {
+    return raw;
+  }
+  return null;
 }

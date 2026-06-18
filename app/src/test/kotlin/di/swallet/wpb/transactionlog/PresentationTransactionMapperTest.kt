@@ -149,4 +149,69 @@ class PresentationTransactionMapperTest {
             tx.presentation?.dpaContact,
         )
     }
+
+    /**
+     * Demo presentation without RP registry still records clientId and request_uri
+     * so privacy flows can list the presentation as eligible.
+     */
+    @Test
+    fun `maps demo presentation party reference from authorization request`() {
+        val now = Instant.parse("2025-07-29T09:11:20Z")
+        val context = PresentationContext(
+            sessionMeta = SessionMetadata(
+                sessionId = UUID.randomUUID(),
+                holderId = "holder-1",
+                correlationId = "corr-demo",
+                createdAt = now,
+                updatedAt = now,
+                expiresAt = now.plusSeconds(600),
+            ),
+            state = PresentationState.DISPATCHED,
+            authorizationRequest = di.swallet.wpb.openid4vp.protocol.ResolvedAuthorizationRequest(
+                requestToken = "rt",
+                requestUri = "http://127.0.0.1:8081/request/conformance/simple_claim.json",
+                clientId = "verifier-demo-client",
+                responseMode = di.swallet.wpb.openid4vp.protocol.PresentationResponseMode.DIRECT_POST,
+                nonce = "n",
+                state = "s",
+                requirements = PresentationRequirements(
+                    dcqlQueryJson = "{}",
+                    credentialQueryIds = listOf("pid"),
+                    credentialQueries = listOf(
+                        CredentialQuery(
+                            id = "pid",
+                            format = CredentialFormat.SD_JWT,
+                            credentialTypeHints = listOf("PID"),
+                            requestedClaimPaths = listOf(ClaimPath(listOf(ClaimPathSegment.Key("given_name")))),
+                        ),
+                    ),
+                ),
+            ),
+            verifierIdentity = di.swallet.wpb.presentation.domain.VerifierIdentity(
+                clientId = "verifier-demo-client",
+                displayName = "verifier-demo-client",
+            ),
+            selectedCredentials = listOf(
+                SelectedCredential(
+                    candidateId = "c1",
+                    credentialId = 1L,
+                    holderId = "holder-1",
+                    queryId = "pid",
+                    credentialType = "PID",
+                    format = CredentialFormat.SD_JWT,
+                    requestedClaimPaths = listOf(ClaimPath(listOf(ClaimPathSegment.Key("given_name")))),
+                ),
+            ),
+            consentDecision = di.swallet.wpb.presentation.domain.ConsentDecision(granted = true),
+        )
+
+        val tx = mapper.fromContext(context, now)!!
+        assertEquals("openid_client_id", tx.presentation?.interactingPartyIdentifier?.type)
+        assertEquals("verifier-demo-client", tx.presentation?.interactingPartyIdentifier?.identifier)
+        assertEquals(
+            "http://127.0.0.1:8081/request/conformance/simple_claim.json",
+            tx.presentation?.registrarURL,
+        )
+        assertEquals(listOf("given_name"), tx.presentation?.listOfClaimsPresented?.first()?.claims)
+    }
 }

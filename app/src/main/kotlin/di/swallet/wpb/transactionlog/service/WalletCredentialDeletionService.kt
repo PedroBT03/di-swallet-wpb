@@ -4,6 +4,7 @@
 
 package di.swallet.wpb.transactionlog.service
 
+import di.swallet.wpb.domain.CredentialKeyBindingRepository
 import di.swallet.wpb.domain.WalletCredentialRepository
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -14,13 +15,18 @@ import org.springframework.web.server.ResponseStatusException
 @Service
 class WalletCredentialDeletionService(
     private val credentialRepository: WalletCredentialRepository,
+    private val credentialKeyBindingRepository: CredentialKeyBindingRepository,
     private val transactionLogger: TransactionLogger,
 ) {
-    /** Logs credential deletion and deletes the credential row. Throws 404 if the credential does not exist. */
+    /** Logs credential deletion, removes key bindings, and deletes the credential row. */
     @Transactional
     fun deleteCredential(credentialId: Long) {
         val credential = credentialRepository.findById(credentialId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Credential $credentialId not found") }
+
+        credentialKeyBindingRepository.findByCredentialId(credentialId).ifPresent {
+            credentialKeyBindingRepository.delete(it)
+        }
 
         transactionLogger.logCredentialDeletion(credential)
         credentialRepository.delete(credential)

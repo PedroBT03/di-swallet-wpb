@@ -11,6 +11,7 @@ import di.swallet.wpb.presentation.registry.RegistryResolution
 import di.swallet.wpb.presentation.registry.RpRegistryResolver
 import di.swallet.wpb.transactionlog.domain.Ts10Presentation
 import di.swallet.wpb.transactionlog.domain.Ts10Transaction
+import di.swallet.wpb.transactionlog.domain.Ts10PresentationPartyRef
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionType
 import di.swallet.wpb.transactionlog.service.TransactionLogService
 import org.springframework.http.HttpStatus
@@ -142,8 +143,7 @@ class DpaContactResolver(
         }
         val presentation = transaction.presentation
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Presentation payload missing")
-        val hasPartyRef = !presentation.interactingPartyIdentifier?.identifier.isNullOrBlank() ||
-            !presentation.registrarURL.isNullOrBlank()
+        val hasPartyRef = Ts10PresentationPartyRef.hasReference(presentation)
         if (!hasPartyRef) {
             throw ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
@@ -167,12 +167,7 @@ class DpaContactResolver(
                     source = DpaContactSource.REGISTRY,
                 )
             }
-            is RegistryResolution.Rejected -> {
-                throw ResponseStatusException(
-                    HttpStatus.BAD_GATEWAY,
-                    "Registry lookup failed for '$rpIdentifier': ${resolution.reason}",
-                )
-            }
+            is RegistryResolution.Rejected -> null
         }
 
     /** Builds a configured provider fallback DPA candidate when registry and log data are missing. */

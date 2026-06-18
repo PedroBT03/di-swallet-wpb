@@ -36,4 +36,28 @@ class DataDeletionRequestProperties {
 
     var registryLookupNotice: String =
         "No deletion contact was stored for this presentation. Registry lookup was used to obtain current support contacts."
+
+    var fallbackNotice: String =
+        "No deletion contact was stored for this presentation. Provider-configured fallback contacts were used."
+
+    var noContactNotice: String =
+        "No contact channel is available for this relying party."
+
+    var providerFallbackRp: ProviderFallbackRpDeletion = ProviderFallbackRpDeletion()
+}
+
+/** Fallback RP deletion contacts when the presentation log and registry provide none. */
+class ProviderFallbackRpDeletion {
+    var country: String = ""
+    var email: String = ""
+    var phone: String = ""
+    var webUri: String = ""
+
+    /** True when any fallback field is configured. */
+    fun isConfigured(): Boolean =
+        country.isNotBlank() || email.isNotBlank() || phone.isNotBlank() || webUri.isNotBlank()
+
+    /** True when at least one actionable deletion channel is configured. */
+    fun hasDeletionChannel(): Boolean =
+        email.isNotBlank() || phone.isNotBlank() || webUri.isNotBlank()
 }

@@ -71,7 +71,24 @@ Session state, `PresentationContext`, and audit events are shown at the bottom a
 
 Issuance session state, `IssuanceContext`, and audit events appear in the debug panels.
 
+### Transaction log and privacy
+
+1. After **Present** or **Issue** flows, open **Log** → **Unlock & load transactions** (passkey).
+2. Click a row to load the decrypted TS10 payload (holder `dek-mode` needs log passphrase first).
+3. Select entries and **Download JWE** with an export password.
+4. Open **Privacy** → load eligible presentations, then **Request deletion** or **Initiate report**.
+5. Use **Copy** / **Open** on returned `mailto:`, `tel:`, or `https:` contact URIs.
+
+**DPA report (demo):** local WPB uses a **dummy** DPA fallback (`dpa-demo@local.test`, labelled “CNPD (demo only)”) because emulator presentations do not store real supervisory-authority contacts and the RP registry is off by default. This lets you exercise mailto/actions in the lab only — configure real DPA contacts for production (see `application-dev.properties` comments and TS8).
+
+When WPB runs with `wpb.transaction-log.dek-mode=holder`, derive the log key on **Log** before viewing detail or exporting.
+
+### Delete wallet data (credentials)
+
+On **Wallet**, each credential has **Delete from wallet** (permanent removal from WPB, logs `CredentialDeletion` in the transaction log) and **Revoke** (status-list invalidation). This is distinct from **Privacy → Data deletion**, which contacts the relying party about data they hold after a presentation.
+
 - WPB Swagger (direct): [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+
 
 ## Proxy
 

@@ -29,7 +29,7 @@ class DpaReportProperties {
         "No DPA contact was stored for this presentation. Registry lookup was used to obtain current supervisory authority contacts."
 
     var noContactNotice: String =
-        "No DPA contact channel is available. Configure wpb.dpa-reporting.provider-fallback-dpa.* for production fallback."
+        "No DPA contact channel is available for this presentation."
 
     var providerFallbackDpa: ProviderFallbackDpa = ProviderFallbackDpa()
 }

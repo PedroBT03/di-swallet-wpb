@@ -7,6 +7,7 @@ package di.swallet.wpb.ops
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.config.SwaggerProperties
+import di.swallet.wpb.config.TransactionLogProperties
 import di.swallet.wpb.config.WalletProperties
 import org.springframework.boot.actuate.info.Info
 import org.springframework.boot.actuate.info.InfoContributor
@@ -24,6 +25,7 @@ class WpbInfoContributor(
     private val openId4VpProperties: OpenId4VpProperties,
     private val openId4VciProperties: OpenId4VciProperties,
     private val walletProperties: WalletProperties,
+    private val transactionLogProperties: TransactionLogProperties,
     private val swaggerProperties: SwaggerProperties,
     private val buildProperties: Optional<BuildProperties>,
 ) : InfoContributor {
@@ -41,6 +43,9 @@ class WpbInfoContributor(
             "swaggerEnabled" to swaggerProperties.enabled,
             "registryEnabled" to openId4VpProperties.registry.enabled,
             "trustSourceMode" to openId4VpProperties.trust.sourceModeNormalized(),
+            "transactionLog" to mapOf(
+                "dekMode" to transactionLogProperties.resolvedDekMode().name.lowercase(),
+            ),
         )
         buildProperties.ifPresent { build ->
             operational["version"] = build.version

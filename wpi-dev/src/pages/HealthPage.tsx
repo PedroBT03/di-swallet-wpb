@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchHealth } from "../api/health";
 import { wpbExternalBase } from "../api/client";
 import type { HealthResponse } from "../types/health";
-import { ApiError } from "../api/client";
+import { formatApiError } from "../utils/apiError";
 
 function statusClass(status: string | undefined): string {
   if (status === "UP") return "status-badge status-badge--up";
@@ -23,13 +23,7 @@ export function HealthPage() {
       setHealth(data);
     } catch (err) {
       setHealth(null);
-      if (err instanceof ApiError) {
-        setError(`WPB unreachable (${err.status}): ${err.message}`);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to reach WPB. Is `./gradlew :app:bootRun` running?");
-      }
+      setError(formatApiError(err) || "Failed to reach WPB. Is `./gradlew :app:bootRun` running?");
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import type {
+  CredentialMutationResult,
   RevokeKeyResult,
   SignResult,
   WalletCredentialRecord,
@@ -86,6 +87,36 @@ export function issueDemoSdCredential(
 ): Promise<WalletCredentialRecord> {
   return apiFetch<WalletCredentialRecord>(
     `/api/v1/wallet/credentials/issue-sd/${encodeURIComponent(holderId)}`,
+    {
+      method: "POST",
+      headers: authHeaders,
+      raw: true,
+    },
+  );
+}
+
+/** Permanently removes a credential from the holder wallet (DASH_05a). */
+export function deleteCredential(
+  credentialId: number,
+  authHeaders: Headers,
+): Promise<CredentialMutationResult> {
+  return apiFetch<CredentialMutationResult>(
+    `/api/v1/wallet/credentials/${credentialId}`,
+    {
+      method: "DELETE",
+      headers: authHeaders,
+      raw: true,
+    },
+  );
+}
+
+/** Revokes a WP-managed credential on the status list without deleting the row. */
+export function revokeCredential(
+  credentialId: number,
+  authHeaders: Headers,
+): Promise<CredentialMutationResult> {
+  return apiFetch<CredentialMutationResult>(
+    `/api/v1/wallet/credentials/${credentialId}/revoke`,
     {
       method: "POST",
       headers: authHeaders,

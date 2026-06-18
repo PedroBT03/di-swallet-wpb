@@ -25,10 +25,13 @@ class DefaultRegistryValidator(
      */
     override fun validate(context: PresentationContext): PresentationContext {
         if (!properties.registry.enabled) {
+            val request = context.authorizationRequest
             return context.copy(
                 registryDecision = RegistryDecision(
                     accepted = true,
                     reason = "Registry validation disabled by configuration",
+                    rpIdentifier = request?.clientId,
+                    sourceEndpoint = request?.requestUri,
                 ),
             )
         }

@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getWalletKey } from "../api/wallet";
-import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { walletRpId, walletRpName } from "../auth/webauthn";
 import type { WalletKeyRecord } from "../types/wallet";
+import { formatApiError } from "../utils/apiError";
 
 export function SettingsPage() {
   const { session, busy, error, clearError, unlock, reregisterPasskey, signOut, forgetDevice } = useAuth();
@@ -21,13 +21,7 @@ export function SettingsPage() {
       const key = await getWalletKey(session.holderId, headers);
       setTestResult(key);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setTestError(typeof err.body === "string" ? err.body : err.message);
-      } else if (err instanceof Error) {
-        setTestError(err.message);
-      } else {
-        setTestError("Authentication test failed.");
-      }
+      setTestError(formatApiError(err));
     }
   }
 

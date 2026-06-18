@@ -11,6 +11,7 @@ import di.swallet.wpb.transactionlog.domain.Ts10ClaimInfo
 import di.swallet.wpb.transactionlog.domain.Ts10Presentation
 import di.swallet.wpb.transactionlog.domain.Ts10Transaction
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionResult
+import di.swallet.wpb.transactionlog.domain.Ts10PresentationPartyRef
 import di.swallet.wpb.transactionlog.domain.Ts10TransactionType
 import di.swallet.wpb.transactionlog.service.TransactionLogService
 import org.springframework.http.HttpStatus
@@ -37,7 +38,7 @@ class DeletionContactResolver(
     private val registryResolver: RpRegistryResolver,
     private val properties: DataDeletionRequestProperties,
 ) {
-    /** Loads the presentation, resolves contacts, and fails when no deletion channel exists. */
+    /** Loads the presentation, resolves contacts, and returns an empty set when none are available. */
     fun resolve(
         holderId: String,
         presentationTransactionId: String,
@@ -53,19 +54,24 @@ class DeletionContactResolver(
         if (!contacts.hasDeletionChannel()) {
             val rpIdentifier = presentation.interactingPartyIdentifier?.identifier
             if (consentRegistryLookup && !rpIdentifier.isNullOrBlank()) {
-                contacts = lookupRegistryContacts(rpIdentifier)
-                registryLookupPerformed = contacts.hasDeletionChannel()
-                if (registryLookupPerformed) {
+                val lookedUp = lookupRegistryContactsOrEmpty(rpIdentifier)
+                if (lookedUp.hasDeletionChannel()) {
+                    contacts = lookedUp
+                    registryLookupPerformed = true
                     userNotice = properties.registryLookupNotice
                 }
             }
         }
 
         if (!contacts.hasDeletionChannel()) {
-            throw ResponseStatusException(
-                HttpStatus.UNPROCESSABLE_ENTITY,
-                "No deletion contact channel available for presentation $presentationTransactionId",
-            )
+            buildProviderFallbackContacts()?.let { fallback ->
+                contacts = fallback
+                userNotice = properties.fallbackNotice
+            }
+        }
+
+        if (!contacts.hasDeletionChannel()) {
+            userNotice = properties.noContactNotice
         }
 
         return ResolvedDeletionContext(
@@ -106,8 +112,7 @@ class DeletionContactResolver(
                 "Presentation $presentationTransactionId has no presented claims",
             )
         }
-        val hasPartyRef = !presentation.interactingPartyIdentifier?.identifier.isNullOrBlank() ||
-            !presentation.registrarURL.isNullOrBlank()
+        val hasPartyRef = Ts10PresentationPartyRef.hasReference(presentation)
         if (!hasPartyRef) {
             throw ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
@@ -117,19 +122,29 @@ class DeletionContactResolver(
         return presentation
     }
 
-    /** Looks up support URIs for an RP identifier and classifies them as deletion channels. */
-    private fun lookupRegistryContacts(rpIdentifier: String): ParsedDeletionContacts {
-        return when (val resolution = registryResolver.lookupByIdentifier(rpIdentifier)) {
+    /** Looks up support URIs for an RP identifier; returns empty contacts when lookup fails. */
+    private fun lookupRegistryContactsOrEmpty(rpIdentifier: String): ParsedDeletionContacts =
+        when (val resolution = registryResolver.lookupByIdentifier(rpIdentifier)) {
             is RegistryResolution.Accepted -> {
                 val classified = contactBuilder.fromRegistry(resolution.record)
                 contactBuilder.parseStoredContact(classified)
             }
-            is RegistryResolution.Rejected -> {
-                throw ResponseStatusException(
-                    HttpStatus.BAD_GATEWAY,
-                    "Registry lookup failed for '$rpIdentifier': ${resolution.reason}",
-                )
-            }
+            is RegistryResolution.Rejected -> ParsedDeletionContacts()
         }
+
+    private fun buildProviderFallbackContacts(): ParsedDeletionContacts? {
+        val fallback = properties.providerFallbackRp
+        if (!fallback.hasDeletionChannel()) return null
+        val supportUris = listOfNotNull(
+            fallback.email.takeIf { it.isNotBlank() },
+            fallback.phone.takeIf { it.isNotBlank() },
+            fallback.webUri.takeIf { it.isNotBlank() },
+        )
+        return contactBuilder.parseStoredContact(
+            contactBuilder.fromSupportUris(
+                country = fallback.country.takeIf { it.isNotBlank() },
+                supportUris = supportUris,
+            ),
+        ).takeIf { it.hasDeletionChannel() }
     }
 }

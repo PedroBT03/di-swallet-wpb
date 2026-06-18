@@ -29,6 +29,8 @@ export interface WalletKeyRecord {
   publicKeyBase64: string;
   revocationIndex: number;
   createdAt?: string;
+  /** Present on wallet summary; absent on create/get key endpoints until synced. */
+  revoked?: boolean;
 }
 
 export interface WalletCredentialRecord {
@@ -76,4 +78,9 @@ export interface SignResult {
 export interface RevokeKeyResult {
   status: string;
   index: string;
+}
+
+export interface CredentialMutationResult {
+  credentialId: number;
+  status: string;
 }

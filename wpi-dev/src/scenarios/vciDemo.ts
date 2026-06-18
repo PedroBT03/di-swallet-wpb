@@ -55,4 +55,23 @@ export const VCI_DEMO_SCENARIOS: VciDemoScenario[] = [
       }),
     )}`,
   },
+  {
+    id: "pid-deferred",
+    title: "PID — deferred issuance",
+    description:
+      "Requires wpb.openid4vci.simulator.always-defer=true on WPB. After Request credential, Continue polls until DEFERRED_ISSUED.",
+    grant: "pre-authorized",
+    defaultTxCode: "1234",
+    offerUri: `openid-credential-offer://credential_offer=${encodeURIComponent(
+      JSON.stringify({
+        credential_issuer: ISSUER,
+        credential_configuration_ids: ["pid_jwt"],
+        grants: {
+          "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
+            tx_code: { length: 4 },
+          },
+        },
+      }),
+    )}`,
+  },
 ];

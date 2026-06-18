@@ -8,6 +8,8 @@ const navItems = [
   { to: "/issue", label: "Issue" },
   { to: "/log", label: "Log" },
   { to: "/privacy", label: "Privacy" },
+  { to: "/ops", label: "Ops" },
+  { to: "/pseudonyms", label: "Pseudonyms" },
   { to: "/settings", label: "Settings" },
 ] as const;
 

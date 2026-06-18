@@ -1,3 +1,4 @@
+import { formatCredentialTypeLabel } from "../../utils/credentialType";
 import type { CredentialSummary, WalletCredentialRecord, WalletInitResult } from "../../types/wallet";
 
 const walletStateKey = (holderId: string) => `wpi-dev.walletState.${holderId}`;
@@ -23,7 +24,7 @@ export function summarizeCredential(credential: WalletCredentialRecord): Credent
       : credential.encodedData;
   return {
     id: credential.id,
-    credentialType: credential.credentialType,
+    credentialType: formatCredentialTypeLabel(credential.credentialType),
     issuedAt: credential.issuedAt,
     revocationState: credential.revocationState,
     deviceBound: credential.deviceBound,

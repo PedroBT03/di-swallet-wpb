@@ -18,6 +18,7 @@ import di.swallet.wpb.service.WalletInitCommand
 import di.swallet.wpb.service.format.PresentationService
 import di.swallet.wpb.service.format.DisclosureCipherService
 import di.swallet.wpb.domain.WalletKey
+import di.swallet.wpb.domain.CredentialTypeLabels
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.WalletKeyRepository
@@ -354,7 +355,7 @@ class WalletController(
 
         transactionLogger.logLegacyPresentation(
             holderId = credential.userId,
-            credentialType = credential.credentialType,
+            credentialType = CredentialTypeLabels.displayLabel(credential.credentialType),
             claimsRequested = request.claimsToDisclose,
             claimsPresented = request.claimsToDisclose,
             completed = true,
@@ -362,7 +363,7 @@ class WalletController(
 
         return mapOf(
             "userId" to credential.userId,
-            "credentialType" to credential.credentialType,
+            "credentialType" to CredentialTypeLabels.displayLabel(credential.credentialType),
             "format" to "SD-JWT",
             "presentation" to minimizedSdJwt,
             "revealedClaims" to request.claimsToDisclose
@@ -450,7 +451,7 @@ class WalletController(
         }
         return WalletCredentialSummary(
             id = credential.id ?: error("WalletCredential persisted without id"),
-            credentialType = credential.credentialType,
+            credentialType = CredentialTypeLabels.displayLabel(credential.credentialType),
             issuedAt = credential.issuedAt,
             revocationState = credential.revocationState.name,
             deviceBound = credential.deviceBound,

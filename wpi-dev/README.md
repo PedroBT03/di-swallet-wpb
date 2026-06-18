@@ -83,6 +83,37 @@ Issuance session state, `IssuanceContext`, and audit events appear in the debug 
 
 When WPB runs with `wpb.transaction-log.dek-mode=holder`, derive the log key on **Log** before viewing detail or exporting.
 
+### Ops (trust mark & status lists)
+
+Open **Ops** (no passkey required):
+
+1. **Trust mark** — loads `GET /api/v1/wallet/trust-mark`. Dev profile enables placeholder URLs; remote fetch warnings are expected.
+2. **Status lists** — load the published JWT/JSON bitstring and look up a revocation index from Wallet (HSM key or credential).
+
+### Pseudonyms
+
+Open **Pseudonyms** after sign-in:
+
+1. Create a slot with rpId `localhost` (must match the browser origin).
+2. **Register passkey** runs a separate WebAuthn ceremony for that RP.
+3. Requires `wpb.pseudonym.enabled=true` and `wpb.pseudonym.allowed-rp-ids=localhost` in `application-dev.properties`.
+
+### Advanced wallet actions
+
+- **SD-JWT presentation (manual)** — selective disclosure without a verifier session (`POST /credentials/{id}/presentation`).
+- **Revoke wallet unit** — cascades revocation to keys and WP-managed credentials.
+- **Deferred issuance** — on **Issue**, use the deferred scenario after enabling `wpb.openid4vci.simulator.always-defer=true`; Continue polls `POST /deferred/query`.
+
+See [FEATURE_MATRIX.md](./FEATURE_MATRIX.md) and [scenarios/README.md](./scenarios/README.md) for full traceability and demo scripts.
+
+### 15-minute thesis demo
+
+1. Onboarding → Wallet init → HSM key → demo PID (~3 min)
+2. Present (verifier emulator) → Log (~4 min)
+3. Issue (pre-authorized PID) → Wallet sync (~4 min)
+4. Privacy deletion + DPA report (~3 min)
+5. Ops trust mark + status list lookup (~1 min)
+
 ### Delete wallet data (credentials)
 
 On **Wallet**, each credential has **Delete from wallet** (permanent removal from WPB, logs `CredentialDeletion` in the transaction log) and **Revoke** (status-list invalidation). This is distinct from **Privacy → Data deletion**, which contacts the relying party about data they hold after a presentation.

@@ -1,5 +1,6 @@
 import type {
   CredentialMutationResult,
+  PresentationResult,
   RevokeKeyResult,
   SignResult,
   WalletCredentialRecord,
@@ -7,6 +8,7 @@ import type {
   WalletInitResult,
   WalletKeyRecord,
   WalletSummaryResponse,
+  WalletUnitRevokeResult,
 } from "../types/wallet";
 import { apiFetch } from "./client";
 
@@ -121,6 +123,35 @@ export function revokeCredential(
       method: "POST",
       headers: authHeaders,
       raw: true,
+    },
+  );
+}
+
+export function revokeWalletUnit(
+  walletId: string,
+  authHeaders: Headers,
+): Promise<WalletUnitRevokeResult> {
+  return apiFetch<WalletUnitRevokeResult>(
+    `/api/v1/wallet/units/${encodeURIComponent(walletId)}/revoke`,
+    {
+      method: "POST",
+      headers: authHeaders,
+      raw: true,
+    },
+  );
+}
+
+export function createCredentialPresentation(
+  credentialId: number,
+  claimsToDisclose: string[],
+  authHeaders: Headers,
+): Promise<PresentationResult> {
+  return apiFetch<PresentationResult>(
+    `/api/v1/wallet/credentials/${credentialId}/presentation`,
+    {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ claimsToDisclose }),
     },
   );
 }

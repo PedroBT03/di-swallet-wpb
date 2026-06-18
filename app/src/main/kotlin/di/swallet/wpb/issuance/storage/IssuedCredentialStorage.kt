@@ -4,6 +4,7 @@
 
 package di.swallet.wpb.issuance.storage
 
+import di.swallet.wpb.domain.CredentialTypeLabels
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.domain.WalletKey
@@ -113,7 +114,9 @@ class JpaIssuedCredentialStorage(
 
     /** Falls back to a format label when the credential configuration id is blank. */
     private fun inferCredentialType(configurationId: String, format: IssuanceCredentialFormat): String {
-        if (configurationId.isNotBlank()) return configurationId
+        if (configurationId.isNotBlank()) {
+            return CredentialTypeLabels.canonicalWalletType(configurationId)
+        }
         return when (format) {
             IssuanceCredentialFormat.SD_JWT_VC -> "SdJwtVc"
             IssuanceCredentialFormat.MSO_MDOC -> "MsoMdoc"

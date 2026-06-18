@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   createWalletKey,
+  createCredentialPresentation,
   deleteCredential,
   fetchWalletSummary,
   initWalletUnit,
   issueDemoSdCredential,
   revokeCredential,
   revokeWalletKey,
+  revokeWalletUnit,
   signData,
 } from "../api/wallet";
 import { AuthGate } from "../components/AuthGate";
@@ -19,10 +21,12 @@ import { mergeWalletStateFromSummary } from "../features/wallet/walletUnit";
 import { useAuthedApi } from "../hooks/useAuthedApi";
 import type {
   CredentialSummary,
+  PresentationResult,
   SignResult,
   WalletInitResult,
   WalletKeyRecord,
 } from "../types/wallet";
+import { formatCredentialTypeLabel } from "../utils/credentialType";
 import { formatApiError, isIssuanceEligible } from "../utils/apiError";
 
 interface WalletCache {
@@ -49,9 +53,13 @@ export function WalletPage() {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [signInput, setSignInput] = useState("Hello from WPI Dev");
   const [signResult, setSignResult] = useState<SignResult | null>(null);
+  const [presentationCredentialId, setPresentationCredentialId] = useState<number | "">("");
+  const [claimsInput, setClaimsInput] = useState("given_name, family_name");
+  const [presentationResult, setPresentationResult] = useState<PresentationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lastRaw, setLastRaw] = useState<unknown>(null);
+  const presentationResultRef = useRef<HTMLDivElement | null>(null);
 
   const applyCache = useCallback((cache: WalletCache) => {
     setWalletKey(cache.key);
@@ -64,6 +72,27 @@ export function WalletPage() {
       setWalletState(loadWalletState(holderId));
     }
   }, [holderId]);
+
+  const presentableCredentials = useMemo(
+    () => credentials.filter((credential) => credential.revocationState === "ACTIVE"),
+    [credentials],
+  );
+
+  useEffect(() => {
+    if (presentableCredentials.length === 0) {
+      setPresentationCredentialId("");
+      return;
+    }
+    setPresentationCredentialId((current) => {
+      if (
+        current !== "" &&
+        presentableCredentials.some((credential) => credential.id === current)
+      ) {
+        return current;
+      }
+      return presentableCredentials[0]?.id ?? "";
+    });
+  }, [presentableCredentials]);
 
   const runAction = useCallback(
     async (action: () => Promise<void>) => {
@@ -212,6 +241,66 @@ export function WalletPage() {
     });
   }
 
+  async function handleRevokeWalletUnit() {
+    const walletId = walletState?.walletId;
+    if (!walletId) {
+      setError("Initialize the wallet unit before revoking it.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Revoke wallet unit ${walletId}? This cascades revocation to keys and WP-managed credentials.`,
+      )
+    ) {
+      return;
+    }
+    await runAction(async () => {
+      const result = await withProtectedAction((headers) => revokeWalletUnit(walletId, headers));
+      setSuccessMessage(`Wallet unit ${result.walletId} revoked.`);
+      setLastRaw(result);
+      await performSync();
+    });
+  }
+
+  async function handleManualPresentation(event: React.FormEvent) {
+    event.preventDefault();
+    const credentialId = resolvePresentationCredentialId();
+    if (credentialId == null) {
+      setError("Select a credential for manual SD-JWT presentation.");
+      return;
+    }
+    const claims = claimsInput
+      .split(",")
+      .map((claim) => claim.trim())
+      .filter((claim) => claim.length > 0);
+    if (claims.length === 0) {
+      setError("Enter at least one claim name to disclose.");
+      return;
+    }
+    await runAction(async () => {
+      const result = await withProtectedAction((headers) =>
+        createCredentialPresentation(credentialId, claims, headers),
+      );
+      setPresentationResult(result);
+      setLastRaw(result);
+      setSuccessMessage(
+        `Built selective SD-JWT for credential #${credentialId} (${result.revealedClaims.length} claim(s)). ` +
+          "This token is not sent to a verifier — use Present for a full OID4VP flow.",
+      );
+      window.requestAnimationFrame(() => {
+        presentationResultRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    });
+  }
+
+  function resolvePresentationCredentialId(): number | null {
+    if (presentationCredentialId !== "" && !Number.isNaN(Number(presentationCredentialId))) {
+      return Number(presentationCredentialId);
+    }
+    const fallback = presentableCredentials[0]?.id;
+    return fallback != null ? fallback : null;
+  }
+
   async function handleSign(event: React.FormEvent) {
     event.preventDefault();
     if (walletKey?.revoked) {
@@ -352,6 +441,18 @@ export function WalletPage() {
                 {busy ? "Working…" : "Initialize wallet"}
               </button>
             </form>
+            {walletState && (
+              <div className="toolbar toolbar--compact">
+                <button
+                  type="button"
+                  className="button button--danger"
+                  disabled={busy || !walletState.walletId}
+                  onClick={() => void handleRevokeWalletUnit()}
+                >
+                  Revoke wallet unit
+                </button>
+              </div>
+            )}
             {walletState && <JsonPanel title="Init result" data={walletState} />}
           </section>
 
@@ -454,7 +555,7 @@ export function WalletPage() {
                 {credentials.map((credential) => (
                   <li key={credential.id} className="credential-list__item">
                     <div className="credential-list__head">
-                      <strong>{credential.credentialType}</strong>
+                      <strong>{formatCredentialTypeLabel(credential.credentialType)}</strong>
                       <span
                         className={`status-badge status-badge--${credential.revocationState === "ACTIVE" ? "up" : "down"}`}
                       >
@@ -489,6 +590,80 @@ export function WalletPage() {
                 ))}
               </ul>
             )}
+          </section>
+
+          <section className="card wallet-section">
+            <h2 className="card__title">SD-JWT builder (API lab)</h2>
+            <p className="hint">
+              <strong>Not the normal presentation path.</strong> In production, claim selection happens on{" "}
+              <Link to="/present">Present</Link> — the verifier’s DCQL query defines which attributes are
+              requested, and you approve them on the consent screen. This section only calls{" "}
+              <code>POST /credentials/{"{id}"}/presentation</code> directly: it filters disclosures on a
+              stored credential and returns a minimized SD-JWT string (no verifier, no vp_token).
+            </p>
+            {credentials.length === 0 ? (
+              <p className="hint">Issue or sync credentials first.</p>
+            ) : presentableCredentials.length === 0 ? (
+              <p className="hint">
+                All credentials are revoked. Revoked PIDs cannot be presented — issue a new demo PID or
+                revoke only applies to status-list invalidation (row kept in wallet).
+              </p>
+            ) : (
+              <form className="form" onSubmit={(event) => void handleManualPresentation(event)}>
+                <label className="form__field">
+                  <span className="form__label">Credential</span>
+                  <select
+                    value={presentationCredentialId === "" ? "" : String(presentationCredentialId)}
+                    onChange={(event) =>
+                      setPresentationCredentialId(
+                        event.target.value === "" ? "" : Number(event.target.value),
+                      )
+                    }
+                    disabled={busy}
+                  >
+                    {presentableCredentials.map((credential) => (
+                      <option key={credential.id} value={credential.id}>
+                        #{credential.id} — {formatCredentialTypeLabel(credential.credentialType)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="form__field">
+                  <span className="form__label">Claims to disclose (comma-separated)</span>
+                  <input
+                    value={claimsInput}
+                    onChange={(event) => setClaimsInput(event.target.value)}
+                    disabled={busy}
+                    spellCheck={false}
+                    placeholder="given_name, family_name"
+                  />
+                </label>
+                <p className="hint">
+                  Demo PID claims include <code>given_name</code>, <code>family_name</code>,{" "}
+                  <code>birthdate</code>, <code>nationality</code>, <code>address.locality</code>. Requires
+                  passkey (same as Sign test).
+                </p>
+                <button type="submit" disabled={busy || presentableCredentials.length === 0}>
+                  {busy ? "Authenticating…" : "Build SD-JWT"}
+                </button>
+              </form>
+            )}
+            {presentationResult ? (
+              <div ref={presentationResultRef}>
+                <p className="hint">
+                  Revealed: <code>{presentationResult.revealedClaims.join(", ")}</code>
+                </p>
+                <code
+                  className="credential-list__preview"
+                  title={presentationResult.presentation}
+                >
+                  {presentationResult.presentation.length > 120
+                    ? `${presentationResult.presentation.slice(0, 120)}…`
+                    : presentationResult.presentation}
+                </code>
+                <JsonPanel title="Presentation result" data={presentationResult} defaultOpen />
+              </div>
+            ) : null}
           </section>
 
           <section className="card wallet-section">

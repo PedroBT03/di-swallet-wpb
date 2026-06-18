@@ -72,7 +72,7 @@ class JpaIssuedCredentialStorageTest {
         val captor = ArgumentCaptor.forClass(WalletCredential::class.java)
         verify(repo).save(captor.capture())
         val saved = captor.value
-        assertEquals("pid_jwt", saved.credentialType)
+        assertEquals("PID", saved.credentialType)
         assertEquals("issuer-jwt-header.payload.sig", saved.encodedData)
         assertTrue(saved.encryptedDisclosures.isNotBlank())
 

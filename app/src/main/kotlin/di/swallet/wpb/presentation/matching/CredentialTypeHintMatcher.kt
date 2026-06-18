@@ -4,6 +4,7 @@
 
 package di.swallet.wpb.presentation.matching
 
+import di.swallet.wpb.domain.CredentialTypeLabels
 import java.util.Base64
 
 /**
@@ -39,13 +40,7 @@ object CredentialTypeHintMatcher {
     private fun isPidHint(hint: String): Boolean =
         hint.equals("PID", ignoreCase = true)
 
-    private fun isPidCredential(type: String): Boolean {
-        val normalized = type.lowercase().replace('-', '_')
-        return normalized == "pid_jwt" ||
-            normalized == "pid" ||
-            normalized == "eu.europa.ec.eudi.pid_jwt_vc_json" ||
-            normalized.contains("pid_jwt")
-    }
+    private fun isPidCredential(type: String): Boolean = CredentialTypeLabels.isPidType(type)
 
     private fun extractVct(issuerJwt: String?): String? {
         val payloadB64 = issuerJwt?.split('.')?.getOrNull(1) ?: return null

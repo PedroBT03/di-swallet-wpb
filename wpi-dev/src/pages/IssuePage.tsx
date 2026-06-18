@@ -273,6 +273,22 @@ export function IssuePage() {
           </div>
         ) : null}
 
+        {flowState === "DEFERRED_PENDING" ? (
+          <div className="alert alert--info" role="status">
+            <strong>Deferred issuance</strong>
+            <p>
+              The simulated issuer returned a transaction id. Click <strong>Continue</strong> to poll{" "}
+              <code>POST /openid4vci/deferred/query</code> until the credential is ready, then complete
+              storage consent.
+            </p>
+            {context?.deferredHandle?.transactionId ? (
+              <p className="hint">
+                Transaction id: <code>{context.deferredHandle.transactionId}</code>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         <IssuanceStepper state={flowState} />
 
         <div className="present-grid">

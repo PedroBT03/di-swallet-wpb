@@ -16,7 +16,7 @@ import { formatApiError } from "../utils/apiError";
 import { formatWebAuthnError } from "../auth/webauthn";
 
 export function PseudonymsPage() {
-  const { session, withProtectedAction, busy, clearError } = useAuthedApi();
+  const { session, withApiAuth, withSoleControl, busy, clearError } = useAuthedApi();
   const holderId = session?.holderId.trim() ?? "";
 
   const [items, setItems] = useState<PseudonymView[] | null>(null);
@@ -41,7 +41,7 @@ export function PseudonymsPage() {
   );
 
   async function loadPseudonyms() {
-    await withProtectedAction(async (headers) => {
+    await withApiAuth(async (headers) => {
       const list = await listPseudonyms(holderId, headers);
       setItems(list);
       setLastRaw(list);
@@ -55,7 +55,7 @@ export function PseudonymsPage() {
       return;
     }
     await runAction(async () => {
-      await withProtectedAction(async (headers) => {
+      await withApiAuth(async (headers) => {
         const created = await createPseudonym(
           {
             holderId,
@@ -77,7 +77,7 @@ export function PseudonymsPage() {
   async function handleRegister(item: PseudonymView) {
     const origin = window.location.origin;
     await runAction(async () => {
-      const options = await withProtectedAction((headers) =>
+      const options = await withApiAuth((headers) =>
         fetchPseudonymRegistrationOptions(item.id, holderId, origin, headers),
       );
       let clientDataJSON: string;
@@ -86,7 +86,7 @@ export function PseudonymsPage() {
       } catch (err) {
         throw new Error(formatWebAuthnError(err));
       }
-      const result = await withProtectedAction((headers) =>
+      const result = await withSoleControl((headers) =>
         finishPseudonymRegistration(item.id, holderId, origin, clientDataJSON, headers),
       );
       setSuccessMessage(`Pseudonym registered for ${item.rpId}.`);
@@ -100,7 +100,7 @@ export function PseudonymsPage() {
       return;
     }
     await runAction(async () => {
-      await withProtectedAction(async (headers) => {
+      await withSoleControl(async (headers) => {
         await deletePseudonym(item.id, holderId, headers);
         setSuccessMessage(`Pseudonym for ${item.rpId} deleted.`);
         const list = await listPseudonyms(holderId, headers);
@@ -153,7 +153,7 @@ export function PseudonymsPage() {
                 disabled={busy || !holderId}
                 onClick={() => void runAction(loadPseudonyms)}
               >
-                Unlock &amp; list
+                Load pseudonyms
               </button>
             </div>
           </div>
@@ -162,7 +162,7 @@ export function PseudonymsPage() {
         <div className="card">
           <h2 className="card__title">Your pseudonyms</h2>
           {items == null ? (
-            <p className="hint">Unlock to load pseudonyms for this holder.</p>
+            <p className="hint">Load pseudonyms for this holder.</p>
           ) : items.length === 0 ? (
             <p className="hint">No pseudonyms yet.</p>
           ) : (

@@ -1,4 +1,4 @@
-# WPI Dev — lab frontend
+# WPI Dev: lab frontend
 
 Visual test harness for the DI-Swallet WPB backend. Runs as a separate Node project (not part of the Gradle build).
 
@@ -16,7 +16,7 @@ From the repository root:
 docker compose up -d
 ```
 
-Default credentials match `application.properties`: user `pedro`, password `tese2026`, database `diswallet`. If `bootRun` fails with *Connection to localhost:5432 refused*, the database is not running — start Docker Desktop (or the Docker daemon) and run the command above.
+Default credentials match `application.properties`: user `pedro`, password `tese2026`, database `diswallet`. If `bootRun` fails with *Connection to localhost:5432 refused*, the database is not running: start Docker Desktop (or the Docker daemon) and run the command above.
 
 ## Quick start
 
@@ -30,8 +30,8 @@ Open [http://localhost:5173](http://localhost:5173). The **Health** page calls `
 
 ### Holder passkey (phase 1)
 
-1. **New holder** (header → *New holder*, or `/onboarding`) — pick a holder id and register a passkey.
-2. **Log in** (header → *Log in*, or `/login`) — existing holder id + passkey unlock (no re-registration).
+1. **New holder** (header → *New holder*, or `/onboarding`): pick a holder id and register a passkey.
+2. **Log in** (header → *Log in*, or `/login`): existing holder id + passkey unlock (no re-registration).
 3. **Sign out** ends the UI session; **Log in** restores it using the passkey remembered on this browser.
 
 If WebAuthn fails, confirm `http://localhost:5173` is listed in `wallet.origins` on WPB.
@@ -40,46 +40,45 @@ If WebAuthn fails, confirm `http://localhost:5173` is listed in `wallet.origins`
 
 Open **Wallet** after signing in. Typical demo flow:
 
-1. **Initialize wallet** — creates wallet unit + DPoP binding (needs FIDO2 device id from passkey registration).
-2. **Ensure HSM key** — generates holder key in SoftHSM (or returns existing).
-3. **Issue demo PID** — requires wallet state **OPERATIONAL** (or VALID) and an HSM key.
-4. **Sign test** — remote signature inside the HSM.
+1. **Initialize wallet**: creates wallet unit + DPoP binding (needs FIDO2 device id from passkey registration).
+2. **Ensure HSM key**: generates holder key in SoftHSM (or returns existing).
+3. **Issue demo PID**: requires wallet state **OPERATIONAL** (or VALID) and an HSM key.
+4. **Sign test**: remote signature inside the HSM.
 
-Protected actions show an “Authenticating with passkey…” banner while WebAuthn runs.
+Protected **sole-control** actions (consent approve/reject, HSM sign, revoke, delete) show an “Authenticating with passkey…” banner. Dashboard reads (wallet sync, consent **view**, transaction log) reuse the **holder session** opened at login (WIAM_15) and do not prompt again.
 
-On **Wallet**, use **Unlock & sync from server** once to load key and credentials (single passkey). **Refresh view** replays cached data without asking again. **Ensure HSM key** returns the existing key if one is already stored.
+On **Wallet**, **Sync from server** loads key and credentials without a new passkey prompt after login. **Refresh view** replays cached data locally. **Ensure HSM key** creates or returns an HSM key and **does** require a fresh passkey (WIAM_14).
 
 ### OpenID4VP present
 
 1. Start WPB with demo-mode: `./gradlew :app:bootRun --args='--wpb.openid4vp.demo-mode=true'`
-2. Start the verifier emulator (`verifier-emulator/`). It signs requests with **ES256** and embeds the verifier **access certificate** in `verifier_info.x5c` (PKIX trust against `demo-lote.json` — not skipped).
-2. Start the verifier emulator (`verifier-emulator/`, port **8081**).
-3. On **Wallet**, issue a demo PID (PID scenarios need a matching credential).
-4. Open **Present** — pick a demo scenario or paste a `request_uri`, then **Start presentation**.
-5. Review the consent screen (claim paths only — no attribute values), then **Approve** or **Reject** (passkey).
+2. Start the verifier emulator (`verifier-emulator/`, port **8081**). It signs requests with **ES256** and embeds the verifier **access certificate** in `verifier_info.x5c` (PKIX trust against `demo-lote.json`; not skipped).
+3. On **Wallet**, issue a demo PID (PID scenarios) or driving licence (mDL scenarios).
+4. Open **Present**, choose **PID** or **Driving licence (mDL)**, pick fields or a quick demo, then **Start presentation**.
+5. Review the consent screen (claim paths only: no attribute values), then **Approve** or **Reject** (passkey).
 
 Session state, `PresentationContext`, and audit events are shown at the bottom after the flow runs.
 
-### OpenID4VCI issue
+### OpenID4VCI issue (UC2)
 
-1. WPB with simulated issuer: `wpb.openid4vci.demo-mode=true` (default in `dev` profile).
-2. On **Wallet**, initialize the wallet unit (device-bound credentials such as `pid_jwt` need an HSM key).
-3. Open **Issue** — pick a demo scenario or paste a `credential_offer_uri`, then **Resolve offer**.
-4. Use **Continue** to advance authorization and credential request (pre-authorized demo uses `tx_code` **1234**).
-5. **Unlock & load storage consent** (passkey), review claim preview, then **Approve storage** or **Reject**.
-6. Optionally **Notify issuer**, then open **Wallet** → **Unlock & sync from server** to see the new credential.
+1. Complete **UC1** first: **Onboarding** (passkey) → **Wallet** (init + HSM key).
+2. WPB with simulated issuer: `wpb.openid4vci.demo-mode=true` (default in `dev` profile).
+3. Open **Issue**: pick PID or mDL, then **Start issuance**.
+4. **Continue** to prepare issuer authorization, then complete the **CMD** step (simulated citizen login).
+5. **Continue** for credential request; the storage consent screen loads automatically. **Approve** or **Reject** with your passkey (WIAM_14 / ISSU_11).
+6. Open **Wallet** → **Sync from server** to see the new credential.
 
-Issuance session state, `IssuanceContext`, and audit events appear in the debug panels.
+WIA, KA, `IssuanceContext`, and audit events appear in **Developer details** on Issue and Wallet.
 
 ### Transaction log and privacy
 
-1. After **Present** or **Issue** flows, open **Log** → **Unlock & load transactions** (passkey).
+1. After **Present** or **Issue** flows, open **Log** → **Load transactions** (uses holder session; no extra passkey).
 2. Click a row to load the decrypted TS10 payload (holder `dek-mode` needs log passphrase first).
 3. Select entries and **Download JWE** with an export password.
 4. Open **Privacy** → load eligible presentations, then **Request deletion** or **Initiate report**.
 5. Use **Copy** / **Open** on returned `mailto:`, `tel:`, or `https:` contact URIs.
 
-**DPA report (demo):** local WPB uses a **dummy** DPA fallback (`dpa-demo@local.test`, labelled “CNPD (demo only)”) because emulator presentations do not store real supervisory-authority contacts and the RP registry is off by default. This lets you exercise mailto/actions in the lab only — configure real DPA contacts for production (see `application-dev.properties` comments and TS8).
+**DPA report (demo):** local WPB uses a **dummy** DPA fallback (`dpa-demo@local.test`, labelled “CNPD (demo only)”) because emulator presentations do not store real supervisory-authority contacts and the RP registry is off by default. This lets you exercise mailto/actions in the lab only: configure real DPA contacts for production (see `application-dev.properties` comments and TS8).
 
 When WPB runs with `wpb.transaction-log.dek-mode=holder`, derive the log key on **Log** before viewing detail or exporting.
 
@@ -87,8 +86,8 @@ When WPB runs with `wpb.transaction-log.dek-mode=holder`, derive the log key on 
 
 Open **Ops** (no passkey required):
 
-1. **Trust mark** — loads `GET /api/v1/wallet/trust-mark`. Dev profile enables placeholder URLs; remote fetch warnings are expected.
-2. **Status lists** — load the published JWT/JSON bitstring and look up a revocation index from Wallet (HSM key or credential).
+1. **Trust mark**: loads `GET /api/v1/wallet/trust-mark`. Dev profile enables placeholder URLs; remote fetch warnings are expected.
+2. **Status lists**: load the published JWT/JSON bitstring and look up a revocation index from Wallet (HSM key or credential).
 
 ### Pseudonyms
 
@@ -100,17 +99,17 @@ Open **Pseudonyms** after sign-in:
 
 ### Advanced wallet actions
 
-- **SD-JWT presentation (manual)** — selective disclosure without a verifier session (`POST /credentials/{id}/presentation`).
-- **Revoke wallet unit** — cascades revocation to keys and WP-managed credentials.
-- **Deferred issuance** — on **Issue**, use the deferred scenario after enabling `wpb.openid4vci.simulator.always-defer=true`; Continue polls `POST /deferred/query`.
+- **SD-JWT presentation (manual)**: selective disclosure without a verifier session (`POST /credentials/{id}/presentation`).
+- **Revoke wallet unit**: cascades revocation to keys and WP-managed credentials.
+- **Deferred issuance**: on **Issue**, use the deferred scenario after enabling `wpb.openid4vci.simulator.always-defer=true`; Continue polls `POST /deferred/query`.
 
 See [FEATURE_MATRIX.md](./FEATURE_MATRIX.md) and [scenarios/README.md](./scenarios/README.md) for full traceability and demo scripts.
 
 ### 15-minute thesis demo
 
-1. Onboarding → Wallet init → HSM key → demo PID (~3 min)
+1. Onboarding (UC1) → Wallet init → HSM key (~3 min)
 2. Present (verifier emulator) → Log (~4 min)
-3. Issue (pre-authorized PID) → Wallet sync (~4 min)
+3. Issue (UC2, CMD + PID) → Wallet sync (~4 min)
 4. Privacy deletion + DPA report (~3 min)
 5. Ops trust mark + status list lookup (~1 min)
 

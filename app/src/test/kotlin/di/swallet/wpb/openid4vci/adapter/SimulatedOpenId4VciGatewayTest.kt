@@ -4,6 +4,8 @@
 
 package di.swallet.wpb.openid4vci.adapter
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.issuance.domain.DeferredIssuanceHandle
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
@@ -35,6 +37,8 @@ class SimulatedOpenId4VciGatewayTest {
         properties,
         MdocDocTypeRegistry(),
         codec,
+        SdJwtService(ObjectMapper()),
+        ObjectMapper(),
     )
 
     /** Fixed ES256 proof material with key id "key-1" for simulated issuance calls. */
@@ -147,7 +151,13 @@ class SimulatedOpenId4VciGatewayTest {
             simulator.alwaysDefer = true
             simulator.deferredPollsBeforeIssue = 2
         }
-        val gw = SimulatedOpenId4VciGateway(props, MdocDocTypeRegistry(), codec)
+        val gw = SimulatedOpenId4VciGateway(
+            props,
+            MdocDocTypeRegistry(),
+            codec,
+            SdJwtService(ObjectMapper()),
+            ObjectMapper(),
+        )
         val (offer, metadata) = gw.resolveOffer(
             """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}""",
         )
@@ -195,7 +205,7 @@ class SimulatedOpenId4VciGatewayTest {
             sessionId,
             IssuanceRequest(credentialConfigurationId = "org.iso.18013.5.1.mDL"),
             proof(),
-            null,
+            ka(),
         )
         assertTrue(outcome is IssuanceOutcome.Issued)
         val issued = (outcome as IssuanceOutcome.Issued).credentials.first()

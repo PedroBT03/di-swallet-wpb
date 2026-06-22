@@ -9,6 +9,7 @@ import di.swallet.wpb.domain.CredentialBindingFormat
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.format.sdjwt.SdJwtService
+import di.swallet.wpb.issuance.storage.IssuedCredentialSupersessionService
 import di.swallet.wpb.revocation.WpCredentialStatusAllocator
 import di.swallet.wpb.security.AuthenticatedHolderGuard
 import di.swallet.wpb.service.HsmService
@@ -43,6 +44,7 @@ class MockIssuerController(
     private val keyBindingRuntimeService: KeyBindingRuntimeService,
     private val legacySdJwtIssuanceSupport: LegacySdJwtIssuanceSupport,
     private val wpCredentialStatusAllocator: WpCredentialStatusAllocator,
+    private val supersessionService: IssuedCredentialSupersessionService,
     private val transactionLogger: TransactionLogger,
     private val authenticatedHolderGuard: AuthenticatedHolderGuard,
 ) {
@@ -107,6 +109,8 @@ class MockIssuerController(
 
         val signedJwt = hsmService.signSdJwt(userId, sdPayload)
         val encryptedDisclosures = disclosureCipherService.encrypt(issued.disclosures)
+
+        supersessionService.supersedeActiveOfSameFamily(userId, "PID")
 
         val credential = WalletCredential(
             userId = userId,

@@ -39,25 +39,34 @@ class WalletRevocationService(
     private val hsmService: HsmService,
 ) {
     /**
-     * Revokes a single WP-managed credential by setting its status-list bit and local revocation state.
+     * Revokes a credential: updates the WP status list when wallet-managed, otherwise marks
+     * REVOKED locally only (OID4VCI / issuer-managed credentials).
+     *
+     * @return whether the WP bitstring index was updated (false for wallet-local-only revoke)
      */
     @Transactional
-    fun revokeCredential(credentialId: Long) {
+    fun revokeCredential(credentialId: Long): Boolean {
         val credential = walletCredentialRepository.findById(credentialId)
             .orElseThrow {
                 ResponseStatusException(HttpStatus.NOT_FOUND, "Credential $credentialId not found")
             }
-        if (!credentialRevocationGuard.isWpManaged(credential)) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Credential $credentialId is issuer-managed; revocation must be performed by the issuer",
-            )
+        if (credential.revocationState == CredentialRevocationState.REVOKED) {
+            return credentialRevocationGuard.isWpManaged(credential)
         }
-        val index = credential.statusListIndex
-            ?: throw ResponseStatusException(HttpStatus.CONFLICT, "Credential has no WP status index")
-        statusListService.revoke(index)
+
+        val wpManaged = credentialRevocationGuard.isWpManaged(credential)
+        if (wpManaged) {
+            val index = credential.statusListIndex
+                ?: throw ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Credential $credentialId is missing a WP status list index",
+                )
+            statusListService.revoke(index)
+        }
+
         credential.revocationState = CredentialRevocationState.REVOKED
         walletCredentialRepository.save(credential)
+        return wpManaged
     }
 
     /**

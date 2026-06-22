@@ -10,11 +10,15 @@ export function needsConsentScreen(state: PresentationState): boolean {
   return state === "CONSENT_PENDING";
 }
 
-/** Pre-selects the sole candidate in each group; leaves multi-choice groups empty. */
+/** Pre-selects the sole candidate in each group, or the stored credential over a synthetic demo. */
 export function defaultCredentialSelection(groups: CredentialChoiceGroup[]): string[] {
   return groups.flatMap((group) => {
     if (group.candidates.length === 1) {
       return [group.candidates[0].candidateId];
+    }
+    const stored = group.candidates.find((candidate) => candidate.credentialId != null);
+    if (stored) {
+      return [stored.candidateId];
     }
     return [];
   });
@@ -56,7 +60,11 @@ export function presentStepForState(state: PresentationState | null): PresentSte
 
 export function stateBadgeVariant(
   state: PresentationState,
+  error?: { code: string; message: string } | null,
 ): "up" | "down" | "unknown" {
+  if (state === "DISPATCHED" && error) {
+    return "down";
+  }
   if (state === "DISPATCHED" || state === "CONSENT_GRANTED" || state === "VP_BUILT") {
     return "up";
   }

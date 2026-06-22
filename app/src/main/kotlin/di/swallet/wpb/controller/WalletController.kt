@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.yubico.webauthn.AssertionRequest
 import di.swallet.wpb.security.AuthenticatedHolderGuard
+import di.swallet.wpb.security.HolderSessionService
 import jakarta.servlet.http.HttpServletRequest
 import di.swallet.wpb.revocation.CredentialRevocationGuard
 import di.swallet.wpb.revocation.WalletRevocationService
@@ -47,8 +48,17 @@ data class SignRequest(
  * Data Transfer Object for selective disclosure presentation requests.
  */
 data class PresentationRequest(
-    @Schema(example = "[\"given_name\", \"nationality\"]", description = "List of claim names to reveal to the Verifier")
+    @Schema(example = "[\"given_name\", \"nationalities\"]", description = "List of claim names to reveal to the Verifier")
     val claimsToDisclose: List<String>
+)
+
+/** FIDO2 assertion payload used to open a holder session after login. */
+data class HolderSessionExchangeRequest(
+    val userId: String,
+    val id: String,
+    val clientDataJSON: String,
+    val authenticatorData: String,
+    val signature: String,
 )
 
 /** Request body for wallet unit initialization and bootstrap key binding. */
@@ -130,6 +140,7 @@ class WalletController(
     private val transactionLogger: TransactionLogger,
     private val walletCredentialDeletionService: WalletCredentialDeletionService,
     private val authenticatedHolderGuard: AuthenticatedHolderGuard,
+    private val holderSessionService: HolderSessionService,
     private val objectMapper: ObjectMapper,
 ) {
 
@@ -167,6 +178,35 @@ class WalletController(
     ): Map<String, Any> {
         val assertionRequest = fido2Service.startAuthentication(userId, credentialId)
         return buildChallengeResponse(userId, assertionRequest)
+    }
+
+    /**
+     * Exchanges a verified WebAuthn assertion for a holder session token (WIAM_15 dashboard access).
+     *
+     * Sole-control operations (consent, HSM signing) still require a fresh FIDO2 assertion per request.
+     */
+    @PostMapping("/auth/session")
+    @Operation(
+        summary = "Open holder session",
+        description = "Verifies a WebAuthn assertion and returns a short-lived session token for read/dashboard APIs.",
+    )
+    fun openHolderSession(@RequestBody request: HolderSessionExchangeRequest): Map<String, Any> {
+        val verified = fido2Service.verifyStandardAssertion(
+            userId = request.userId,
+            credentialId = request.id,
+            clientDataJSON = request.clientDataJSON,
+            authenticatorData = request.authenticatorData,
+            signature = request.signature,
+        )
+        if (!verified) {
+            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid FIDO2 assertion")
+        }
+        val session = holderSessionService.create(request.userId)
+        return mapOf(
+            "sessionToken" to session.sessionToken,
+            "holderId" to session.holderId,
+            "expiresAt" to session.expiresAt.toString(),
+        )
     }
 
     private fun buildChallengeResponse(userId: String, assertionRequest: AssertionRequest): Map<String, Any> {
@@ -301,14 +341,22 @@ class WalletController(
     }
 
     /**
-     * Revokes a WP-managed credential by setting its status list bit.
+     * Revokes a credential. WP-managed credentials update the status list bit; issuer-managed
+     * credentials (OID4VCI) are marked REVOKED in the wallet only.
      */
     @PostMapping("/credentials/{credentialId}/revoke")
-    @Operation(summary = "Revoke WP-managed credential", description = "Sets the credential status bit and marks it REVOKED.")
+    @Operation(
+        summary = "Revoke credential",
+        description = "Revokes WP-managed credentials on the status list; issuer-managed credentials are revoked locally in the wallet.",
+    )
     fun revokeCredential(@PathVariable credentialId: Long): Map<String, Any> {
         authenticatedHolderGuard.requireCredentialOwned(credentialId)
-        walletRevocationService.revokeCredential(credentialId)
-        return mapOf("credentialId" to credentialId, "status" to "REVOKED")
+        val statusListUpdated = walletRevocationService.revokeCredential(credentialId)
+        return mapOf(
+            "credentialId" to credentialId,
+            "status" to "REVOKED",
+            "walletLocalOnly" to !statusListUpdated,
+        )
     }
 
     /**
@@ -416,7 +464,9 @@ class WalletController(
     fun getWalletSummary(@PathVariable userId: String): WalletSummaryResponse {
         authenticatedHolderGuard.requireSelf(userId)
         val key = runCatching { hsmService.getUserKey(userId) }.getOrNull()?.let(::toKeySummary)
-        val credentials = credentialRepository.findByUserId(userId).map(::toCredentialSummary)
+        val credentials = credentialRepository.findByUserId(userId)
+            .sortedByDescending { it.issuedAt }
+            .map(::toCredentialSummary)
         val walletUnit = walletUnitRepository.findFirstByHolderId(userId).orElse(null)?.let { unit ->
             WalletUnitSummary(walletId = unit.walletId, state = unit.state.name)
         }
@@ -441,6 +491,7 @@ class WalletController(
     fun getCredentials(@PathVariable userId: String): List<WalletCredential> {
         authenticatedHolderGuard.requireSelf(userId)
         return credentialRepository.findByUserId(userId)
+            .sortedByDescending { it.issuedAt }
     }
 
     private fun toCredentialSummary(credential: WalletCredential): WalletCredentialSummary {

@@ -4,6 +4,10 @@ export function formatApiError(error: unknown): string {
   if (error instanceof ApiError) {
     const detail = sanitizeMessage(extractApiErrorDetail(error) || error.message);
     switch (error.status) {
+      case 415:
+        return detail.length > 0
+          ? detail
+          : "Unsupported request format. Try signing out and logging in again.";
       case 401:
         return formatUnauthorizedMessage(detail);
       case 403:
@@ -15,7 +19,7 @@ export function formatApiError(error: unknown): string {
       case 400:
         return detail.length > 0 ? detail : "The request was invalid. Check your input and try again.";
       case 409:
-        return detail.length > 0 ? detail : "This action conflicts with the current wallet state.";
+        return formatConflictMessage(detail);
       case 422:
         return detail.length > 0 ? detail : "The server could not process this request.";
       case 500:
@@ -40,14 +44,50 @@ function extractApiErrorDetail(error: ApiError): string {
   }
   if (typeof error.body === "object" && error.body !== null) {
     const record = error.body as Record<string, unknown>;
-    for (const field of ["message", "detail", "error", "reason"] as const) {
+    for (const field of ["message", "detail", "title", "reason"] as const) {
       const value = record[field];
-      if (typeof value === "string" && value.length > 0) {
+      if (typeof value === "string" && value.length > 0 && !isGenericHttpReasonPhrase(value)) {
         return value;
       }
     }
+    const errorField = record.error;
+    if (typeof errorField === "string" && errorField.length > 0 && !isGenericHttpReasonPhrase(errorField)) {
+      return errorField;
+    }
   }
   return "";
+}
+
+function isGenericHttpReasonPhrase(text: string): boolean {
+  const lower = text.trim().toLowerCase();
+  return [
+    "bad request",
+    "conflict",
+    "forbidden",
+    "internal server error",
+    "not found",
+    "service unavailable",
+    "unauthorized",
+    "unprocessable entity",
+  ].includes(lower);
+}
+
+function formatConflictMessage(detail: string): string {
+  const lower = detail.toLowerCase();
+  if (lower.includes("issuer-managed")) {
+    return (
+      "This credential was issued via OID4VCI and is managed by the issuer status list. " +
+      "The wallet cannot update that list from here — use Delete to remove it from the wallet, " +
+      "or contact the issuer for formal revocation."
+    );
+  }
+  if (lower.includes("status list index")) {
+    return "This credential cannot be revoked because it has no wallet status list index.";
+  }
+  if (detail.length > 0) {
+    return detail;
+  }
+  return "This action conflicts with the current wallet state.";
 }
 
 function sanitizeMessage(message: string): string {
@@ -65,13 +105,20 @@ function sanitizeMessage(message: string): string {
 }
 
 function formatUnauthorizedMessage(detail: string): string {
+  const lower = detail.toLowerCase();
+  if (lower.includes("authorization context") || lower.includes("holder session")) {
+    return (
+      "Holder session missing or expired. Sign out and log in again with your passkey once; " +
+      "after that, wallet sync and other dashboard views will not ask again until the session expires."
+    );
+  }
   const explanation =
     detail.length > 0
       ? detail
       : "Your passkey unlock was not accepted for this holder.";
   return (
     `${explanation} ` +
-    "Try Wallet → Unlock & sync with the same holder. If that fails, sign out and use Settings → " +
+    "Try Wallet → Sync from server with the same holder. If that fails, sign out and use Settings → " +
     "Re-register passkey (needed after a WPB database reset or if this browser never stored the device key)."
   );
 }
@@ -81,7 +128,7 @@ function formatForbiddenMessage(detail: string): string {
   if (lower.includes("revoked") || lower.includes("status list")) {
     return (
       "This HSM key has been revoked and can no longer sign data or issue credentials. " +
-      "Use Ensure HSM key to issue a new active key, or Unlock & sync to refresh the status shown in the wallet."
+      "Use Ensure HSM key to issue a new active key, or Sync from server to refresh the status shown in the wallet."
     );
   }
   if (detail.length > 0) {

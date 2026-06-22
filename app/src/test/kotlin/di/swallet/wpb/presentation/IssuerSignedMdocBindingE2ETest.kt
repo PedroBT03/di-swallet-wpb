@@ -9,10 +9,12 @@ import di.swallet.wpb.testWalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
+import di.swallet.wpb.issuance.storage.IssuedCredentialSupersessionService
 import di.swallet.wpb.issuance.storage.JpaIssuedCredentialStorage
 import di.swallet.wpb.format.mdoc.IndependentMdocVerifier
 import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocEffectiveDocTypeResolver
 import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.openid4vci.protocol.IssuedCredential
 import di.swallet.wpb.presentation.domain.CredentialFormat
@@ -85,6 +87,7 @@ class IssuerSignedMdocBindingE2ETest {
             mdocDocTypeRegistry = registry,
             keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),
             credentialStatusParser = di.swallet.wpb.revocation.RevocationTestSupport.credentialStatusParser(),
+            supersessionService = mock(IssuedCredentialSupersessionService::class.java),
         )
         val credentialId = storage.store(
             holderId = "holder-1",
@@ -100,6 +103,7 @@ class IssuerSignedMdocBindingE2ETest {
             walletCredentialRepository = repository,
             mdocCredentialCodec = codec,
             mdocDocTypeRegistry = registry,
+            mdocEffectiveDocTypeResolver = MdocEffectiveDocTypeResolver(registry),
         )
         val vp = vpBuilder.build(
             selected = SelectedCredential(

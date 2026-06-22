@@ -102,10 +102,15 @@ class DefaultPresentationFlowOrchestratorTest {
             )
     }
 
-    private class StubMatcher(private val candidates: List<CredentialCandidate>) : CredentialMatcher {
+    private class StubMatcher(
+        private val candidates: List<CredentialCandidate>,
+        private val revokedMatches: Boolean = false,
+    ) : CredentialMatcher {
         /** Replaces credentialCandidates with the list supplied at construction time. */
         override fun match(context: PresentationContext): PresentationContext =
             context.copy(credentialCandidates = candidates)
+
+        override fun hasRevokedMatches(context: PresentationContext): Boolean = revokedMatches
     }
 
     private class StubVpBuilder : VpTokenBuilder {
@@ -237,6 +242,25 @@ class DefaultPresentationFlowOrchestratorTest {
         )
         val ctx = orchestrator.startSession("http://verifier/request-1", "holder-1")
         assertEquals(PresentationState.DISPATCHED, ctx.state)
+        assertEquals("no_matching_credentials", ctx.error?.code)
+        assertEquals(1, gateway.negativeCount)
+    }
+
+    /**
+     * Matcher finds revoked credentials that would match but no active candidates.
+     * startSession rejects with credentials_revoked instead of a generic no-match error.
+     */
+    @Test
+    fun `revoked matching credentials yield credentials_revoked error`() = runBlocking {
+        val gateway = GatewayStub(resolved)
+        val orchestrator = newOrchestrator(
+            gateway = gateway,
+            matcher = StubMatcher(emptyList(), revokedMatches = true),
+            policy = StubPolicy(allowed = true),
+        )
+        val ctx = orchestrator.startSession("http://verifier/request-1", "holder-1")
+        assertEquals(PresentationState.DISPATCHED, ctx.state)
+        assertEquals("credentials_revoked", ctx.error?.code)
         assertEquals(1, gateway.negativeCount)
     }
 

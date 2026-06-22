@@ -15,8 +15,10 @@ import {
 import { AuthGate } from "../components/AuthGate";
 import { AuthenticatingBanner } from "../components/AuthenticatingBanner";
 import { JsonPanel } from "../components/JsonPanel";
+import { ProtocolExchangePanel } from "../components/ProtocolExchangePanel";
+import { Uc1Stepper } from "../components/wallet/Uc1Stepper";
 import { generateDevicePublicJwk } from "../crypto/deviceJwk";
-import { loadWalletState, saveWalletState, summarizeCredential } from "../features/wallet/storage";
+import { loadWalletState, saveWalletState, sortCredentialsByIssuedAt, summarizeCredential } from "../features/wallet/storage";
 import { mergeWalletStateFromSummary } from "../features/wallet/walletUnit";
 import { useAuthedApi } from "../hooks/useAuthedApi";
 import type {
@@ -36,7 +38,7 @@ interface WalletCache {
 }
 
 export function WalletPage() {
-  const { session, withProtectedAction, busy, clearError } = useAuthedApi();
+  const { session, withApiAuth, withSoleControl, busy, clearError } = useAuthedApi();
   const holderId = session?.holderId ?? "";
 
   const cacheRef = useRef<WalletCache>({
@@ -59,7 +61,14 @@ export function WalletPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lastRaw, setLastRaw] = useState<unknown>(null);
+  const [lastInitRequest, setLastInitRequest] = useState<{
+    platform: string;
+    devicePubJwk: string;
+    pidPubJwk?: string;
+  } | null>(null);
   const presentationResultRef = useRef<HTMLDivElement | null>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
+  const [asideHeight, setAsideHeight] = useState<number | null>(null);
 
   const applyCache = useCallback((cache: WalletCache) => {
     setWalletKey(cache.key);
@@ -113,13 +122,11 @@ export function WalletPage() {
   }
 
   async function performSync() {
-    const summary = await withProtectedAction((headers) =>
-      fetchWalletSummary(holderId, headers),
-    );
+    const summary = await withApiAuth((headers) => fetchWalletSummary(holderId, headers));
     const syncedAt = new Date().toISOString();
     cacheRef.current = {
       key: summary.key,
-      credentials: summary.credentials,
+      credentials: sortCredentialsByIssuedAt(summary.credentials),
       syncedAt,
     };
     applyCache(cacheRef.current);
@@ -129,6 +136,31 @@ export function WalletPage() {
     }
     setLastRaw(summary);
   }
+
+  const performSyncRef = useRef(performSync);
+  performSyncRef.current = performSync;
+
+  useEffect(() => {
+    if (!holderId) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      clearError();
+      setError(null);
+      setSuccessMessage(null);
+      try {
+        await performSyncRef.current();
+      } catch (err) {
+        if (!cancelled) {
+          setError(formatApiError(err));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [holderId, clearError]);
 
   async function syncFromServer() {
     await runAction(async () => {
@@ -145,13 +177,20 @@ export function WalletPage() {
         );
       }
       const devicePubJwk = await generateDevicePublicJwk();
-      const result = await initWalletUnit({
+      const resolvedPidPub = pidPubJwk.trim() || (await generateDevicePublicJwk());
+      const initPayload = {
         holderId,
         platform,
         devicePubJwk,
-        pidPubJwk: pidPubJwk.trim() || undefined,
+        pidPubJwk: resolvedPidPub,
         userDeviceId: session.userDeviceId,
+      };
+      setLastInitRequest({
+        platform,
+        devicePubJwk,
+        pidPubJwk: resolvedPidPub,
       });
+      const result = await initWalletUnit(initPayload);
       setWalletState(result);
       saveWalletState(holderId, result);
       setLastRaw(result);
@@ -162,7 +201,7 @@ export function WalletPage() {
     await runAction(async () => {
       const previousAlias = cacheRef.current.key?.keyAlias;
       const wasRevoked = cacheRef.current.key?.revoked === true;
-      const key = await withProtectedAction((headers) => createWalletKey(holderId, headers));
+      const key = await withSoleControl((headers) => createWalletKey(holderId, headers));
       await performSync();
       if (wasRevoked || (previousAlias && previousAlias !== key.keyAlias)) {
         setSuccessMessage(
@@ -179,7 +218,7 @@ export function WalletPage() {
 
   async function handleRevokeKey() {
     await runAction(async () => {
-      const result = await withProtectedAction((headers) => revokeWalletKey(holderId, headers));
+      const result = await withSoleControl((headers) => revokeWalletKey(holderId, headers));
       if (cacheRef.current.key) {
         cacheRef.current = {
           ...cacheRef.current,
@@ -201,7 +240,7 @@ export function WalletPage() {
       return;
     }
     await runAction(async () => {
-      const result = await withProtectedAction((headers) => deleteCredential(credentialId, headers));
+      const result = await withSoleControl((headers) => deleteCredential(credentialId, headers));
       setLastRaw(result);
       await syncFromServer();
     });
@@ -209,8 +248,13 @@ export function WalletPage() {
 
   async function handleRevokeCredential(credentialId: number) {
     await runAction(async () => {
-      const result = await withProtectedAction((headers) => revokeCredential(credentialId, headers));
+      const result = await withSoleControl((headers) => revokeCredential(credentialId, headers));
       setLastRaw(result);
+      setSuccessMessage(
+        result.walletLocalOnly
+          ? `Credential #${credentialId} marked revoked in this wallet. The issuer status list was not updated (OID4VCI credential).`
+          : `Credential #${credentialId} revoked on the wallet status list.`,
+      );
       await syncFromServer();
     });
   }
@@ -218,7 +262,7 @@ export function WalletPage() {
   async function handleIssueDemo() {
     if (!isIssuanceEligible(walletState?.state)) {
       setError(
-        "Initialize the wallet unit first (state must be OPERATIONAL). Use Unlock & sync to refresh status.",
+        "Initialize the wallet unit first (state must be OPERATIONAL). Use Sync from server to refresh status.",
       );
       return;
     }
@@ -227,14 +271,16 @@ export function WalletPage() {
       return;
     }
     await runAction(async () => {
-      const issued = await withProtectedAction((headers) =>
-        issueDemoSdCredential(holderId, headers),
-      );
+      const issued = await withSoleControl((headers) => issueDemoSdCredential(holderId, headers));
       setLastRaw(issued);
       const summary = summarizeCredential(issued);
+      const merged = sortCredentialsByIssuedAt([
+        ...cacheRef.current.credentials.filter((c) => c.id !== summary.id),
+        summary,
+      ]);
       cacheRef.current = {
         ...cacheRef.current,
-        credentials: [summary, ...cacheRef.current.credentials.filter((c) => c.id !== summary.id)],
+        credentials: merged,
         syncedAt: cacheRef.current.syncedAt,
       };
       setCredentials(cacheRef.current.credentials);
@@ -255,7 +301,7 @@ export function WalletPage() {
       return;
     }
     await runAction(async () => {
-      const result = await withProtectedAction((headers) => revokeWalletUnit(walletId, headers));
+      const result = await withSoleControl((headers) => revokeWalletUnit(walletId, headers));
       setSuccessMessage(`Wallet unit ${result.walletId} revoked.`);
       setLastRaw(result);
       await performSync();
@@ -278,14 +324,14 @@ export function WalletPage() {
       return;
     }
     await runAction(async () => {
-      const result = await withProtectedAction((headers) =>
+      const result = await withSoleControl((headers) =>
         createCredentialPresentation(credentialId, claims, headers),
       );
       setPresentationResult(result);
       setLastRaw(result);
       setSuccessMessage(
         `Built selective SD-JWT for credential #${credentialId} (${result.revealedClaims.length} claim(s)). ` +
-          "This token is not sent to a verifier — use Present for a full OID4VP flow.",
+          "This token is not sent to a verifier. Use Present for a full OID4VP flow.",
       );
       window.requestAnimationFrame(() => {
         presentationResultRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -305,56 +351,86 @@ export function WalletPage() {
     event.preventDefault();
     if (walletKey?.revoked) {
       setError(
-        "This HSM key has been revoked and can no longer sign data. Unlock & sync to refresh status, or create a new key.",
+        "This HSM key has been revoked and can no longer sign data. Sync from server to refresh status, or create a new key.",
       );
       return;
     }
     await runAction(async () => {
-      const result = await withProtectedAction((headers) =>
-        signData(holderId, signInput, headers),
-      );
+      const result = await withSoleControl((headers) => signData(holderId, signInput, headers));
       setSignResult(result);
       setLastRaw(result);
     });
   }
 
   const keyRevoked = walletKey?.revoked === true;
-
   const issuanceReady = isIssuanceEligible(walletState?.state);
+  const walletInitialized = issuanceReady && !!walletState?.walletId;
+  const hsmReady = !!walletKey && !keyRevoked;
+  const setupComplete = walletInitialized && hsmReady;
+
+  function formatIssuedAt(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+      return iso;
+    }
+    return date.toLocaleString();
+  }
+
+  function credentialInitials(type: string): string {
+    const label = formatCredentialTypeLabel(type);
+    if (label.length <= 3) {
+      return label.toUpperCase();
+    }
+    return label.slice(0, 3).toUpperCase();
+  }
+
+  useEffect(() => {
+    const el = asideRef.current;
+    if (!el) {
+      return undefined;
+    }
+    const updateHeight = () => setAsideHeight(el.offsetHeight);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [walletState, walletKey, credentials.length, session?.userDeviceId]);
 
   return (
     <AuthGate>
-      <section className="page">
+      <section className="page page--wallet">
         <AuthenticatingBanner />
-        <header className="page__header">
-          <h1>Wallet</h1>
-          <p className="page__lead">
-            Holder <code>{holderId}</code> — initialize the wallet unit, manage HSM keys, issue demo
-            credentials, and test remote signing.
-          </p>
-        </header>
 
-        {error && (
+        {error ? (
           <div className="alert alert--error" role="alert">
             {error}
           </div>
-        )}
+        ) : null}
 
-        {successMessage && (
+        {successMessage ? (
           <div className="alert alert--success" role="status">
             {successMessage}
           </div>
-        )}
+        ) : null}
 
-        <div className="card card--muted wallet-sync-bar">
-          <p>
-            {lastSyncedAt
-              ? `Last synced ${new Date(lastSyncedAt).toLocaleString()}`
-              : "Not synced yet — unlock once to load key and credentials from WPB."}
-          </p>
-          <div className="toolbar toolbar--compact">
+        <div className="wallet-hero">
+          <div className="wallet-hero__main">
+            <h1>Wallet</h1>
+            <p className="wallet-hero__lead">
+              Bootstrap the wallet unit: device binding, HSM key, and readiness for{" "}
+              <Link to="/issue">credential issuance</Link>. Holder <code>{holderId}</code>.
+            </p>
+            <p className="wallet-hero__sync">
+              {lastSyncedAt
+                ? `Last synced ${new Date(lastSyncedAt).toLocaleString()}`
+                : busy
+                  ? "Syncing from server…"
+                  : "Not synced yet."}
+            </p>
+          </div>
+          <div className="wallet-hero__actions">
             <button type="button" onClick={() => void syncFromServer()} disabled={busy}>
-              {busy ? "Authenticating…" : "Unlock & sync from server"}
+              {busy ? "Syncing…" : "Sync from server"}
             </button>
             <button
               type="button"
@@ -365,218 +441,143 @@ export function WalletPage() {
               Refresh view
             </button>
           </div>
-          <p className="hint">
-            Refresh view replays cached data without passkey. Create, revoke, sign, and issue still
-            require authentication.
-          </p>
         </div>
 
-        <div className="wallet-grid">
-          <section className="card wallet-section">
-            <h2 className="card__title">Home</h2>
-            <dl className="details-list">
-              <div className="details-list__row">
-                <dt>Holder</dt>
-                <dd>
-                  <code>{holderId}</code>
-                </dd>
-              </div>
-              <div className="details-list__row">
-                <dt>Wallet unit</dt>
-                <dd>{walletState?.walletId ?? "Not initialized"}</dd>
-              </div>
-              <div className="details-list__row">
-                <dt>State</dt>
-                <dd>{walletState?.state ?? "—"}</dd>
-              </div>
-              <div className="details-list__row">
-                <dt>HSM key</dt>
-                <dd>{walletKey?.keyAlias ?? "Not loaded"}</dd>
-              </div>
-              <div className="details-list__row">
-                <dt>Credentials</dt>
-                <dd>{credentials.length}</dd>
-              </div>
-            </dl>
-            <div className="toolbar toolbar--compact">
-              <Link className="button button--secondary" to="/settings">
-                Settings
-              </Link>
-            </div>
-          </section>
+        <Uc1Stepper
+          passkeyDone={!!session?.userDeviceId}
+          walletInitialized={walletInitialized}
+          hsmReady={hsmReady}
+        />
 
-          <section className="card wallet-section">
-            <h2 className="card__title">Initialize wallet unit</h2>
-            <p className="hint">
-              Binds a fresh DPoP device JWK to a new wallet unit. Does not require passkey (public
-              bootstrap endpoint).
-            </p>
-            {!session?.userDeviceId && (
-              <div className="alert alert--info">
-                Missing device id — <Link to="/settings">re-register passkey</Link> to link init with
-                FIDO2.
+        <div className="wallet-stats">
+          <div className="wallet-stat">
+            <span className="wallet-stat__label">Wallet unit</span>
+            <span className="wallet-stat__value">
+              {walletState?.state ? (
+                <span
+                  className={`status-badge status-badge--${walletInitialized ? "up" : "unknown"}`}
+                >
+                  {walletState.state}
+                </span>
+              ) : (
+                "Not initialized"
+              )}
+            </span>
+          </div>
+          <div className="wallet-stat">
+            <span className="wallet-stat__label">HSM key</span>
+            <span className="wallet-stat__value">
+              {!walletKey ? (
+                "Not loaded"
+              ) : (
+                <span className={`status-badge status-badge--${keyRevoked ? "down" : "up"}`}>
+                  {keyRevoked ? "REVOKED" : "ACTIVE"}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="wallet-stat">
+            <span className="wallet-stat__label">Credentials</span>
+            <span className="wallet-stat__value">{credentials.length}</span>
+          </div>
+        </div>
+
+        {!setupComplete ? (
+          <div className="wallet-setup">
+            <h2 className="wallet-setup__title">Get started</h2>
+            <ol className="wallet-setup__steps">
+              <li className={`wallet-setup__step ${session?.userDeviceId ? "is-done" : ""}`}>
+                <span className="wallet-setup__step-marker">{session?.userDeviceId ? "✓" : "1"}</span>
+                <Link to="/onboarding">Register passkey</Link> (holder identity for this lab)
+              </li>
+              <li className={`wallet-setup__step ${walletInitialized ? "is-done" : ""}`}>
+                <span className="wallet-setup__step-marker">{walletInitialized ? "✓" : "2"}</span>
+                Initialize wallet unit (<code>POST /wallet/init</code>)
+              </li>
+              <li className={`wallet-setup__step ${hsmReady ? "is-done" : ""}`}>
+                <span className="wallet-setup__step-marker">{hsmReady ? "✓" : "3"}</span>
+                Create or ensure HSM key
+              </li>
+              <li className={`wallet-setup__step ${credentials.length > 0 ? "is-done" : ""}`}>
+                <span className="wallet-setup__step-marker">
+                  {credentials.length > 0 ? "✓" : "4"}
+                </span>
+                <Link to="/issue">Issue a credential</Link>
+              </li>
+            </ol>
+          </div>
+        ) : null}
+
+        <div
+          className={`wallet-layout${asideHeight != null ? " wallet-layout--synced" : ""}`}
+          style={
+            asideHeight != null
+              ? ({ "--wallet-aside-height": `${asideHeight}px` } as React.CSSProperties)
+              : undefined
+          }
+        >
+          <section className="card wallet-panel wallet-panel--primary">
+            <div className="wallet-panel__header">
+              <div>
+                <h2 className="wallet-panel__title">Credentials</h2>
+                <p className="wallet-panel__subtitle">
+                  Present via <Link to="/present">Present</Link> or issue on{" "}
+                  <Link to="/issue">Issue</Link>. Data deletion requests are on{" "}
+                  <Link to="/privacy">Privacy</Link>.
+                </p>
               </div>
-            )}
-            <form className="form" onSubmit={(event) => void handleInit(event)}>
-              <label className="form__field">
-                <span className="form__label">Platform</span>
-                <input
-                  value={platform}
-                  onChange={(event) => setPlatform(event.target.value)}
-                  disabled={busy}
-                />
-              </label>
-              <label className="form__field">
-                <span className="form__label">PID public JWK (optional)</span>
-                <textarea
-                  className="form__textarea"
-                  value={pidPubJwk}
-                  onChange={(event) => setPidPubJwk(event.target.value)}
-                  rows={3}
-                  placeholder='{"kty":"EC","crv":"P-256",...}'
-                  disabled={busy}
-                />
-              </label>
-              <button type="submit" disabled={busy || !session?.userDeviceId}>
-                {busy ? "Working…" : "Initialize wallet"}
-              </button>
-            </form>
-            {walletState && (
-              <div className="toolbar toolbar--compact">
+              <div className="wallet-panel__actions">
                 <button
                   type="button"
-                  className="button button--danger"
-                  disabled={busy || !walletState.walletId}
-                  onClick={() => void handleRevokeWalletUnit()}
+                  onClick={() => void handleIssueDemo()}
+                  disabled={busy || !issuanceReady || !walletKey || keyRevoked}
                 >
-                  Revoke wallet unit
+                  Issue demo PID
                 </button>
               </div>
-            )}
-            {walletState && <JsonPanel title="Init result" data={walletState} />}
-          </section>
-
-          <section className="card wallet-section">
-            <h2 className="card__title">HSM key</h2>
-            <p className="hint">
-              Creates a new key when none exists. If the current key is revoked, Ensure issues a
-              replacement and marks it active again.
-            </p>
-            {walletKey ? (
-              <dl className="details-list">
-                <div className="details-list__row">
-                  <dt>Alias</dt>
-                  <dd>
-                    <code>{walletKey.keyAlias}</code>
-                  </dd>
-                </div>
-                <div className="details-list__row">
-                  <dt>Status</dt>
-                  <dd>
-                    <span
-                      className={`status-badge status-badge--${keyRevoked ? "down" : "up"}`}
-                    >
-                      {keyRevoked ? "REVOKED" : "ACTIVE"}
-                    </span>
-                  </dd>
-                </div>
-                <div className="details-list__row">
-                  <dt>Revocation index</dt>
-                  <dd>{walletKey.revocationIndex}</dd>
-                </div>
-                <div className="details-list__row">
-                  <dt>Public key</dt>
-                  <dd>
-                    <code
-                      className="details-list__truncate"
-                      title={walletKey.publicKeyBase64}
-                    >
-                      {walletKey.publicKeyBase64}
-                    </code>
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="hint">No key in cache. Use Unlock & sync or create a new HSM key.</p>
-            )}
-            {keyRevoked && (
-              <div className="alert alert--info" role="status">
-                This key is revoked on the status list. Signing and issuance are blocked until you create
-                a new HSM key for this holder.
-              </div>
-            )}
-            <div className="toolbar toolbar--compact">
-              <button type="button" onClick={() => void handleCreateKey()} disabled={busy}>
-                {walletKey ? "Ensure HSM key" : "Create HSM key"}
-              </button>
-              <button
-                type="button"
-                className="button button--danger"
-                onClick={() => void handleRevokeKey()}
-                disabled={busy || !walletKey || keyRevoked}
-              >
-                Revoke key
-              </button>
             </div>
-          </section>
 
-          <section className="card wallet-section">
-            <h2 className="card__title">Credentials</h2>
-            <p className="hint">
-              <strong>Delete from wallet</strong> removes the PID and encrypted payload from WPB
-              storage. <strong>Revoke</strong> marks it invalid on the status list but keeps the
-              row. To ask a verifier to erase data they received, use{" "}
-              <Link to="/privacy">Privacy → Data deletion</Link>.
-            </p>
-            {!issuanceReady && (
+            <div className="wallet-panel__body">
+            {!issuanceReady ? (
               <div className="alert alert--info">
                 Initialize the wallet unit before issuing. Current state:{" "}
                 <code>{walletState?.state ?? "not initialized"}</code>.
               </div>
-            )}
-            {issuanceReady && !walletKey && (
+            ) : null}
+            {issuanceReady && !walletKey ? (
               <div className="alert alert--info">
                 Create or sync an HSM key before issuing a credential.
               </div>
-            )}
-            <div className="toolbar toolbar--compact">
-              <button
-                type="button"
-                onClick={() => void handleIssueDemo()}
-                disabled={busy || !issuanceReady || !walletKey}
-              >
-                Issue demo PID
-              </button>
-            </div>
+            ) : null}
+
             {credentials.length === 0 ? (
-              <p className="hint">No credentials in cache for this holder.</p>
+              <div className="wallet-empty">
+                <strong>No credentials yet</strong>
+                Issue a demo PID or complete an <Link to="/issue">Issue</Link> flow, then sync.
+              </div>
             ) : (
-              <ul className="credential-list">
+              <ul className="wallet-credentials">
                 {credentials.map((credential) => (
-                  <li key={credential.id} className="credential-list__item">
-                    <div className="credential-list__head">
-                      <strong>{formatCredentialTypeLabel(credential.credentialType)}</strong>
-                      <span
-                        className={`status-badge status-badge--${credential.revocationState === "ACTIVE" ? "up" : "down"}`}
-                      >
-                        {credential.revocationState}
-                      </span>
+                  <li key={credential.id} className="wallet-credential">
+                    <div className="wallet-credential__badge" aria-hidden>
+                      {credentialInitials(credential.credentialType)}
                     </div>
-                    <div className="credential-list__meta">
-                      <span>#{credential.id}</span>
-                      <span>{credential.issuedAt}</span>
-                      {credential.deviceBound && <span>device-bound</span>}
+                    <div className="wallet-credential__body">
+                      <div className="wallet-credential__title">
+                        {formatCredentialTypeLabel(credential.credentialType)}
+                      </div>
+                      <div className="wallet-credential__meta">
+                        <span>#{credential.id}</span>
+                        <span>{formatIssuedAt(credential.issuedAt)}</span>
+                        {credential.deviceBound ? <span>Device-bound</span> : null}
+                        <span
+                          className={`status-badge status-badge--${credential.revocationState === "ACTIVE" ? "up" : "down"}`}
+                        >
+                          {credential.revocationState}
+                        </span>
+                      </div>
                     </div>
-                    <code className="credential-list__preview">{credential.encodedPreview}</code>
-                    <div className="toolbar toolbar--compact">
-                      <button
-                        type="button"
-                        className="button button--danger button--sm"
-                        disabled={busy}
-                        onClick={() => void handleDeleteCredential(credential.id)}
-                      >
-                        Delete from wallet
-                      </button>
+                    <div className="wallet-credential__actions">
                       <button
                         type="button"
                         className="button button--secondary button--sm"
@@ -585,122 +586,280 @@ export function WalletPage() {
                       >
                         Revoke
                       </button>
+                      <button
+                        type="button"
+                        className="button button--danger button--sm"
+                        disabled={busy}
+                        onClick={() => void handleDeleteCredential(credential.id)}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </li>
                 ))}
               </ul>
             )}
+            </div>
           </section>
 
-          <section className="card wallet-section">
-            <h2 className="card__title">SD-JWT builder (API lab)</h2>
-            <p className="hint">
-              <strong>Not the normal presentation path.</strong> In production, claim selection happens on{" "}
-              <Link to="/present">Present</Link> — the verifier’s DCQL query defines which attributes are
-              requested, and you approve them on the consent screen. This section only calls{" "}
-              <code>POST /credentials/{"{id}"}/presentation</code> directly: it filters disclosures on a
-              stored credential and returns a minimized SD-JWT string (no verifier, no vp_token).
-            </p>
-            {credentials.length === 0 ? (
-              <p className="hint">Issue or sync credentials first.</p>
-            ) : presentableCredentials.length === 0 ? (
-              <p className="hint">
-                All credentials are revoked. Revoked PIDs cannot be presented — issue a new demo PID or
-                revoke only applies to status-list invalidation (row kept in wallet).
-              </p>
-            ) : (
-              <form className="form" onSubmit={(event) => void handleManualPresentation(event)}>
-                <label className="form__field">
-                  <span className="form__label">Credential</span>
-                  <select
-                    value={presentationCredentialId === "" ? "" : String(presentationCredentialId)}
-                    onChange={(event) =>
-                      setPresentationCredentialId(
-                        event.target.value === "" ? "" : Number(event.target.value),
-                      )
-                    }
-                    disabled={busy}
-                  >
-                    {presentableCredentials.map((credential) => (
-                      <option key={credential.id} value={credential.id}>
-                        #{credential.id} — {formatCredentialTypeLabel(credential.credentialType)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="form__field">
-                  <span className="form__label">Claims to disclose (comma-separated)</span>
-                  <input
-                    value={claimsInput}
-                    onChange={(event) => setClaimsInput(event.target.value)}
-                    disabled={busy}
-                    spellCheck={false}
-                    placeholder="given_name, family_name"
-                  />
-                </label>
-                <p className="hint">
-                  Demo PID claims include <code>given_name</code>, <code>family_name</code>,{" "}
-                  <code>birthdate</code>, <code>nationality</code>, <code>address.locality</code>. Requires
-                  passkey (same as Sign test).
-                </p>
-                <button type="submit" disabled={busy || presentableCredentials.length === 0}>
-                  {busy ? "Authenticating…" : "Build SD-JWT"}
-                </button>
-              </form>
-            )}
-            {presentationResult ? (
-              <div ref={presentationResultRef}>
-                <p className="hint">
-                  Revealed: <code>{presentationResult.revealedClaims.join(", ")}</code>
-                </p>
-                <code
-                  className="credential-list__preview"
-                  title={presentationResult.presentation}
+          <aside ref={asideRef} className="wallet-aside-stack">
+            <section className="card wallet-panel">
+              <h2 className="wallet-panel__title">Wallet unit</h2>
+              {walletState?.walletId ? (
+                <>
+                  <dl className="wallet-key-meta">
+                    <div className="wallet-key-meta__row">
+                      <dt>State</dt>
+                      <dd>
+                        <span
+                          className={`status-badge status-badge--${walletInitialized ? "up" : "unknown"}`}
+                        >
+                          {walletState.state}
+                        </span>
+                      </dd>
+                    </div>
+                    <div className="wallet-key-meta__row">
+                      <dt>Unit id</dt>
+                      <dd>
+                        <code className="details-list__truncate" title={walletState.walletId}>
+                          {walletState.walletId}
+                        </code>
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="wallet-danger-zone">
+                    <p className="wallet-danger-zone__label">Danger zone</p>
+                    <button
+                      type="button"
+                      className="button button--danger button--sm"
+                      disabled={busy}
+                      onClick={() => void handleRevokeWalletUnit()}
+                    >
+                      Revoke wallet unit
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="hint">
+                    Binds <code>device_pub</code> (DPoP) and optional <code>pid_pub</code> (SCAL2 +
+                    holder binding) to a new wallet unit. Does not require passkey.
+                  </p>
+                  {!session?.userDeviceId ? (
+                    <div className="alert alert--info">
+                      Missing device id.{" "}
+                      <Link to="/settings">re-register passkey</Link> in Settings first.
+                    </div>
+                  ) : null}
+                  <form className="form" onSubmit={(event) => void handleInit(event)}>
+                    <label className="form__field">
+                      <span className="form__label">Platform</span>
+                      <input
+                        value={platform}
+                        onChange={(event) => setPlatform(event.target.value)}
+                        disabled={busy}
+                      />
+                    </label>
+                    <details>
+                      <summary className="hint">Advanced: PID public JWK</summary>
+                      <label className="form__field">
+                        <textarea
+                          className="form__textarea"
+                          value={pidPubJwk}
+                          onChange={(event) => setPidPubJwk(event.target.value)}
+                          rows={3}
+                          placeholder='{"kty":"EC","crv":"P-256",...}'
+                          disabled={busy}
+                        />
+                      </label>
+                    </details>
+                    <button type="submit" disabled={busy || !session?.userDeviceId}>
+                      {busy ? "Working…" : "Initialize wallet"}
+                    </button>
+                  </form>
+                </>
+              )}
+            </section>
+
+            <section className="card wallet-panel">
+              <div className="wallet-panel__header">
+                <h2 className="wallet-panel__title">HSM key</h2>
+                <div className="wallet-panel__actions">
+                  <button type="button" onClick={() => void handleCreateKey()} disabled={busy}>
+                    {walletKey ? "Ensure key" : "Create key"}
+                  </button>
+                </div>
+              </div>
+              {walletKey ? (
+                <dl className="wallet-key-meta">
+                  <div className="wallet-key-meta__row">
+                    <dt>Status</dt>
+                    <dd>
+                      <span className={`status-badge status-badge--${keyRevoked ? "down" : "up"}`}>
+                        {keyRevoked ? "REVOKED" : "ACTIVE"}
+                      </span>
+                    </dd>
+                  </div>
+                  <div className="wallet-key-meta__row">
+                    <dt>Alias</dt>
+                    <dd>
+                      <code>{walletKey.keyAlias}</code>
+                    </dd>
+                  </div>
+                  <div className="wallet-key-meta__row">
+                    <dt>Revocation index</dt>
+                    <dd>{walletKey.revocationIndex}</dd>
+                  </div>
+                  <div className="wallet-key-meta__row">
+                    <dt>Public key</dt>
+                    <dd>
+                      <code className="details-list__truncate" title={walletKey.publicKeyBase64}>
+                        {walletKey.publicKeyBase64.slice(0, 16)}…
+                      </code>
+                    </dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="hint">Sync from server or create a key to enable signing and issuance.</p>
+              )}
+              {keyRevoked ? (
+                <div className="alert alert--info" role="status">
+                  Key revoked on the status list. Ensure key to rotate and restore signing.
+                </div>
+              ) : null}
+              <div className="wallet-danger-zone">
+                <p className="wallet-danger-zone__label">Danger zone</p>
+                <button
+                  type="button"
+                  className="button button--danger button--sm"
+                  onClick={() => void handleRevokeKey()}
+                  disabled={busy || !walletKey || keyRevoked}
                 >
-                  {presentationResult.presentation.length > 120
-                    ? `${presentationResult.presentation.slice(0, 120)}…`
-                    : presentationResult.presentation}
-                </code>
-                <JsonPanel title="Presentation result" data={presentationResult} defaultOpen />
+                  Revoke key
+                </button>
               </div>
-            ) : null}
-          </section>
-
-          <section className="card wallet-section">
-            <h2 className="card__title">Sign test</h2>
-            {keyRevoked && (
-              <div className="alert alert--info" role="status">
-                Signing is disabled because the HSM key is revoked.
-              </div>
-            )}
-            <form className="form" onSubmit={(event) => void handleSign(event)}>
-              <label className="form__field">
-                <span className="form__label">Payload</span>
-                <textarea
-                  className="form__textarea"
-                  value={signInput}
-                  onChange={(event) => setSignInput(event.target.value)}
-                  rows={3}
-                  disabled={busy}
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={busy || signInput.trim().length === 0 || keyRevoked}
-              >
-                Sign in HSM
-              </button>
-            </form>
-            {signResult && (
-              <p className="hint">
-                Algorithm <code>{signResult.algorithm}</code> — signature truncated below.
-              </p>
-            )}
-            {signResult && <JsonPanel title="Signature result" data={signResult} defaultOpen />}
-          </section>
+            </section>
+          </aside>
         </div>
 
-        {lastRaw != null && <JsonPanel title="Last API response (debug)" data={lastRaw} />}
+        <details className="wallet-advanced present-dev-details" open={!walletInitialized}>
+          <summary>Developer details: wallet init protocol</summary>
+          <div className="wallet-advanced__grid present-dev-details__body">
+            <section className="wallet-panel">
+              <h3 className="wallet-panel__title">Wallet init request</h3>
+              <p className="hint">
+                Lab mapping of <code>POST /wallet/init</code>. In production ARTE also validates Play
+                Integrity / App Attest and issues WIA + WUA (phase <code>initial</code>).
+              </p>
+              {lastInitRequest ? (
+                <JsonPanel title="Last init request" data={lastInitRequest} defaultOpen />
+              ) : (
+                <p className="hint">Initialize the wallet unit to capture the request payload.</p>
+              )}
+              {walletState ? (
+                <JsonPanel title="Last init response" data={walletState} />
+              ) : null}
+              <ProtocolExchangePanel
+                title="Production artefacts (reference)"
+                summary="Not returned by this lab backend on init; shown for thesis traceability (wallet_init.md / ARF §6.5.3)."
+                items={[
+                  { label: "WIA", value: "JWT wallet instance attestation (24h TTL)", mono: false },
+                  { label: "WUA initial", value: "JWT without pid_pub; used for first PID issuance", mono: false },
+                  { label: "After wallet init", value: "operational (anonymous citizen)", mono: false },
+                  { label: "After PID issuance", value: "valid + user_sub from CMD", mono: false },
+                ]}
+              />
+            </section>
+
+            <section className="wallet-panel">
+              <h3 className="wallet-panel__title">SD-JWT builder (API lab)</h3>
+              <p className="hint">
+                Low-level <code>POST /credentials/{"{id}"}/presentation</code>. For real flows use{" "}
+                <Link to="/present">Present</Link>.
+              </p>
+              {presentableCredentials.length === 0 ? (
+                <p className="hint">No active credentials available.</p>
+              ) : (
+                <form className="form" onSubmit={(event) => void handleManualPresentation(event)}>
+                  <label className="form__field">
+                    <span className="form__label">Credential</span>
+                    <select
+                      value={presentationCredentialId === "" ? "" : String(presentationCredentialId)}
+                      onChange={(event) =>
+                        setPresentationCredentialId(
+                          event.target.value === "" ? "" : Number(event.target.value),
+                        )
+                      }
+                      disabled={busy}
+                    >
+                      {presentableCredentials.map((credential) => (
+                        <option key={credential.id} value={credential.id}>
+                          #{credential.id}: {formatCredentialTypeLabel(credential.credentialType)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form__field">
+                    <span className="form__label">Claims to disclose</span>
+                    <input
+                      value={claimsInput}
+                      onChange={(event) => setClaimsInput(event.target.value)}
+                      disabled={busy}
+                      spellCheck={false}
+                      placeholder="given_name, family_name"
+                    />
+                  </label>
+                  <button type="submit" disabled={busy}>
+                    {busy ? "Authenticating…" : "Build SD-JWT"}
+                  </button>
+                </form>
+              )}
+              {presentationResult ? (
+                <div ref={presentationResultRef}>
+                  <p className="hint">
+                    Revealed: <code>{presentationResult.revealedClaims.join(", ")}</code>
+                  </p>
+                  <code className="credential-list__preview" title={presentationResult.presentation}>
+                    {presentationResult.presentation.length > 120
+                      ? `${presentationResult.presentation.slice(0, 120)}…`
+                      : presentationResult.presentation}
+                  </code>
+                  <JsonPanel title="Presentation result" data={presentationResult} />
+                </div>
+              ) : null}
+            </section>
+
+            <section className="wallet-panel">
+              <h3 className="wallet-panel__title">Sign test</h3>
+              <p className="hint">Remote signature inside SoftHSM (requires active key).</p>
+              {keyRevoked ? (
+                <div className="alert alert--info" role="status">
+                  Signing disabled. Key is revoked.
+                </div>
+              ) : null}
+              <form className="form" onSubmit={(event) => void handleSign(event)}>
+                <label className="form__field">
+                  <span className="form__label">Payload</span>
+                  <textarea
+                    className="form__textarea"
+                    value={signInput}
+                    onChange={(event) => setSignInput(event.target.value)}
+                    rows={3}
+                    disabled={busy}
+                  />
+                </label>
+                <button type="submit" disabled={busy || signInput.trim().length === 0 || keyRevoked}>
+                  Sign in HSM
+                </button>
+              </form>
+              {signResult ? (
+                <JsonPanel title="Signature result" data={signResult} defaultOpen />
+              ) : null}
+            </section>
+          </div>
+        </details>
+
+        {lastRaw != null ? <JsonPanel title="Last API response (debug)" data={lastRaw} /> : null}
       </section>
     </AuthGate>
   );

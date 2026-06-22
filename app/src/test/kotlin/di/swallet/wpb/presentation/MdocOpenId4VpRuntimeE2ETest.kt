@@ -12,9 +12,13 @@ import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.testWalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
+import di.swallet.wpb.issuance.storage.IssuedCredentialSupersessionService
 import di.swallet.wpb.issuance.storage.JpaIssuedCredentialStorage
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocEffectiveDocTypeResolver
 import di.swallet.wpb.format.mdoc.MdocTestSupport
+import di.swallet.wpb.format.sdjwt.SdJwtService
+import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.observability.InMemorySessionEventStore
 import di.swallet.wpb.transactionlog.TransactionLogTestSupport
 import di.swallet.wpb.openid4vci.adapter.SimulatedOpenId4VciGateway
@@ -86,12 +90,19 @@ class MdocOpenId4VpRuntimeE2ETest {
             mdocDocTypeRegistry = mdocRegistry,
             keyBindingRuntimeService = mock(KeyBindingRuntimeService::class.java),
             credentialStatusParser = di.swallet.wpb.revocation.RevocationTestSupport.credentialStatusParser(),
+            supersessionService = IssuedCredentialSupersessionService(
+                credentialRepository,
+                di.swallet.wpb.revocation.RevocationTestSupport.noopGuard(),
+                mock(di.swallet.wpb.service.StatusListService::class.java),
+            ),
         )
 
         val issuanceGateway = SimulatedOpenId4VciGateway(
             properties = OpenId4VciProperties(),
             mdocDocTypeRegistry = mdocRegistry,
             mdocCredentialCodec = mdocCodec,
+            sdJwtService = SdJwtService(ObjectMapper()),
+            objectMapper = ObjectMapper(),
         )
         issueAndStore(
             gateway = issuanceGateway,
@@ -176,7 +187,12 @@ class MdocOpenId4VpRuntimeE2ETest {
         )
         val vpBuilder = DefaultVpTokenBuilder(
             sdJwtVpBuilder = sdJwtBuilder,
-            mdocVpBuilder = MdocVpBuilder(repository, mdocCodec, mdocRegistry),
+            mdocVpBuilder = MdocVpBuilder(
+                repository,
+                mdocCodec,
+                mdocRegistry,
+                MdocEffectiveDocTypeResolver(mdocRegistry),
+            ),
         )
         val consentDeps = ConsentTestSupport.presentationOrchestratorDeps(repository = repository)
         return DefaultPresentationFlowOrchestrator(

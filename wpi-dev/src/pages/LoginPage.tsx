@@ -41,7 +41,7 @@ export function LoginPage() {
       <header className="page__header">
         <h1>Log in</h1>
         <p className="page__lead">
-          Sign in with your existing holder id and passkey. No new registration — only a WebAuthn
+          Sign in with your existing holder id and passkey. No new registration: only a WebAuthn
           unlock against WPB.
         </p>
       </header>

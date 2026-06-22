@@ -16,43 +16,73 @@ import {
 } from "../api/openid4vci";
 import { AuthGate } from "../components/AuthGate";
 import { AuthenticatingBanner } from "../components/AuthenticatingBanner";
+import { CmdIdentityPanel } from "../components/issue/CmdIdentityPanel";
 import { IssuanceConsentScreen } from "../components/issue/IssuanceConsentScreen";
 import { IssuanceStepper } from "../components/issue/IssuanceStepper";
 import { JsonPanel } from "../components/JsonPanel";
+import { ProtocolExchangePanel } from "../components/ProtocolExchangePanel";
+import {
+  MDL_ISSUANCE_CLAIMS,
+  PID_ISSUANCE_CLAIMS,
+} from "../features/issue/documentClaims";
+import {
+  availableDocuments,
+  buildCredentialOfferUri,
+  DEFAULT_ISSUANCE_GRANT,
+  formatIssuanceLabel,
+  getDocument,
+} from "../features/issue/offerBuilder";
 import {
   canContinueIssuance,
   continueActionLabel,
   flowKind,
-  isIssuanceSuccess,
   isTerminalIssuanceState,
   primaryCredentialConfigurationId,
   stateBadgeVariant,
 } from "../features/issue/state";
 import { useAuthedApi } from "../hooks/useAuthedApi";
-import { VCI_DEMO_SCENARIOS } from "../scenarios/vciDemo";
 import type { IssuanceConsentView, IssuanceContext, IssuanceEvent } from "../types/openid4vci";
 import { formatApiError } from "../utils/apiError";
 
 const SIMULATED_AUTH_CODE = "code-abc";
+const DOCUMENT_OPTIONS = availableDocuments();
+
+function claimPreviewLabels(documentId: string): string {
+  const claims = documentId === "mdl" ? MDL_ISSUANCE_CLAIMS : PID_ISSUANCE_CLAIMS;
+  return claims.map((claim) => claim.label).join(", ");
+}
 
 export function IssuePage() {
-  const { session, withProtectedAction, busy, clearError } = useAuthedApi();
+  const { session, withApiAuth, withSoleControl, busy, clearError } = useAuthedApi();
   const holderId = session?.holderId.trim() ?? "";
 
-  const [offerUri, setOfferUri] = useState(VCI_DEMO_SCENARIOS[0]?.offerUri ?? "");
-  const [txCode, setTxCode] = useState(VCI_DEMO_SCENARIOS[0]?.defaultTxCode ?? "1234");
+  const [selectedDocumentId, setSelectedDocumentId] = useState("pid");
+  const [offerUri, setOfferUri] = useState(
+    buildCredentialOfferUri("pid_jwt", DEFAULT_ISSUANCE_GRANT),
+  );
   const [context, setContext] = useState<IssuanceContext | null>(null);
   const [consentView, setConsentView] = useState<IssuanceConsentView | null>(null);
   const [events, setEvents] = useState<IssuanceEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [loadingConsent, setLoadingConsent] = useState(false);
   const [vciDemoMode, setVciDemoMode] = useState<boolean | null>(null);
 
+  const selectedDocument = getDocument(selectedDocumentId);
   const sessionId = context?.sessionMeta.sessionId ?? null;
   const flowState = context?.state ?? consentView?.state ?? null;
-  const awaitingConsentUnlock =
-    flowState === "ISSUANCE_CONSENT_PENDING" && !consentView && sessionId != null;
-  const showSuccessLink = flowState != null && isIssuanceSuccess(flowState);
+  const showCmdStep = context?.state === "AUTHORIZATION_PREPARED";
+  const showBuilder = context == null && consentView == null;
+  const inProgress =
+    context != null &&
+    consentView == null &&
+    !isTerminalIssuanceState(context.state) &&
+    context.state !== "ISSUANCE_CONSENT_PENDING" &&
+    !showCmdStep;
+  const outcomeSuccess = flowState === "NOTIFIED";
+  const outcomeFailed =
+    flowState === "FAILED" || flowState === "REJECTED" || flowState === "EXPIRED";
+  const issuanceSummary = formatIssuanceLabel(selectedDocumentId);
 
   const refreshVciDemoMode = useCallback(() => {
     fetchWpbOperationalInfo()
@@ -71,6 +101,14 @@ export function IssuePage() {
     };
   }, [refreshVciDemoMode]);
 
+  const syncBuilderOffer = useCallback((documentId: string) => {
+    const document = getDocument(documentId);
+    if (!document || document.labStatus !== "available") {
+      return;
+    }
+    setOfferUri(buildCredentialOfferUri(document.configurationId, DEFAULT_ISSUANCE_GRANT));
+  }, []);
+
   const runAction = useCallback(
     async (action: () => Promise<void>) => {
       clearError();
@@ -86,17 +124,41 @@ export function IssuePage() {
 
   const loadConsentView = useCallback(
     async (id: string) => {
-      const view = await withProtectedAction((headers) =>
-        fetchIssuanceConsentView(id, holderId, headers),
-      );
+      const view = await withApiAuth((headers) => fetchIssuanceConsentView(id, holderId, headers));
       setConsentView(view);
     },
-    [holderId, withProtectedAction],
+    [holderId, withApiAuth],
   );
+
+  useEffect(() => {
+    if (flowState !== "ISSUANCE_CONSENT_PENDING" || !sessionId || consentView) {
+      return;
+    }
+    let cancelled = false;
+    setLoadingConsent(true);
+    clearError();
+    setError(null);
+    void (async () => {
+      try {
+        await loadConsentView(sessionId);
+      } catch (err) {
+        if (!cancelled) {
+          setError(formatApiError(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingConsent(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [flowState, sessionId, consentView, loadConsentView, clearError]);
 
   const refreshDebug = useCallback(
     async (id: string) => {
-      const [nextContext, nextEvents] = await withProtectedAction(async (headers) => {
+      const [nextContext, nextEvents] = await withApiAuth(async (headers) => {
         const ctx = await fetchIssuanceSession(id, headers);
         const ev = await fetchIssuanceEvents(id, headers);
         return [ctx, ev] as const;
@@ -104,7 +166,7 @@ export function IssuePage() {
       setContext(nextContext);
       setEvents(nextEvents);
     },
-    [withProtectedAction],
+    [withApiAuth],
   );
 
   async function advanceIssuance(ctx: IssuanceContext): Promise<IssuanceContext> {
@@ -112,7 +174,7 @@ export function IssuePage() {
     switch (ctx.state) {
       case "OFFER_RESOLVED":
         if (flowKind(ctx) === "PRE_AUTHORIZED_CODE") {
-          return completePreAuthorized(id, txCode.trim() || undefined);
+          return completePreAuthorized(id);
         }
         return prepareAuthorization(id);
       case "AUTHORIZATION_PREPARED": {
@@ -134,8 +196,8 @@ export function IssuePage() {
     }
   }
 
-  async function handleResolve() {
-    const trimmed = offerUri.trim();
+  async function handleStart(uri: string) {
+    const trimmed = uri.trim();
     if (!trimmed) {
       setError("Credential offer URI is required.");
       return;
@@ -150,6 +212,7 @@ export function IssuePage() {
     setConsentView(null);
     setEvents(null);
     setContext(null);
+    setError(null);
 
     await runAction(async () => {
       const next = await resolveOffer({ offerUri: trimmed, holderId });
@@ -162,7 +225,32 @@ export function IssuePage() {
     setResolving(false);
   }
 
-    async function handleContinue() {
+  function handleStartCustom() {
+    if (!selectedDocument || selectedDocument.labStatus !== "available") {
+      setError("This document type is not available in the lab yet.");
+      return;
+    }
+    void handleStart(offerUri);
+  }
+
+  function handleReset() {
+    setContext(null);
+    setConsentView(null);
+    setEvents(null);
+    setError(null);
+  }
+
+  function selectDocument(documentId: string) {
+    const document = getDocument(documentId);
+    if (!document || document.labStatus !== "available") {
+      return;
+    }
+    setError(null);
+    setSelectedDocumentId(documentId);
+    syncBuilderOffer(documentId);
+  }
+
+  async function handleContinue() {
     if (!context || !canContinueIssuance(context) || busy) {
       return;
     }
@@ -175,19 +263,17 @@ export function IssuePage() {
     });
   }
 
-  async function handleLoadConsent() {
-    if (!sessionId || busy) {
+  async function handleCmdContinue() {
+    if (!context || context.state !== "AUTHORIZATION_PREPARED" || busy) {
       return;
     }
-    await runAction(() => loadConsentView(sessionId));
-  }
-
-  function applyScenario(scenario: (typeof VCI_DEMO_SCENARIOS)[number]) {
-    setOfferUri(scenario.offerUri);
-    if (scenario.defaultTxCode) {
-      setTxCode(scenario.defaultTxCode);
-    }
-    setError(null);
+    await runAction(async () => {
+      const next = await advanceIssuance(context);
+      setContext(next);
+      if (next.error) {
+        setError(`${next.error.code}: ${next.error.message}`);
+      }
+    });
   }
 
   async function handleConsent(granted: boolean) {
@@ -196,7 +282,7 @@ export function IssuePage() {
     }
 
     await runAction(async () => {
-      const next = await withProtectedAction((headers) =>
+      const next = await withSoleControl((headers) =>
         submitIssuanceConsent(
           {
             sessionId,
@@ -213,36 +299,37 @@ export function IssuePage() {
     });
   }
 
-  const showTxCodeField =
-    context == null ||
-    flowKind(context) === "PRE_AUTHORIZED_CODE" ||
-    context.resolvedOffer?.preAuthorizedGrant?.txCodeRequired === true;
+  const wiaJwt = context?.wia?.attestation?.jwt ?? null;
+  const kaJwt = context?.ka?.attestation?.jwt ?? null;
 
   return (
     <AuthGate>
-      <section className="page">
-        <header className="page__header">
-          <h1>Issue</h1>
-          <p className="page__lead">
-            Resolve an OpenID4VCI credential offer, complete issuer authorization, request the
-            credential, then approve storage with your passkey.
-          </p>
+      <section className="page page--issue">
+        <header className="present-hero">
+          <div className="present-hero__main">
+            <h1>Issue credentials</h1>
+            <p className="present-hero__lead">
+              Receive a PID or driving licence from the simulated issuer via OpenID4VCI. Citizen
+              identity is established through <strong>CMD</strong> (simulated in this lab), then you
+              approve storage with your passkey.
+            </p>
+          </div>
         </header>
 
         <AuthenticatingBanner />
 
         <div className="alert alert--info">
-          <strong>Local demo setup</strong>
+          <strong>Prerequisites</strong>
           <p>
-            WPB uses the <strong>simulated issuer</strong> when{" "}
-            <code>wpb.openid4vci.demo-mode=true</code> (default in <code>dev</code>). Initialize
-            your wallet on <Link to="/wallet">Wallet</Link> before device-bound credentials.
+            Complete <Link to="/onboarding">passkey registration</Link> and{" "}
+            <Link to="/wallet">wallet init</Link> first. WPB uses the simulated issuer when{" "}
+            <code>wpb.openid4vci.demo-mode=true</code>.
           </p>
         </div>
 
         {vciDemoMode === true ? (
           <div className="alert alert--info" role="status">
-            WPB reports <code>openid4vci.demo-mode=true</code> — simulated issuer flows are enabled.
+            WPB reports <code>openid4vci.demo-mode=true</code>. Simulated issuer flows are enabled.
           </div>
         ) : null}
 
@@ -254,6 +341,10 @@ export function IssuePage() {
               Restart WPB with{" "}
               <code>./gradlew :app:bootRun --args=&apos;--wpb.openid4vci.demo-mode=true&apos;</code>
             </p>
+            <p className="hint">
+              Check <Link to="/health">Backend health</Link>. The dev proxy targets{" "}
+              <code>{import.meta.env.VITE_WPB_PROXY_TARGET ?? "http://localhost:8080"}</code>.
+            </p>
           </div>
         ) : null}
 
@@ -263,108 +354,266 @@ export function IssuePage() {
           </div>
         ) : null}
 
-        {showSuccessLink ? (
-          <div className="alert alert--info" role="status">
-            <strong>Credential issued</strong>
-            <p>
-              Open <Link to="/wallet">Wallet</Link> and use <strong>Unlock &amp; sync from server</strong>{" "}
-              to see the new credential.
-            </p>
-          </div>
-        ) : null}
-
-        {flowState === "DEFERRED_PENDING" ? (
-          <div className="alert alert--info" role="status">
-            <strong>Deferred issuance</strong>
-            <p>
-              The simulated issuer returned a transaction id. Click <strong>Continue</strong> to poll{" "}
-              <code>POST /openid4vci/deferred/query</code> until the credential is ready, then complete
-              storage consent.
-            </p>
-            {context?.deferredHandle?.transactionId ? (
-              <p className="hint">
-                Transaction id: <code>{context.deferredHandle.transactionId}</code>
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
         <IssuanceStepper state={flowState} />
 
-        <div className="present-grid">
-          <section className="card present-section">
-            <h2 className="card__title">Credential offer</h2>
-            <div className="form">
-              <label className="form__field">
-                <span className="form__label">credential_offer_uri</span>
-                <textarea
-                  className="form__textarea"
-                  value={offerUri}
-                  onChange={(e) => setOfferUri(e.target.value)}
-                  rows={4}
-                  disabled={busy || resolving}
-                  spellCheck={false}
-                />
-              </label>
-              {showTxCodeField ? (
-                <label className="form__field">
-                  <span className="form__label">tx_code (pre-authorized offers)</span>
-                  <input
-                    className="form__input"
-                    value={txCode}
-                    onChange={(e) => setTxCode(e.target.value)}
-                    disabled={busy || resolving}
-                    autoComplete="off"
-                  />
-                </label>
-              ) : null}
-              <div className="toolbar toolbar--compact">
-                <button type="button" disabled={busy || resolving} onClick={() => void handleResolve()}>
-                  {resolving ? "Resolving…" : "Resolve offer"}
-                </button>
-                {context && canContinueIssuance(context) ? (
-                  <button
-                    type="button"
-                    className="button--secondary"
-                    disabled={busy}
-                    onClick={() => void handleContinue()}
-                  >
-                    {continueActionLabel(context)}
-                  </button>
-                ) : null}
+        {showBuilder ? (
+          <section className="card present-builder issue-builder">
+            <h2 className="card__title">Which document do you want to receive?</h2>
+            <p className="hint present-builder__lead">
+              Choose <strong>PID</strong> (identity + mandatory metadata) or{" "}
+              <strong>driving licence (mDL)</strong>, then start issuance.
+            </p>
+
+            <div className="present-claim-group">
+              <div className="present-claim-toggles" role="group" aria-label="Document type">
+                {DOCUMENT_OPTIONS.map((document) => {
+                  const selected = selectedDocumentId === document.id;
+                  const available = document.labStatus === "available";
+                  return (
+                    <button
+                      key={document.id}
+                      type="button"
+                      className={[
+                        "present-claim-toggle",
+                        selected ? "present-claim-toggle--selected" : "",
+                        !available ? "present-claim-toggle--unavailable" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      aria-pressed={available ? selected : undefined}
+                      aria-disabled={!available}
+                      disabled={busy || resolving || vciDemoMode === false || !available}
+                      title={!available ? document.unavailableNote : undefined}
+                      onClick={() => selectDocument(document.id)}
+                    >
+                      <span className="present-claim-toggle__label">{document.label}</span>
+                      <span className="present-claim-toggle__path">{document.description}</span>
+                      {!available && document.unavailableNote ? (
+                        <span className="present-claim-toggle__note">{document.unavailableNote}</span>
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          </section>
 
-          <section className="card present-section">
-            <h2 className="card__title">Demo scenarios</h2>
-            <p className="hint present-scenarios__lead">
-              Simulated issuer offers served by WPB (no external issuer required).
-            </p>
-            <ul className="present-scenario-list">
-              {VCI_DEMO_SCENARIOS.map((scenario) => (
-                <li key={scenario.id} className="present-scenario-list__item">
-                  <div className="present-scenario-list__head">
-                    <strong>{scenario.title}</strong>
-                    <span className="status-badge status-badge--unknown">{scenario.grant}</span>
-                  </div>
-                  <p className="hint">{scenario.description}</p>
-                  <button
-                    type="button"
-                    className="button--secondary"
+            {selectedDocumentId === "mdl" && selectedDocument?.labNote ? (
+              <p className="hint issue-mdl-note">{selectedDocument.labNote}</p>
+            ) : null}
+
+            <details className="present-dev-details issue-claim-preview">
+              <summary>Included attributes (reference)</summary>
+              <p className="hint issue-claim-preview__text">{claimPreviewLabels(selectedDocumentId)}</p>
+            </details>
+
+            <div className="present-builder__summary">
+              <span className="hint">You will request:</span>
+              <strong>{issuanceSummary}</strong>
+            </div>
+
+            <button
+              type="button"
+              disabled={
+                busy ||
+                resolving ||
+                vciDemoMode === false ||
+                selectedDocument?.labStatus !== "available"
+              }
+              onClick={handleStartCustom}
+            >
+              {resolving ? "Starting…" : "Start issuance"}
+            </button>
+
+            <details className="present-dev-details issue-builder__advanced">
+              <summary>Advanced: edit offer URI</summary>
+              <div className="present-dev-details__body">
+                <p className="hint">
+                  Default grant is <code>authorization_code</code> (CMD + OAuth). A{" "}
+                  <code>pre-authorized_code</code> offer is available for adapter testing only.
+                </p>
+                <label className="form__field">
+                  <span className="form__label">credential_offer_uri</span>
+                  <textarea
+                    className="form__textarea"
+                    value={offerUri}
+                    onChange={(e) => setOfferUri(e.target.value)}
+                    rows={4}
                     disabled={busy || resolving}
-                    onClick={() => applyScenario(scenario)}
-                  >
-                    Use offer
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    spellCheck={false}
+                  />
+                </label>
+              </div>
+            </details>
           </section>
+        ) : null}
 
-          {flowState ? (
-            <section className="card present-section present-section--status">
-              <h2 className="card__title">Session status</h2>
+        {showCmdStep && context ? (
+          <CmdIdentityPanel
+            authorizationUrl={context.preparedAuthorization?.authorizationCodeUrl}
+            wiaJwtPreview={wiaJwt}
+            busy={busy}
+            onContinue={() => void handleCmdContinue()}
+            onCancel={handleReset}
+          />
+        ) : null}
+
+        {inProgress && context ? (
+          <section className="card present-unlock issue-progress">
+            <h2 className="card__title">Issuance in progress</h2>
+            <p className="present-unlock__lead">
+              Requesting <strong>{issuanceSummary}</strong>. Continue the issuer steps below, then
+              approve storage when prompted.
+            </p>
+
+            {context.state === "DEFERRED_PENDING" ? (
+              <div className="alert alert--info" role="status">
+                <strong>Deferred issuance</strong>
+                <p>
+                  The simulated issuer returned a transaction id. Click <strong>Continue</strong> to
+                  poll until the credential is ready.
+                </p>
+                {context.deferredHandle?.transactionId ? (
+                  <p className="hint">
+                    Transaction id: <code>{context.deferredHandle.transactionId}</code>
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            <dl className="details-list">
+              {sessionId ? (
+                <div className="details-list__row">
+                  <dt>Session</dt>
+                  <dd>
+                    <code className="details-list__truncate">{sessionId}</code>
+                  </dd>
+                </div>
+              ) : null}
+              <div className="details-list__row">
+                <dt>State</dt>
+                <dd>
+                  <span className={`status-badge status-badge--${stateBadgeVariant(context.state)}`}>
+                    {context.state}
+                  </span>
+                </dd>
+              </div>
+              {context.flow ? (
+                <div className="details-list__row">
+                  <dt>Grant</dt>
+                  <dd>
+                    <code>{context.flow}</code>
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+
+            <div className="toolbar toolbar--compact">
+              {canContinueIssuance(context) ? (
+                <button type="button" disabled={busy} onClick={() => void handleContinue()}>
+                  {continueActionLabel(context)}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="button--secondary"
+                disabled={busy || resolving}
+                onClick={handleReset}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {loadingConsent ? (
+          <section className="card present-unlock">
+            <h2 className="card__title">Loading storage consent</h2>
+            <p className="present-unlock__lead">
+              You are about to store <strong>{issuanceSummary}</strong> in your wallet. Review the
+              details below, then approve with your passkey.
+            </p>
+          </section>
+        ) : null}
+
+        {consentView ? (
+          <div className="present-section present-section--consent">
+            <IssuanceConsentScreen
+              view={consentView}
+              onApprove={() => runAction(() => handleConsent(true))}
+              onReject={() => runAction(() => handleConsent(false))}
+              busy={busy}
+            />
+          </div>
+        ) : null}
+
+        {outcomeSuccess ? (
+          <section className="card present-outcome present-outcome--success" role="status">
+            <h2 className="card__title">Credential stored</h2>
+            <p>
+              Issuance completed for <strong>{issuanceSummary}</strong>. Open{" "}
+              <Link to="/wallet">Wallet</Link> and use <strong>Sync from server</strong> to see the
+              new credential, then try selective disclosure on <Link to="/present">Present</Link>.
+            </p>
+            <div className="toolbar toolbar--compact">
+              <Link to="/wallet" className="button button--secondary">
+                Open wallet
+              </Link>
+              <Link to="/present" className="button button--secondary">
+                Present credentials
+              </Link>
+              <button type="button" className="button--secondary" onClick={handleReset}>
+                Issue again
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {outcomeFailed && context?.error ? (
+          <section className="card present-outcome present-outcome--error" role="alert">
+            <h2 className="card__title">Issuance did not complete</h2>
+            <p>
+              <code>{context.error.code}</code>: {context.error.message}
+            </p>
+            <button type="button" className="button--secondary" onClick={handleReset}>
+              Start over
+            </button>
+          </section>
+        ) : null}
+
+        {flowState && !showBuilder ? (
+          <details className="present-dev-details" open>
+            <summary>Developer details: protocol exchange</summary>
+            <div className="present-dev-details__body">
+              <ProtocolExchangePanel
+                title="WIA (Wallet Instance Attestation)"
+                summary="Attached during OAuth authorization. The issuer validates WIA signature and cnf.jkt binding (ISSU_21)."
+                items={[
+                  { label: "WIA state", value: context?.wia?.state },
+                  { label: "cnf.jkt", value: context?.wia?.attestation?.cnfJkt },
+                  { label: "walletInstanceId", value: context?.wia?.attestation?.walletInstanceId },
+                  {
+                    label: "WIA bound to access token",
+                    value: context?.authorizedContext?.wiaCnfJkt ?? "(after CMD step)",
+                  },
+                ]}
+                payload={context?.wia?.attestation ?? null}
+                payloadTitle="WIA attestation"
+              />
+
+              {kaJwt ? (
+                <ProtocolExchangePanel
+                  title="KA (Key Attestation / WUA)"
+                  summary="Device-bound credentials include key attestation from the WSCD (ISSU_17)."
+                  items={[
+                    { label: "KA state", value: context?.ka?.state },
+                    { label: "keyId", value: context?.ka?.attestation?.keyId },
+                    { label: "attestedJkt", value: context?.ka?.attestation?.attestedJkt },
+                  ]}
+                  payload={context?.ka?.attestation ?? null}
+                  payloadTitle="Key attestation"
+                />
+              ) : null}
+
               <dl className="details-list">
                 {sessionId ? (
                   <div className="details-list__row">
@@ -377,19 +626,13 @@ export function IssuePage() {
                 <div className="details-list__row">
                   <dt>State</dt>
                   <dd>
-                    <span className={`status-badge status-badge--${stateBadgeVariant(flowState)}`}>
+                    <span
+                      className={`status-badge status-badge--${stateBadgeVariant(flowState)}`}
+                    >
                       {flowState}
                     </span>
                   </dd>
                 </div>
-                {context?.flow ? (
-                  <div className="details-list__row">
-                    <dt>Grant</dt>
-                    <dd>
-                      <code>{context.flow}</code>
-                    </dd>
-                  </div>
-                ) : null}
                 {context?.credentialIssuerId ? (
                   <div className="details-list__row">
                     <dt>Issuer</dt>
@@ -398,66 +641,22 @@ export function IssuePage() {
                     </dd>
                   </div>
                 ) : null}
-                {context?.sessionMeta.correlationId ? (
-                  <div className="details-list__row">
-                    <dt>Correlation</dt>
-                    <dd>
-                      <code>{context.sessionMeta.correlationId}</code>
-                    </dd>
-                  </div>
-                ) : null}
-                {context?.error ? (
-                  <div className="details-list__row">
-                    <dt>Error</dt>
-                    <dd>
-                      <code>{context.error.code}</code> — {context.error.message}
-                    </dd>
-                  </div>
-                ) : null}
               </dl>
               {sessionId ? (
-                <div className="toolbar toolbar--compact">
-                  {awaitingConsentUnlock ? (
-                    <button type="button" disabled={busy} onClick={() => void handleLoadConsent()}>
-                      Unlock &amp; load storage consent (passkey)
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="button--secondary"
-                    disabled={busy}
-                    onClick={() => runAction(() => refreshDebug(sessionId))}
-                  >
-                    Refresh debug (passkey)
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="button--secondary"
+                  disabled={busy}
+                  onClick={() => runAction(() => refreshDebug(sessionId))}
+                >
+                  Refresh session debug (passkey)
+                </button>
               ) : null}
-            </section>
-          ) : null}
-
-          {consentView ? (
-            <div className="present-section present-section--consent">
-              <IssuanceConsentScreen
-                view={consentView}
-                onApprove={() => runAction(() => handleConsent(true))}
-                onReject={() => runAction(() => handleConsent(false))}
-                busy={busy}
-              />
+              {context ? <JsonPanel title="IssuanceContext" data={context} /> : null}
+              {events ? <JsonPanel title="Issuance events" data={events} defaultOpen /> : null}
             </div>
-          ) : null}
-
-          {context ? (
-            <div className="present-section present-section--debug">
-              <JsonPanel title="IssuanceContext" data={context} />
-            </div>
-          ) : null}
-
-          {events ? (
-            <div className="present-section present-section--debug">
-              <JsonPanel title="Issuance events" data={events} defaultOpen />
-            </div>
-          ) : null}
-        </div>
+          </details>
+        ) : null}
       </section>
     </AuthGate>
   );

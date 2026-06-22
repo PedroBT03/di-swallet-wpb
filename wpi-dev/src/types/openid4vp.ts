@@ -104,11 +104,18 @@ export interface PresentationError {
   message: string;
 }
 
+export interface VpToken {
+  presentationsByQueryId: Record<string, string[]>;
+  format?: CredentialFormat;
+  rawValue?: string | null;
+}
+
 export interface PresentationContext {
   sessionMeta: SessionMetadata;
   state: PresentationState;
   error: PresentationError | null;
   dispatchOutcome: unknown;
+  vpToken?: VpToken | null;
   consentDecision: {
     granted: boolean;
     reason: string | null;

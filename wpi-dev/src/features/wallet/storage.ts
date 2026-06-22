@@ -33,3 +33,19 @@ export function summarizeCredential(credential: WalletCredentialRecord): Credent
     encodedPreview: preview,
   };
 }
+
+/** Newest credentials first (by issuedAt, then id as tiebreaker). */
+export function sortCredentialsByIssuedAt(
+  credentials: CredentialSummary[],
+): CredentialSummary[] {
+  return [...credentials].sort((left, right) => {
+    const leftTime = Date.parse(left.issuedAt);
+    const rightTime = Date.parse(right.issuedAt);
+    const leftMs = Number.isNaN(leftTime) ? 0 : leftTime;
+    const rightMs = Number.isNaN(rightTime) ? 0 : rightTime;
+    if (rightMs !== leftMs) {
+      return rightMs - leftMs;
+    }
+    return right.id - left.id;
+  });
+}

@@ -11,6 +11,7 @@ import {
 import { AuthGate } from "../components/AuthGate";
 import { AuthenticatingBanner } from "../components/AuthenticatingBanner";
 import { ConsentScreen } from "../components/present/ConsentScreen";
+import { PresentationSharedPanel } from "../components/present/PresentationSharedPanel";
 import { PresentationStepper } from "../components/present/PresentationStepper";
 import { JsonPanel } from "../components/JsonPanel";
 import {
@@ -18,20 +19,41 @@ import {
   defaultCredentialSelection,
   stateBadgeVariant,
 } from "../features/present/state";
+import {
+  PRESENT_DOCUMENTS,
+  buildCustomVerifierRequestUri,
+  claimOptionsForDocument,
+  defaultClaimsForDocument,
+  formatClaimsLabel,
+  groupClaimOptions,
+  type PresentDocumentType,
+} from "../features/present/pidClaims";
 import { useAuthedApi } from "../hooks/useAuthedApi";
-import { VP_DEMO_SCENARIOS } from "../scenarios/vpDemo";
+import { scenariosForDocument, VP_PRESENT_SCENARIOS, type VpDemoScenario } from "../scenarios/vpDemo";
 import type {
   PresentationConsentView,
   PresentationContext,
   SessionEvent,
 } from "../types/openid4vp";
 import { formatApiError } from "../utils/apiError";
+import { formatFlowError } from "../utils/flowError";
+
+const CLAIM_GROUPS = groupClaimOptions;
 
 export function PresentPage() {
-  const { session, withProtectedAction, busy, clearError } = useAuthedApi();
+  const { session, withApiAuth, withSoleControl, busy, clearError } = useAuthedApi();
   const holderId = session?.holderId.trim() ?? "";
 
-  const [requestUri, setRequestUri] = useState(VP_DEMO_SCENARIOS[0]?.requestUri ?? "");
+  const [selectedDocument, setSelectedDocument] = useState<PresentDocumentType>("pid");
+  const claimOptions = claimOptionsForDocument(selectedDocument);
+  const claimGroups = CLAIM_GROUPS(claimOptions);
+  const demoScenarios = scenariosForDocument(selectedDocument);
+
+  const [selectedClaims, setSelectedClaims] = useState<string[]>(() =>
+    defaultClaimsForDocument("pid"),
+  );
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
+  const [activeSharesLabel, setActiveSharesLabel] = useState<string | null>(null);
   const [context, setContext] = useState<PresentationContext | null>(null);
   const [consentView, setConsentView] = useState<PresentationConsentView | null>(null);
   const [events, setEvents] = useState<SessionEvent[] | null>(null);
@@ -39,12 +61,17 @@ export function PresentPage() {
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [loadingConsent, setLoadingConsent] = useState(false);
   const [vpDemoMode, setVpDemoMode] = useState<boolean | null>(null);
 
   const sessionId = context?.sessionMeta.sessionId ?? null;
   const flowState = context?.state ?? consentView?.state ?? null;
-  const awaitingConsentUnlock =
-    flowState === "CONSENT_PENDING" && !consentView && sessionId != null;
+  const showBuilder = context == null && consentView == null;
+  const sharesSummary = activeSharesLabel ?? (
+    activeScenarioId
+      ? VP_PRESENT_SCENARIOS.find((s) => s.id === activeScenarioId)?.sharesLabel
+      : null
+  ) ?? null;
 
   const refreshVpDemoMode = useCallback(() => {
     fetchWpbOperationalInfo()
@@ -77,20 +104,39 @@ export function PresentPage() {
     [clearError],
   );
 
-  const loadConsentView = useCallback(
-    async (id: string) => {
-      const view = await withProtectedAction((headers) =>
-        fetchConsentView(id, holderId, headers),
-      );
-      setConsentView(view);
-      setSelectedIds(defaultCredentialSelection(view.choiceGroups));
-    },
-    [holderId, withProtectedAction],
-  );
+  useEffect(() => {
+    if (flowState !== "CONSENT_PENDING" || !sessionId) {
+      return;
+    }
+    let cancelled = false;
+    setLoadingConsent(true);
+    clearError();
+    setError(null);
+    void (async () => {
+      try {
+        const view = await withApiAuth((headers) => fetchConsentView(sessionId, holderId, headers));
+        if (!cancelled) {
+          setConsentView(view);
+          setSelectedIds(defaultCredentialSelection(view.choiceGroups));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(formatApiError(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingConsent(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [flowState, sessionId, holderId, withApiAuth, clearError]);
 
   const refreshDebug = useCallback(
     async (id: string) => {
-      const [nextContext, nextEvents] = await withProtectedAction(async (headers) => {
+      const [nextContext, nextEvents] = await withApiAuth(async (headers) => {
         const ctx = await fetchPresentationSession(id, headers);
         const ev = await fetchPresentationEvents(id, headers);
         return [ctx, ev] as const;
@@ -98,13 +144,13 @@ export function PresentPage() {
       setContext(nextContext);
       setEvents(nextEvents);
     },
-    [withProtectedAction],
+    [withApiAuth],
   );
 
-  async function handleStart() {
-    const trimmed = requestUri.trim();
+  async function handleStart(uri: string, scenarioId: string | null, sharesLabel: string | null) {
+    const trimmed = uri.trim();
     if (!trimmed) {
-      setError("Request URI is required.");
+      setError("No verifier request configured.");
       return;
     }
     if (!holderId) {
@@ -114,10 +160,13 @@ export function PresentPage() {
 
     refreshVpDemoMode();
     setStarting(true);
+    setActiveScenarioId(scenarioId);
+    setActiveSharesLabel(sharesLabel);
     setConsentView(null);
     setEvents(null);
     setContext(null);
     setSelectedIds([]);
+    setError(null);
 
     await runAction(async () => {
       const next = await startPresentation({
@@ -130,16 +179,80 @@ export function PresentPage() {
     setStarting(false);
   }
 
-  async function handleLoadConsent() {
-    if (!sessionId || busy) {
+  function selectDocument(documentType: PresentDocumentType) {
+    if (documentType === selectedDocument) {
       return;
     }
-    await runAction(() => loadConsentView(sessionId));
+    setError(null);
+    setSelectedDocument(documentType);
+    setSelectedClaims(defaultClaimsForDocument(documentType));
+    setActiveScenarioId(null);
+    setActiveSharesLabel(null);
   }
 
-  function applyScenario(uri: string) {
-    setRequestUri(uri);
+  function handleStartCustom() {
+    if (selectedClaims.length === 0) {
+      setError("Select at least one field to share.");
+      return;
+    }
+    void handleStart(
+      buildCustomVerifierRequestUri(selectedClaims, selectedDocument),
+      null,
+      formatClaimsLabel(selectedClaims, selectedDocument),
+    );
+  }
+
+  function handleStartScenario(scenario: VpDemoScenario) {
+    setSelectedDocument(scenario.documentType);
+    setSelectedClaims(scenario.requestedClaims);
+    void handleStart(scenario.requestUri, scenario.id, scenario.sharesLabel);
+  }
+
+  function handleReset() {
+    setActiveScenarioId(null);
+    setActiveSharesLabel(null);
+    setContext(null);
+    setConsentView(null);
+    setEvents(null);
+    setSelectedIds([]);
     setError(null);
+    setSelectionError(null);
+  }
+
+  function toggleClaim(claimId: string) {
+    setError(null);
+    setSelectedClaims((prev) =>
+      prev.includes(claimId) ? prev.filter((id) => id !== claimId) : [...prev, claimId],
+    );
+  }
+
+  async function handleConsent(granted: boolean) {
+    if (!sessionId || !consentView) {
+      return;
+    }
+
+    if (granted && !allGroupsSelected(consentView.choiceGroups, selectedIds)) {
+      setSelectionError("Select a credential for each requested query.");
+      return;
+    }
+
+    await runAction(async () => {
+      const next = await withSoleControl((headers) =>
+        submitConsent(
+          {
+            sessionId,
+            holderId,
+            granted,
+            selectedCredentialIds: granted ? selectedIds : [],
+            reason: granted ? undefined : "Holder rejected presentation",
+          },
+          headers,
+        ),
+      );
+      setContext(next);
+      setConsentView(null);
+      setEvents(null);
+    });
   }
 
   function toggleCandidate(candidateId: string, queryId: string) {
@@ -167,44 +280,24 @@ export function PresentPage() {
     );
   }
 
-  async function handleConsent(granted: boolean) {
-    if (!sessionId || !consentView) {
-      return;
-    }
-
-    if (granted && !allGroupsSelected(consentView.choiceGroups, selectedIds)) {
-      setSelectionError("Select a credential for each requested query.");
-      return;
-    }
-
-    await runAction(async () => {
-      const next = await withProtectedAction((headers) =>
-        submitConsent(
-          {
-            sessionId,
-            holderId,
-            granted,
-            selectedCredentialIds: granted ? selectedIds : [],
-            reason: granted ? undefined : "Holder rejected presentation",
-          },
-          headers,
-        ),
-      );
-      setContext(next);
-      setConsentView(null);
-      setEvents(null);
-    });
-  }
+  const outcomeSuccess = flowState === "DISPATCHED" && !context?.error;
+  const outcomeFailed =
+    flowState === "FAILED" ||
+    flowState === "REJECTED" ||
+    flowState === "EXPIRED" ||
+    (flowState === "DISPATCHED" && Boolean(context?.error));
 
   return (
     <AuthGate>
-      <section className="page">
-        <header className="page__header">
-          <h1>Present</h1>
-          <p className="page__lead">
-            Start an OpenID4VP presentation from a verifier <code>request_uri</code>, review
-            the consent screen, then approve or reject with your passkey.
-          </p>
+      <section className="page page--present">
+        <header className="present-hero">
+          <div className="present-hero__main">
+            <h1>Present credentials</h1>
+            <p>
+              Choose which PID or mDL fields a verifier may receive, then approve with your passkey.
+              Only selected attributes leave the wallet (selective disclosure with SD-JWT or mdoc).
+            </p>
+          </div>
         </header>
 
         <AuthenticatingBanner />
@@ -212,16 +305,16 @@ export function PresentPage() {
         <div className="alert alert--info">
           <strong>Local demo setup</strong>
           <p>
-            Start the <code>verifier-emulator</code> on port 8081 (serves{" "}
-            <code>verifier_info.x5c</code> for PKIX trust) and issue a demo PID on{" "}
-            <Link to="/wallet">Wallet</Link> before PID scenarios. WPB needs{" "}
-            <code>wpb.openid4vp.demo-mode=true</code> (on by default in the <code>dev</code> profile).
+            Start the <code>verifier-emulator</code> on port 8081 and issue a demo PID or mDL on{" "}
+            <Link to="/wallet">Wallet</Link> before presenting. WPB needs{" "}
+            <code>wpb.openid4vp.demo-mode=true</code> (on by default in the <code>dev</code>{" "}
+            profile).
           </p>
         </div>
 
         {vpDemoMode === true ? (
           <div className="alert alert--info" role="status">
-            WPB reports <code>openid4vp.demo-mode=true</code> — local emulator flows are enabled.
+            WPB reports <code>openid4vp.demo-mode=true</code>. Local emulator flows are enabled.
           </div>
         ) : null}
 
@@ -235,7 +328,7 @@ export function PresentPage() {
               <code>./gradlew :app:bootRun --args=&apos;--wpb.openid4vp.demo-mode=true&apos;</code>
             </p>
             <p className="hint">
-              Check <Link to="/health">Backend health</Link> — the dev proxy targets{" "}
+              Check <Link to="/health">Backend health</Link>. The dev proxy targets{" "}
               <code>{import.meta.env.VITE_WPB_PROXY_TARGET ?? "http://localhost:8080"}</code>.
             </p>
           </div>
@@ -249,60 +342,193 @@ export function PresentPage() {
 
         <PresentationStepper state={flowState} />
 
-        <div className="present-grid">
-          <section className="card present-section">
-            <h2 className="card__title">Request URI</h2>
-            <div className="form">
-              <label className="form__field">
-                <span className="form__label">request_uri</span>
-                <textarea
-                  className="form__textarea"
-                  value={requestUri}
-                  onChange={(e) => setRequestUri(e.target.value)}
-                  rows={3}
-                  disabled={busy || starting}
-                  spellCheck={false}
-                />
-              </label>
-              <div className="toolbar toolbar--compact">
-                <button type="button" disabled={busy || starting} onClick={handleStart}>
-                  {starting ? "Starting…" : "Start presentation"}
-                </button>
+        {showBuilder ? (
+          <div className="present-builder-layout">
+            <section className="card present-builder">
+              <h2 className="card__title">What do you want to share?</h2>
+              <p className="hint present-builder__lead">
+                Choose <strong>PID</strong> (SD-JWT) or <strong>driving licence (mDL)</strong>, then
+                select the fields this verifier may receive. Unselected fields stay in your wallet.
+              </p>
+
+              <div className="present-claim-group">
+                <h3 className="present-claim-group__title">Document</h3>
+                <div className="present-claim-toggles" role="group" aria-label="Document type">
+                  {PRESENT_DOCUMENTS.map((document) => {
+                    const selected = selectedDocument === document.id;
+                    return (
+                      <button
+                        key={document.id}
+                        type="button"
+                        className={[
+                          "present-claim-toggle",
+                          selected ? "present-claim-toggle--selected" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-pressed={selected}
+                        disabled={busy || starting || vpDemoMode === false}
+                        onClick={() => selectDocument(document.id)}
+                      >
+                        <span className="present-claim-toggle__label">{document.label}</span>
+                        <span className="present-claim-toggle__path">{document.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </section>
 
-          <section className="card present-section">
-            <h2 className="card__title">Demo scenarios</h2>
-            <p className="hint present-scenarios__lead">
-              Pre-filled URIs served by the verifier emulator.
-            </p>
-            <ul className="present-scenario-list">
-              {VP_DEMO_SCENARIOS.map((scenario) => (
-                <li key={scenario.id} className="present-scenario-list__item">
-                  <div className="present-scenario-list__head">
-                    <strong>{scenario.title}</strong>
-                    {scenario.requiresPid ? (
-                      <span className="status-badge status-badge--unknown">needs PID</span>
-                    ) : null}
+              {Object.entries(claimGroups).map(([groupName, options]) => {
+                if (options.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={groupName} className="present-claim-group">
+                    <h3 className="present-claim-group__title">{groupName}</h3>
+                    <div className="present-claim-toggles" role="group" aria-label={groupName}>
+                      {options.map((option) => {
+                        const selected = selectedClaims.includes(option.id);
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={[
+                              "present-claim-toggle",
+                              selected ? "present-claim-toggle--selected" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            aria-pressed={selected}
+                            disabled={busy || starting || vpDemoMode === false}
+                            onClick={() => toggleClaim(option.id)}
+                          >
+                            <span className="present-claim-toggle__label">{option.label}</span>
+                            <code className="present-claim-toggle__path">{option.id}</code>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <p className="hint">{scenario.description}</p>
-                  <button
-                    type="button"
-                    className="button--secondary"
-                    disabled={busy || starting}
-                    onClick={() => applyScenario(scenario.requestUri)}
-                  >
-                    Use URI
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
+                );
+              })}
 
-          {flowState ? (
-            <section className="card present-section present-section--status">
-              <h2 className="card__title">Session status</h2>
+              <div className="present-builder__summary">
+                <span className="hint">Verifier will request:</span>
+                <strong>
+                  {selectedClaims.length > 0
+                    ? formatClaimsLabel(selectedClaims, selectedDocument)
+                    : "No fields selected"}
+                </strong>
+              </div>
+
+              <button
+                type="button"
+                disabled={
+                  busy || starting || vpDemoMode === false || selectedClaims.length === 0
+                }
+                onClick={handleStartCustom}
+              >
+                {starting && activeScenarioId == null ? "Starting…" : "Start presentation"}
+              </button>
+            </section>
+
+            <aside className="present-builder-aside">
+              <section className="card present-demos">
+                <h2 className="card__title">Quick demos</h2>
+                <p className="hint present-demos__lead">
+                  Pre-configured verifier requests for common selective-disclosure examples.
+                </p>
+                <ul className="present-demos-list">
+                  {demoScenarios.map((scenario) => (
+                    <li key={scenario.id} className="present-demos-list__item">
+                      <h3 className="present-demos-list__title">{scenario.title}</h3>
+                      <p className="hint">{scenario.sharesLabel}</p>
+                      <button
+                        type="button"
+                        className="button--secondary present-demos-list__btn"
+                        disabled={busy || starting || vpDemoMode === false}
+                        onClick={() => handleStartScenario(scenario)}
+                      >
+                        {starting && activeScenarioId === scenario.id ? "Starting…" : "Try demo"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </aside>
+          </div>
+        ) : null}
+
+        {loadingConsent ? (
+          <section className="card present-unlock">
+            <h2 className="card__title">Loading consent screen</h2>
+            <p className="present-unlock__lead">
+              {sharesSummary ? (
+                <>
+                  The verifier asked for <strong>{sharesSummary}</strong>. Review the request below,
+                  then approve with your passkey.
+                </>
+              ) : (
+                "Review what the verifier requested, then approve with your passkey."
+              )}
+            </p>
+          </section>
+        ) : null}
+
+        {consentView ? (
+          <div className="present-section present-section--consent">
+            <ConsentScreen
+              view={consentView}
+              selectedIds={selectedIds}
+              onToggleCandidate={toggleCandidate}
+              onApprove={() => runAction(() => handleConsent(true))}
+              onReject={() => runAction(() => handleConsent(false))}
+              busy={busy}
+              selectionError={selectionError}
+            />
+          </div>
+        ) : null}
+
+        {outcomeSuccess ? (
+          <section className="card present-outcome present-outcome--success" role="status">
+            <h2 className="card__title">Presentation sent</h2>
+            <p>
+              Selective disclosure applied. The verifier received only the attributes you
+              approved
+              {sharesSummary ? (
+                <>
+                  {" "}
+                  (<strong>{sharesSummary}</strong>)
+                </>
+              ) : null}
+              .
+            </p>
+            <div className="toolbar toolbar--compact">
+              <Link to="/log" className="button button--secondary">
+                View transaction log
+              </Link>
+              <button type="button" className="button--secondary" onClick={handleReset}>
+                Present again
+              </button>
+            </div>
+            <PresentationSharedPanel vpToken={context?.vpToken} />
+          </section>
+        ) : null}
+
+        {outcomeFailed && context?.error ? (
+          <section className="card present-outcome present-outcome--error" role="alert">
+            <h2 className="card__title">Presentation did not complete</h2>
+            <p>{formatFlowError(context.error.code, context.error.message)}</p>
+            <button type="button" className="button--secondary" onClick={handleReset}>
+              Start over
+            </button>
+          </section>
+        ) : null}
+
+        {flowState && !showBuilder ? (
+          <details className="present-dev-details">
+            <summary>Developer details</summary>
+            <div className="present-dev-details__body">
               <dl className="details-list">
                 {sessionId ? (
                   <div className="details-list__row">
@@ -315,74 +541,29 @@ export function PresentPage() {
                 <div className="details-list__row">
                   <dt>State</dt>
                   <dd>
-                    <span className={`status-badge status-badge--${stateBadgeVariant(flowState)}`}>
+                    <span
+                      className={`status-badge status-badge--${stateBadgeVariant(flowState, context?.error)}`}
+                    >
                       {flowState}
                     </span>
                   </dd>
                 </div>
-                {context?.sessionMeta.correlationId ? (
-                  <div className="details-list__row">
-                    <dt>Correlation</dt>
-                    <dd>
-                      <code>{context.sessionMeta.correlationId}</code>
-                    </dd>
-                  </div>
-                ) : null}
-                {context?.error ? (
-                  <div className="details-list__row">
-                    <dt>Error</dt>
-                    <dd>
-                      <code>{context.error.code}</code> — {context.error.message}
-                    </dd>
-                  </div>
-                ) : null}
               </dl>
               {sessionId ? (
-                <div className="toolbar toolbar--compact">
-                  {awaitingConsentUnlock ? (
-                    <button type="button" disabled={busy} onClick={() => void handleLoadConsent()}>
-                      Unlock &amp; load consent (passkey)
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="button--secondary"
-                    disabled={busy}
-                    onClick={() => runAction(() => refreshDebug(sessionId))}
-                  >
-                    Refresh debug (passkey)
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="button--secondary"
+                  disabled={busy}
+                  onClick={() => runAction(() => refreshDebug(sessionId))}
+                >
+                  Refresh session debug (passkey)
+                </button>
               ) : null}
-            </section>
-          ) : null}
-
-          {consentView ? (
-            <div className="present-section present-section--consent">
-              <ConsentScreen
-                view={consentView}
-                selectedIds={selectedIds}
-                onToggleCandidate={toggleCandidate}
-                onApprove={() => runAction(() => handleConsent(true))}
-                onReject={() => runAction(() => handleConsent(false))}
-                busy={busy}
-                selectionError={selectionError}
-              />
+              {context ? <JsonPanel title="PresentationContext" data={context} /> : null}
+              {events ? <JsonPanel title="Session events" data={events} defaultOpen /> : null}
             </div>
-          ) : null}
-
-          {context ? (
-            <div className="present-section present-section--debug">
-              <JsonPanel title="PresentationContext" data={context} />
-            </div>
-          ) : null}
-
-          {events ? (
-            <div className="present-section present-section--debug">
-              <JsonPanel title="Session events" data={events} defaultOpen />
-            </div>
-          ) : null}
-        </div>
+          </details>
+        ) : null}
       </section>
     </AuthGate>
   );

@@ -1,6 +1,12 @@
 import type { UserDeviceRecord } from "../types/wallet";
-import type { AuthChallengeResponse } from "../types/fido2";
+import type { AuthChallengeResponse, Fido2AssertionPayload } from "../types/fido2";
 import { apiFetch } from "./client";
+
+export interface HolderSessionResponse {
+  sessionToken: string;
+  holderId: string;
+  expiresAt: string;
+}
 
 export function fetchAuthChallenge(
   holderId: string,
@@ -15,6 +21,15 @@ export function fetchAuthChallenge(
     `/api/v1/wallet/auth/challenge/${encodeURIComponent(holderId)}${query}`,
     { raw: true },
   );
+}
+
+export function createHolderSession(
+  assertion: Fido2AssertionPayload,
+): Promise<HolderSessionResponse> {
+  return apiFetch<HolderSessionResponse>("/api/v1/wallet/auth/session", {
+    method: "POST",
+    body: JSON.stringify(assertion),
+  });
 }
 
 export function registerDevice(

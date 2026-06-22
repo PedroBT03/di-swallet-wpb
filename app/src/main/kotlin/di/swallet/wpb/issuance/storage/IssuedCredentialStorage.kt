@@ -54,6 +54,7 @@ class JpaIssuedCredentialStorage(
     private val mdocDocTypeRegistry: MdocDocTypeRegistry,
     private val keyBindingRuntimeService: KeyBindingRuntimeService,
     private val credentialStatusParser: CredentialStatusParser,
+    private val supersessionService: IssuedCredentialSupersessionService,
 ) : IssuedCredentialStorage {
     /** Persists format-specific payload parts and registers key binding when a key is known. */
     override fun store(
@@ -70,6 +71,7 @@ class JpaIssuedCredentialStorage(
         }
 
         val credentialType = inferCredentialType(issued.credentialConfigurationId, issued.format)
+        supersessionService.supersedeActiveOfSameFamily(holderId, credentialType)
 
         val resolvedKey = walletKey
             ?: keyAliasHint?.let { walletKeyRepository.findByKeyAlias(it).orElse(null) }

@@ -112,7 +112,7 @@ export function deleteCredential(
   );
 }
 
-/** Revokes a WP-managed credential on the status list without deleting the row. */
+/** Revokes a credential (status list bit for WP-managed, wallet-local for OID4VCI). */
 export function revokeCredential(
   credentialId: number,
   authHeaders: Headers,

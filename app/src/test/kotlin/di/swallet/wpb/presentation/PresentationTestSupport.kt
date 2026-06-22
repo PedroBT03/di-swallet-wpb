@@ -10,6 +10,7 @@ import di.swallet.wpb.testWalletProperties
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocEffectiveDocTypeResolver
 import di.swallet.wpb.format.sdjwt.SdJwtDisclosureSelector
 import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.presentation.matching.DefaultCredentialMatcher
@@ -32,6 +33,7 @@ object PresentationTestSupport {
         repository,
         mdocCodec,
         mdocRegistry,
+        MdocEffectiveDocTypeResolver(mdocRegistry),
         disclosureCipher,
         disclosureSelector,
         demoMode = demoMode,

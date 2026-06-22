@@ -58,6 +58,73 @@ export interface PreparedAuthorization {
   wiaAttached: boolean;
 }
 
+export interface WiaStatusReference {
+  listId: string;
+  index: number;
+  uri: string;
+}
+
+export interface WalletInstanceAttestation {
+  jwt: string;
+  popJwt: string;
+  walletInstanceId: string;
+  walletName: string;
+  walletVersion: string;
+  walletLink?: string | null;
+  walletSolutionCertificationInformation: string;
+  cnfJkt: string;
+  clientStatus: WiaStatusReference;
+  tokenExpiresAt: string;
+  clientStatusExpiresAt: string;
+  issuedAt: string;
+  issuerScope?: string | null;
+}
+
+export interface WiaContext {
+  state: string;
+  attestation?: WalletInstanceAttestation | null;
+  nonceMismatchRetries?: number;
+  expiredRetries?: number;
+  lastErrorCode?: string | null;
+}
+
+export interface KaStatusReference {
+  listId: string;
+  index: number;
+  uri: string;
+}
+
+export interface KeyAttestation {
+  jwt: string;
+  keyId: string;
+  keyStorage: string;
+  certification: string;
+  attestedJkt: string;
+  status: KaStatusReference;
+  tokenExpiresAt: string;
+  statusExpiresAt: string;
+  issuedAt: string;
+  issuerScope?: string | null;
+  x5c?: string[];
+}
+
+export interface KaContext {
+  state: string;
+  attestation?: KeyAttestation | null;
+  lastErrorCode?: string | null;
+}
+
+export interface AuthorizedContext {
+  adapterSessionId: string;
+  accessTokenPresent: boolean;
+  refreshTokenPresent: boolean;
+  dpopUsed: boolean;
+  cNoncePresent: boolean;
+  authorizationServer?: string | null;
+  accessTokenCnfJkt?: string | null;
+  wiaCnfJkt?: string | null;
+}
+
 export interface IssuedCredentialSummary {
   credentialConfigurationId: string;
   format?: IssuanceCredentialFormat;
@@ -71,6 +138,9 @@ export interface IssuanceContext {
   credentialConfigurationIds: string[];
   resolvedOffer: ResolvedOffer | null;
   preparedAuthorization: PreparedAuthorization | null;
+  authorizedContext?: AuthorizedContext | null;
+  wia?: WiaContext | null;
+  ka?: KaContext | null;
   issuedCredentials: IssuedCredentialSummary[];
   deferredHandle: { transactionId: string } | null;
   error: IssuanceError | null;

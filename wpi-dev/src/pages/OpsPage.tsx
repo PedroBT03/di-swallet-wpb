@@ -129,7 +129,7 @@ export function OpsPage() {
         <div className="card">
           <h2 className="card__title">EUDI Trust Mark</h2>
           <p className="hint">
-            <code>GET /api/v1/wallet/trust-mark</code> — public view for wallet solution certification
+            <code>GET /api/v1/wallet/trust-mark</code>. Public view for wallet solution certification
             metadata. Remote resource fetch may warn in dev when URLs are placeholders.
           </p>
           <div className="toolbar toolbar--compact">

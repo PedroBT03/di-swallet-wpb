@@ -10,32 +10,35 @@ const navItems = [
   { to: "/privacy", label: "Privacy" },
   { to: "/ops", label: "Ops" },
   { to: "/pseudonyms", label: "Pseudonyms" },
-  { to: "/settings", label: "Settings" },
 ] as const;
 
 export function Layout() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="app-header__brand">
-          <span className="app-header__title">WPI Dev</span>
-          <span className="app-header__subtitle">DI-Swallet lab UI</span>
+        <div className="app-header__left">
+          <div className="app-header__brand">
+            <span className="app-header__title">WPI Dev</span>
+            <span className="app-header__subtitle">DI-Swallet lab UI</span>
+          </div>
+          <nav className="app-nav" aria-label="Main">
+            {navItems.map(({ to, label, ...rest }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  isActive ? "app-nav__link app-nav__link--active" : "app-nav__link"
+                }
+                {...rest}
+              >
+                {label}
+              </NavLink>
+            ))}
+          </nav>
         </div>
-        <AuthStatus />
-        <nav className="app-nav" aria-label="Main">
-          {navItems.map(({ to, label, ...rest }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                isActive ? "app-nav__link app-nav__link--active" : "app-nav__link"
-              }
-              {...rest}
-            >
-              {label}
-            </NavLink>
-          ))}
-        </nav>
+        <div className="app-header__right">
+          <AuthStatus />
+        </div>
       </header>
       <main className="app-main">
         <Outlet />

@@ -27,8 +27,11 @@ import di.swallet.wpb.transactionlog.TransactionLogTestSupport
 import di.swallet.wpb.ka.attestation.KeyAttestationProvider
 import di.swallet.wpb.ka.validation.KeyAttestationValidationException
 import di.swallet.wpb.ka.validation.KeyAttestationValidationService
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
 import di.swallet.wpb.format.mdoc.MdocTestSupport
+import di.swallet.wpb.format.sdjwt.SdJwtService
+import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.openid4vci.adapter.SimulatedOpenId4VciGateway
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.IssuanceConsentSubmission
@@ -184,6 +187,8 @@ class DefaultIssuanceFlowOrchestratorTest {
                 properties,
                 MdocDocTypeRegistry(),
                 mdocCodec,
+                SdJwtService(ObjectMapper()),
+                ObjectMapper(),
             ),
             repository = InMemoryIssuanceSessionRepository(),
             trustValidator = DefaultIssuerTrustValidator(properties, IssuerSignedMetadataValidator(properties)),
@@ -206,7 +211,10 @@ class DefaultIssuanceFlowOrchestratorTest {
             issuanceConsentViewBuilder = IssuanceConsentViewBuilder(
                 consentProperties,
                 pendingStore,
-                IssuedCredentialPreviewParser(),
+                IssuedCredentialPreviewParser(
+                    SdJwtService(ObjectMapper()),
+                    mock(MdocCredentialCodec::class.java),
+                ),
             ),
             consentSessionGuard = ConsentSessionGuard(),
             transactionLogger = TransactionLogTestSupport.noopTransactionLogger(),

@@ -1,4 +1,4 @@
-# WPI Dev — feature traceability
+# WPI Dev: feature traceability
 
 Maps WPB capabilities (see repo `README.md`) to **wpi-dev** screens and API clients.
 
@@ -8,7 +8,7 @@ Maps WPB capabilities (see repo `README.md`) to **wpi-dev** screens and API clie
 | FIDO2 register | `POST /auth/register/{userId}` | Onboarding (`/onboarding`) | `api/auth.ts` |
 | FIDO2 challenge | `GET /auth/challenge/{userId}` | Login, protected actions | `api/auth.ts` |
 | Wallet init | `POST /wallet/init` | Wallet | `api/wallet.ts` |
-| Wallet summary | `GET /wallet/summary/{holderId}` | Wallet (Unlock & sync) | `api/wallet.ts` |
+| Wallet summary | `GET /wallet/summary/{holderId}` | Wallet (Sync from server) | `api/wallet.ts` |
 | HSM keys | `POST/GET /wallet/keys/{holderId}` | Wallet | `api/wallet.ts` |
 | Revoke HSM key | `POST /wallet/keys/{holderId}/revoke` | Wallet | `api/wallet.ts` |
 | List credentials | `GET /wallet/credentials/{holderId}` | Wallet | `api/wallet.ts` |

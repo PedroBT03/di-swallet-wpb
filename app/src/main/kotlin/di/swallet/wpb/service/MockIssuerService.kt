@@ -17,18 +17,5 @@ class MockIssuerService {
     /**
      * Returns a static set of PID-like claims for the given user ID.
      */
-    fun fetchUserData(userId: String): Map<String, Any> {
-        return mapOf(
-            "given_name" to "Pedro",
-            "family_name" to "Tavares",
-            "birthdate" to "2000-01-01",
-            "nationality" to "PT",
-            "nationalities" to listOf("PT", "ES"),
-            "address" to mapOf(
-                "locality" to "Lisbon",
-                "country" to "PT",
-            ),
-            "userId" to userId,
-        )
-    }
+    fun fetchUserData(userId: String): Map<String, Any> = DemoAttestationClaims.pidClaims(userId)
 }

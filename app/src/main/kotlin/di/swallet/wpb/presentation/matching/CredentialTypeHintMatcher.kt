@@ -28,7 +28,18 @@ object CredentialTypeHintMatcher {
     /** Returns true when [hints] are empty or any hint matches [docType]. */
     fun mdocTypeMatches(hints: List<String>, docType: String): Boolean {
         if (hints.isEmpty()) return true
-        return hints.any { hint -> equivalent(hint, docType) }
+        return hints.any { hint -> equivalent(hint, docType) || mdlHintMatchesStoredType(hint, docType) }
+    }
+
+    private fun mdlHintMatchesStoredType(hint: String, docType: String): Boolean {
+        if (!isMdlHint(hint)) return false
+        return CredentialTypeLabels.isMdlType(docType) ||
+            docType.equals("org.iso.18013.5.1.mDL", ignoreCase = true)
+    }
+
+    private fun isMdlHint(hint: String): Boolean {
+        val normalized = hint.lowercase()
+        return normalized.contains("18013") || normalized.contains("mdl")
     }
 
     private fun equivalent(hint: String, type: String): Boolean {

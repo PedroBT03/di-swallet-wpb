@@ -4,10 +4,12 @@
 
 package di.swallet.wpb.presentation.matching
 
+import di.swallet.wpb.domain.CredentialRevocationState
 import di.swallet.wpb.domain.WalletCredential
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocEffectiveDocTypeResolver
 import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.format.sdjwt.SdJwtDisclosureSelector
 import di.swallet.wpb.format.sdjwt.SdJwtService
@@ -39,6 +41,7 @@ class DefaultCredentialMatcherTest {
     private val binding = MdocTestSupport.holderBinding()
     private val mdocCodec = MdocTestSupport.stack(holderBindings = listOf(binding)).codec
     private val mdocRegistry = MdocDocTypeRegistry()
+    private val mdocDocTypeResolver = MdocEffectiveDocTypeResolver(mdocRegistry)
     private val objectMapper = ObjectMapper()
     private val sdJwtService = SdJwtService(objectMapper)
     private val disclosureSelector = SdJwtDisclosureSelector(objectMapper, sdJwtService)
@@ -55,6 +58,7 @@ class DefaultCredentialMatcherTest {
         repository,
         mdocCodec,
         mdocRegistry,
+        mdocDocTypeResolver,
         disclosureCipher,
         disclosureSelector,
         demoMode = demoMode,
@@ -113,6 +117,30 @@ class DefaultCredentialMatcherTest {
         assertEquals("pid", candidate.queryId)
         assertEquals(listOf("given_name"), candidate.requestedClaims)
         assertEquals(42L, candidate.credentialId)
+    }
+
+    /**
+     * Revoked PID still matches the DCQL query for diagnostics, but is excluded from active candidates.
+     */
+    @Test
+    fun `hasRevokedMatches detects revoked PID that would satisfy query`() {
+        val disc = sdJwtService.createDisclosure("given_name", "Pedro")
+        val encrypted = disclosureCipher.encrypt(listOf(disc))
+        val credential = WalletCredential(
+            id = 42L,
+            userId = "holder-1",
+            credentialType = "PID",
+            encodedData = "jwt",
+            encryptedDisclosures = encrypted,
+            revocationState = CredentialRevocationState.REVOKED,
+        )
+        `when`(repository.findByUserId("holder-1")).thenReturn(listOf(credential))
+
+        val dcql = """{"credentials":[{"id":"pid","format":"vc+sd-jwt","claims":[{"path":["given_name"]}]}]}"""
+        val matcher = matcher(demoMode = false)
+        val ctx = context(dcql)
+        assertTrue(matcher.hasRevokedMatches(ctx))
+        assertTrue(matcher.match(ctx).credentialCandidates.isEmpty())
     }
 
     /**
@@ -218,6 +246,81 @@ class DefaultCredentialMatcherTest {
         )
         assertEquals(1, result.credentialCandidates.size)
         assertEquals(CredentialFormat.MDOC, result.credentialCandidates.first().format)
+    }
+
+    /**
+     * Wallet stores canonical type MDL while DCQL requests org.iso.18013.5.1.mDL.
+     */
+    @Test
+    fun `matches mdoc when wallet stores canonical MDL label`() {
+        val credential = WalletCredential(
+            id = 9L,
+            userId = "holder-1",
+            credentialType = "MDL",
+            encodedData = mdocCodec.encode(
+                MdocCredentialDocument(
+                    docType = "org.iso.18013.5.1.mDL",
+                    namespace = "org.iso.18013.5.1",
+                    claims = mapOf("driving_privileges" to listOf("B")),
+                ),
+                binding.deviceCoseKey,
+            ),
+            encryptedDisclosures = "",
+        )
+        `when`(repository.findByUserId("holder-1")).thenReturn(listOf(credential))
+
+        val result = matcher(demoMode = false).match(
+            context("""{"credentials":[{"id":"mdl","format":"mso_mdoc","meta":{"doctype_values":["org.iso.18013.5.1.mDL"]},"claims":[{"path":["driving_privileges"]}]}]}"""),
+        ).credentialCandidates.walletBackedOnly()
+
+        assertEquals(1, result.size)
+        assertEquals(9L, result.single().credentialId)
+        assertEquals("org.iso.18013.5.1.mDL", result.single().credentialType)
+    }
+
+    /**
+     * Multiple mDL credentials in the wallet each become a separate consent candidate for the same query.
+     */
+    @Test
+    fun `returns all matching mdoc credentials for one query`() {
+        fun mdlCredential(id: Long, givenName: String) = WalletCredential(
+            id = id,
+            userId = "holder-1",
+            credentialType = "org.iso.18013.5.1.mDL",
+            encodedData = mdocCodec.encode(
+                MdocCredentialDocument(
+                    docType = "org.iso.18013.5.1.mDL",
+                    namespace = "org.iso.18013.5.1",
+                    claims = mapOf("given_name" to givenName, "driving_privileges" to listOf("B")),
+                ),
+                binding.deviceCoseKey,
+            ),
+            encryptedDisclosures = "",
+        )
+        `when`(repository.findByUserId("holder-1")).thenReturn(
+            listOf(mdlCredential(10L, "Alice"), mdlCredential(11L, "Bob")),
+        )
+
+        val result = matcher(demoMode = true).match(
+            context("""{"credentials":[{"id":"mdl","format":"mso_mdoc","meta":{"doctype_values":["org.iso.18013.5.1.mDL"]},"claims":[{"path":["driving_privileges"]}]}]}"""),
+        ).credentialCandidates.walletBackedOnly()
+
+        assertEquals(2, result.size)
+        assertEquals(setOf(10L, 11L), result.mapNotNull { it.credentialId }.toSet())
+    }
+
+    /**
+     * Demo-mode synthetic candidates are excluded when filtering to wallet-backed credentials only.
+     */
+    @Test
+    fun `walletBackedOnly drops synthetic demo candidates`() {
+        `when`(repository.findByUserId("holder-1")).thenReturn(emptyList())
+        val result = matcher(demoMode = true).match(
+            context("""{"query":[{"type":"Credential","fields":["name"]}]}"""),
+        )
+        assertEquals(1, result.credentialCandidates.size)
+        assertEquals(null, result.credentialCandidates.single().credentialId)
+        assertTrue(result.credentialCandidates.walletBackedOnly().isEmpty())
     }
 
     /**

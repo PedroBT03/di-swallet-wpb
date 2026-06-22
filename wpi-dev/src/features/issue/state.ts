@@ -74,9 +74,9 @@ export function continueActionLabel(ctx: IssuanceContext): string | null {
     case "OFFER_RESOLVED":
       return flowKind(ctx) === "PRE_AUTHORIZED_CODE"
         ? "Complete pre-authorization"
-        : "Prepare authorization";
+        : "Prepare issuer authorization";
     case "AUTHORIZATION_PREPARED":
-      return "Exchange authorization code";
+      return null;
     case "AUTHORIZED":
       return "Request credential";
     case "DEFERRED_PENDING":

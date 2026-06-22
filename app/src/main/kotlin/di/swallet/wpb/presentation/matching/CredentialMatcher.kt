@@ -14,4 +14,9 @@ interface CredentialMatcher {
      * Populates credential candidates on the context from stored wallet credentials.
      */
     fun match(context: PresentationContext): PresentationContext
+
+    /**
+     * Returns true when the wallet holds revoked credentials that would match the verifier request.
+     */
+    fun hasRevokedMatches(context: PresentationContext): Boolean
 }

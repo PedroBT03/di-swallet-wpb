@@ -71,9 +71,9 @@ export function IssuanceConsentScreen({
               <li key={claim.name}>
                 <code>{claim.name}</code>
                 {claim.previewAvailable && claim.value != null ? (
-                  <span className="hint"> — {claim.value}</span>
+                  <span className="hint">: {claim.value}</span>
                 ) : (
-                  <span className="hint"> — (preview unavailable)</span>
+                  <span className="hint"> (preview unavailable)</span>
                 )}
               </li>
             ))}

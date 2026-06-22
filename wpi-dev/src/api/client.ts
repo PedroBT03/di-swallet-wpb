@@ -11,7 +11,7 @@ export class ApiError extends Error {
 }
 
 export type ApiFetchOptions = RequestInit & {
-  /** When true, do not set Content-Type or parse JSON (e.g. for GET without body). */
+  /** When true, do not assume JSON response parsing (e.g. plain text or JWE exports). */
   raw?: boolean;
 };
 
@@ -23,7 +23,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   const { raw = false, headers: initHeaders, ...init } = options;
 
   const headers = new Headers(initHeaders);
-  if (!raw && init.body != null && !headers.has("Content-Type")) {
+  if (init.body != null && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 

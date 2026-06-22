@@ -8,6 +8,7 @@ import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocCredentialDocument
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocEffectiveDocTypeResolver
 import di.swallet.wpb.format.mdoc.MdocOpenId4VpHandover
 import di.swallet.wpb.format.mdoc.MdocCoseKeyMaterial
 import di.swallet.wpb.presentation.domain.SelectedCredential
@@ -24,6 +25,7 @@ class MdocVpBuilder(
     private val walletCredentialRepository: WalletCredentialRepository,
     private val mdocCredentialCodec: MdocCredentialCodec,
     private val mdocDocTypeRegistry: MdocDocTypeRegistry,
+    private val mdocEffectiveDocTypeResolver: MdocEffectiveDocTypeResolver,
     private val credentialBindingValidationService: CredentialBindingValidationService? = null,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -42,7 +44,7 @@ class MdocVpBuilder(
         credentialBindingValidationService?.requireBinding(credentialId, CredentialBindingFormat.MDOC)
         val decoded = mdocCredentialCodec.decode(credential.encodedData)
             ?: throw IllegalStateException("Selected credential $credentialId is not a decodable mdoc payload")
-        val effectiveDocType = if (decoded.docType == "unknown") credential.credentialType else decoded.docType
+        val effectiveDocType = mdocEffectiveDocTypeResolver.resolve(credential.credentialType, decoded)
         val definition = mdocDocTypeRegistry.resolve(effectiveDocType)
             ?: throw IllegalStateException("Unsupported mdoc docType '${decoded.docType}'")
 

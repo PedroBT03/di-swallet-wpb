@@ -29,11 +29,24 @@ import org.mockito.Mockito.`when`
 
 class JpaIssuedCredentialStorageTest {
 
+    private val supersessionService = mock(IssuedCredentialSupersessionService::class.java)
+
     /** Returns a disclosure cipher configured with standard test wallet properties. */
     private fun cipher() = DisclosureCipherService(testWalletProperties())
     private val binding = MdocTestSupport.holderBinding()
     private val mdocCodec = MdocTestSupport.stack(holderBindings = listOf(binding)).codec
     private val mdocRegistry = MdocDocTypeRegistry()
+
+    private fun storage(repo: WalletCredentialRepository) = JpaIssuedCredentialStorage(
+        repo,
+        mock(WalletKeyRepository::class.java),
+        cipher(),
+        mdocCodec,
+        mdocRegistry,
+        mock(KeyBindingRuntimeService::class.java),
+        RevocationTestSupport.credentialStatusParser(),
+        supersessionService,
+    )
 
     /**
      * SD-JWT payload with two disclosures is split into JWT body plus encrypted disclosure blob; decrypt round-trips the original list.
@@ -52,15 +65,7 @@ class JpaIssuedCredentialStorageTest {
             )
         }
 
-        val storage = JpaIssuedCredentialStorage(
-            repo,
-            mock(WalletKeyRepository::class.java),
-            cipher(),
-            mdocCodec,
-            mdocRegistry,
-            mock(KeyBindingRuntimeService::class.java),
-            RevocationTestSupport.credentialStatusParser(),
-        )
+        val storage = storage(repo)
         val issued = IssuedCredential(
             credentialConfigurationId = "pid_jwt",
             format = IssuanceCredentialFormat.SD_JWT_VC,
@@ -101,15 +106,7 @@ class JpaIssuedCredentialStorageTest {
         }
         `when`(repo.findByUserId("holder-2")).thenAnswer { listOfNotNull(persisted) }
 
-        val storage = JpaIssuedCredentialStorage(
-            repo,
-            mock(WalletKeyRepository::class.java),
-            cipher(),
-            mdocCodec,
-            mdocRegistry,
-            mock(KeyBindingRuntimeService::class.java),
-            RevocationTestSupport.credentialStatusParser(),
-        )
+        val storage = storage(repo)
         val issuedPayload = mdocCodec.encode(
             MdocCredentialDocument(
                 docType = "org.iso.18013.5.1.mDL",
@@ -148,15 +145,7 @@ class JpaIssuedCredentialStorageTest {
     @Test
     fun `invalid mdoc payload is rejected instead of silently rebuilt`() {
         val repo = mock(WalletCredentialRepository::class.java)
-        val storage = JpaIssuedCredentialStorage(
-            repo,
-            mock(WalletKeyRepository::class.java),
-            cipher(),
-            mdocCodec,
-            mdocRegistry,
-            mock(KeyBindingRuntimeService::class.java),
-            RevocationTestSupport.credentialStatusParser(),
-        )
+        val storage = storage(repo)
         val issued = IssuedCredential(
             credentialConfigurationId = "org.iso.18013.5.1.mDL",
             format = IssuanceCredentialFormat.MSO_MDOC,

@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import di.swallet.wpb.config.ConsentProperties
 import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.format.mdoc.MdocCredentialCodec
+import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.config.WalletProperties
 import di.swallet.wpb.testWalletProperties
@@ -83,7 +85,10 @@ object ConsentTestSupport {
     ): IssuanceConsentViewBuilder = IssuanceConsentViewBuilder(
         properties,
         pendingStore,
-        IssuedCredentialPreviewParser(),
+        IssuedCredentialPreviewParser(
+            SdJwtService(com.fasterxml.jackson.databind.ObjectMapper()),
+            mock(MdocCredentialCodec::class.java),
+        ),
     )
 
     data class PresentationOrchestratorConsentDeps(

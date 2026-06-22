@@ -6,12 +6,12 @@ Step-by-step flows for thesis demonstrations. Each scenario assumes WPB on `:808
 
 1. `./gradlew :app:bootRun` from repo root (`dev` profile).
 2. `cd wpi-dev && npm run dev`.
-3. **Onboarding** — register a new holder + passkey.
-4. **Wallet** — Initialize wallet unit → Ensure HSM key.
+3. **Onboarding**: register a new holder + passkey.
+4. **Wallet**: Initialize wallet unit → Ensure HSM key.
 
 ---
 
-## S1 — Wallet core (~3 min)
+## S1: Wallet core (~3 min)
 
 | Step | Screen | Action |
 |------|--------|--------|
@@ -26,41 +26,41 @@ Step-by-step flows for thesis demonstrations. Each scenario assumes WPB on `:808
 
 ---
 
-## S2 — OpenID4VP presentation (~4 min)
+## S2: OpenID4VP presentation (~4 min)
 
 | Step | Screen | Action |
 |------|--------|--------|
-| 1 | Wallet | Issue demo PID if needed |
-| 2 | Present | Use **PID selective** scenario → Start |
+| 1 | Wallet | Issue demo PID or mDL (Issue page) if needed |
+| 2 | Present | Select PID or mDL → use selective scenario → Start |
 | 3 | Present | Approve consent (passkey) |
-| 4 | Log | Unlock & load transactions → open row |
+| 4 | Log | Load transactions → open row |
 
 Requires verifier emulator on `:8081` and `wpb.openid4vp.demo-mode=true`.
 
 ---
 
-## S3 — OpenID4VCI issuance (~4 min)
+## S3: OpenID4VCI issuance (~4 min)
 
 | Step | Screen | Action |
 |------|--------|--------|
-| 1 | Issue | **PID — pre-authorized** → Resolve offer |
-| 2 | Issue | Continue through pre-auth (tx_code `1234`) |
-| 3 | Issue | Unlock & load storage consent → Approve |
-| 4 | Wallet | Unlock & sync — new credential appears |
+| 1 | Issue | **Issue PID** → Start issuance |
+| 2 | Issue | Continue → **Simulate CMD login** → Continue (credential) |
+| 3 | Issue | Review storage consent → Approve |
+| 4 | Wallet | Sync from server: new credential appears |
 
 ---
 
-## S4 — Deferred issuance (~3 min)
+## S4: Deferred issuance (~3 min)
 
 1. Enable on WPB: `wpb.openid4vci.simulator.always-defer=true` (see `application-dev.properties` comment).
-2. **Issue** → **PID — deferred issuance** scenario.
+2. **Issue** → **PID: deferred issuance** scenario.
 3. Continue until state `DEFERRED_PENDING` → banner explains polling.
 4. Continue again to poll `POST /deferred/query` until `DEFERRED_ISSUED`.
 5. Complete storage consent and sync wallet.
 
 ---
 
-## S5 — Privacy (~3 min)
+## S5: Privacy (~3 min)
 
 | Step | Screen | Action |
 |------|--------|--------|
@@ -70,7 +70,7 @@ Requires verifier emulator on `:8081` and `wpb.openid4vp.demo-mode=true`.
 
 ---
 
-## S6 — Ops & pseudonyms (~2 min)
+## S6: Ops & pseudonyms (~2 min)
 
 | Step | Screen | Action |
 |------|--------|--------|
@@ -80,11 +80,11 @@ Requires verifier emulator on `:8081` and `wpb.openid4vp.demo-mode=true`.
 
 ---
 
-## S7 — Manual SD-JWT & wallet unit revoke (~2 min)
+## S7: Manual SD-JWT & wallet unit revoke (~2 min)
 
 | Step | Screen | Action |
 |------|--------|--------|
-| 1 | Wallet | SD-JWT presentation — select credential, disclose `given_name, family_name` |
+| 1 | Wallet | SD-JWT presentation: select credential, disclose `given_name, family_name` |
 | 2 | Wallet | Revoke wallet unit (cascades keys/credentials) |
 | 3 | Ops | Confirm indices show REVOKED on status list |
 

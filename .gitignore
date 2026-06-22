@@ -42,6 +42,8 @@ logs/
 
 # Virtual Environments
 .venv/
+__pycache__/
+*.py[cod]
 
 # PIC pdf
 DI_Swallet_EU_Digital_Identity_Server_Side_Wallet_Architecture_1.pdf

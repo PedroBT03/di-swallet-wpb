@@ -5,6 +5,8 @@ const HOLDER_ID_KEY = "wpi-dev.holderId";
 const CREDENTIAL_ID_KEY = "wpi-dev.credentialId";
 const USER_DEVICE_ID_KEY = "wpi-dev.userDeviceId";
 const REMEMBERED_SESSION_KEY = "wpi-dev.rememberedSession";
+const HOLDER_SESSION_TOKEN_KEY = "wpi-dev.holderSessionToken";
+const HOLDER_SESSION_EXPIRES_KEY = "wpi-dev.holderSessionExpires";
 
 export interface HolderSession {
   holderId: string;
@@ -64,6 +66,40 @@ export function clearSession(): void {
   sessionStorage.removeItem(HOLDER_ID_KEY);
   sessionStorage.removeItem(CREDENTIAL_ID_KEY);
   sessionStorage.removeItem(USER_DEVICE_ID_KEY);
+  clearHolderSessionToken();
+}
+
+export function saveHolderSessionToken(sessionToken: string, expiresAt: string): void {
+  sessionStorage.setItem(HOLDER_SESSION_TOKEN_KEY, sessionToken);
+  sessionStorage.setItem(HOLDER_SESSION_EXPIRES_KEY, expiresAt);
+}
+
+export function loadHolderSessionToken(): string | null {
+  const token = sessionStorage.getItem(HOLDER_SESSION_TOKEN_KEY);
+  const expiresAt = sessionStorage.getItem(HOLDER_SESSION_EXPIRES_KEY);
+  if (!token || !expiresAt) {
+    return null;
+  }
+  const expiresMs = Date.parse(expiresAt);
+  if (!Number.isFinite(expiresMs) || Date.now() >= expiresMs) {
+    clearHolderSessionToken();
+    return null;
+  }
+  return token;
+}
+
+export function clearHolderSessionToken(): void {
+  sessionStorage.removeItem(HOLDER_SESSION_TOKEN_KEY);
+  sessionStorage.removeItem(HOLDER_SESSION_EXPIRES_KEY);
+}
+
+/** Builds headers with a holder session token for dashboard/read APIs (WIAM_15). */
+export function withSessionAuth(headers: Headers = new Headers()): Headers {
+  const token = loadHolderSessionToken();
+  if (token) {
+    headers.set("X-Wallet-Session", token);
+  }
+  return headers;
 }
 
 export function forgetRememberedSession(): void {

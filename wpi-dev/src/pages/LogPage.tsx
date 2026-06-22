@@ -28,7 +28,7 @@ import type { TransactionLogSummary, Ts10Transaction } from "../types/transactio
 import { formatApiError } from "../utils/apiError";
 
 export function LogPage() {
-  const { session, withProtectedAction, busy, clearError } = useAuthedApi();
+  const { session, withApiAuth, withSoleControl, busy, clearError } = useAuthedApi();
   const holderId = session?.holderId.trim() ?? "";
 
   const [dekMode, setDekMode] = useState<"server" | "holder" | null>(null);
@@ -87,7 +87,7 @@ export function LogPage() {
   }
 
   async function loadList() {
-    await withProtectedAction(async (headers) => {
+    await withApiAuth(async (headers) => {
       const list = await fetchTransactions(holderId, headers);
       setTransactions(sortNewestFirst(list));
       setSelectedIds(list.map((entry) => entry.transactionId));
@@ -101,7 +101,7 @@ export function LogPage() {
       setError("Unlock the transaction log with your passphrase first.");
       return;
     }
-    await withProtectedAction(async (headers) => {
+    await withApiAuth(async (headers) => {
       const tx = await fetchTransaction(holderId, transactionId, headers, logKey);
       setActiveId(transactionId);
       setDetail(tx);
@@ -110,7 +110,7 @@ export function LogPage() {
   }
 
   async function markDeleted(transactionId: string) {
-    await withProtectedAction(async (headers) => {
+    await withSoleControl(async (headers) => {
       const result = await deleteTransaction(holderId, transactionId, headers);
       setLastRaw(result);
       await loadList();
@@ -131,7 +131,7 @@ export function LogPage() {
       setError("Unlock the transaction log with your passphrase first.");
       return;
     }
-    await withProtectedAction(async (headers) => {
+    await withApiAuth(async (headers) => {
       const jwe = await exportTransactionsJwe(
         {
           holderId,
@@ -174,11 +174,10 @@ export function LogPage() {
             DEK mode: <code>{dekMode ?? "unknown"}</code>
             {holderDekMode ? (
               <>
-                {" "}
-                — WPB cannot decrypt payloads without <code>X-Wallet-Log-Key</code> from this UI.
+                . WPB cannot decrypt payloads without <code>X-Wallet-Log-Key</code> from this UI.
               </>
             ) : (
-              <> — server-side DEK (typical dev profile).</>
+              <>. Server-side DEK (typical dev profile).</>
             )}
           </p>
           {holderDekMode ? (
@@ -218,7 +217,7 @@ export function LogPage() {
               disabled={busy || !holderId}
               onClick={() => void runAction(loadList)}
             >
-              Unlock &amp; load transactions
+              Load transactions
             </button>
           </div>
         </div>

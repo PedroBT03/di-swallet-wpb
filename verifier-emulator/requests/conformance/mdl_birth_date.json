@@ -1,0 +1,18 @@
+{
+  "client_id": "verifier-demo-client",
+  "response_type": "vp_token",
+  "response_mode": "direct_post",
+  "response_uri": "http://127.0.0.1:8081/direct_post",
+  "state": "conformance-mdl-birth-date",
+  "nonce": "nonce-conformance-mdl-birth-date",
+  "dcql": {
+    "credentials": [
+      {
+        "id": "mdl",
+        "format": "mso_mdoc",
+        "meta": { "doctype_values": ["org.iso.18013.5.1.mDL"] },
+        "claims": [{ "path": ["birth_date"] }]
+      }
+    ]
+  }
+}

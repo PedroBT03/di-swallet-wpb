@@ -23,7 +23,7 @@ import { formatApiError } from "../utils/apiError";
 type PrivacyTab = "deletion" | "dpa";
 
 export function PrivacyPage() {
-  const { session, withProtectedAction, busy, clearError } = useAuthedApi();
+  const { session, withApiAuth, busy, clearError } = useAuthedApi();
   const holderId = session?.holderId.trim() ?? "";
 
   const [tab, setTab] = useState<PrivacyTab>("deletion");
@@ -48,7 +48,7 @@ export function PrivacyPage() {
   );
 
   async function loadDeletions() {
-    await withProtectedAction(async (headers) => {
+    await withApiAuth(async (headers) => {
       const list = await fetchEligibleDeletions(holderId, headers);
       setEligibleDeletions(list);
       setDeletionResult(null);
@@ -57,7 +57,7 @@ export function PrivacyPage() {
   }
 
   async function loadDpa() {
-    await withProtectedAction(async (headers) => {
+    await withApiAuth(async (headers) => {
       const list = await fetchEligibleDpaReports(holderId, headers);
       setEligibleDpa(list);
       setDpaResult(null);
@@ -66,7 +66,7 @@ export function PrivacyPage() {
   }
 
   async function requestDeletion(presentationTransactionId: string) {
-    await withProtectedAction(async (headers) => {
+    await withApiAuth(async (headers) => {
       const result = await initiateDeletion(
         {
           holderId,
@@ -81,7 +81,7 @@ export function PrivacyPage() {
   }
 
   async function reportDpa(presentationTransactionId: string) {
-    await withProtectedAction(async (headers) => {
+    await withApiAuth(async (headers) => {
       const result = await initiateDpaReport(
         {
           holderId,
@@ -130,7 +130,7 @@ export function PrivacyPage() {
               <h2 className="card__title">Eligible presentations</h2>
               <p className="hint">
                 Completed presentations that can be used to request erasure from the relying party.
-                Request deletion returns mailto/web actions — it does not remove PIDs from your
+                Request deletion returns mailto/web actions. It does not remove PIDs from your
                 wallet. If the log has no RP contacts, WPB looks up current contacts from the RP
                 registry automatically.
               </p>
@@ -140,7 +140,7 @@ export function PrivacyPage() {
                   disabled={busy || !holderId}
                   onClick={() => void runAction(loadDeletions)}
                 >
-                  Unlock &amp; load eligible
+                  Load eligible
                 </button>
               </div>
               {eligibleDeletions ? (
@@ -164,7 +164,7 @@ export function PrivacyPage() {
                             Claims:{" "}
                             {item.presentedClaims
                               .flatMap((claim) => claim.claims)
-                              .join(", ") || "—"}
+                              .join(", ") || "n/a"}
                           </div>
                         </div>
                         <button
@@ -215,14 +215,14 @@ export function PrivacyPage() {
                   disabled={busy || !holderId}
                   onClick={() => void runAction(loadDpa)}
                 >
-                  Unlock &amp; load eligible
+                  Load eligible
                 </button>
               </div>
               {eligibleDpa ? (
                 eligibleDpa.length === 0 ? (
                   <p className="hint">
                     No eligible presentations. You need at least one <strong>Presentation</strong>{" "}
-                    transaction in the log — run <Link to="/present">Present</Link> first, then
+                    transaction in the log. Run <Link to="/present">Present</Link> first, then
                     reload.
                   </p>
                 ) : (
@@ -268,7 +268,7 @@ export function PrivacyPage() {
                       <dt>DNS name</dt>
                       <dd>
                         {dpaResult.dnsName}
-                        {dpaResult.dnsNameSource ? ` — ${dpaResult.dnsNameSource}` : ""}
+                        {dpaResult.dnsNameSource ? ` (${dpaResult.dnsNameSource})` : ""}
                       </dd>
                     </div>
                   ) : null}

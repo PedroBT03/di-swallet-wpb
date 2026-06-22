@@ -4,6 +4,7 @@
 
 package di.swallet.wpb.consent
 
+import di.swallet.wpb.domain.CredentialTypeLabels
 import di.swallet.wpb.presentation.domain.CredentialCandidate
 import di.swallet.wpb.presentation.domain.CredentialFormat
 import org.springframework.stereotype.Component
@@ -24,13 +25,13 @@ class CredentialChoiceGrouper {
             val requiresUserSelection = requiresExplicitSelection(queryCandidates)
             CredentialChoiceGroup(
                 queryId = queryId,
-                credentialType = first.credentialType,
+                credentialType = CredentialTypeLabels.displayLabel(first.credentialType),
                 format = first.format,
                 candidates = queryCandidates.map { candidate ->
                     CredentialChoiceOption(
                         candidateId = candidate.candidateId,
                         credentialId = candidate.credentialId,
-                        label = buildLabel(candidate),
+                        label = buildLabel(candidate, showCredentialId = queryCandidates.size > 1),
                         deviceBound = false,
                     )
                 },
@@ -51,14 +52,14 @@ class CredentialChoiceGrouper {
     }
 
     /**
-     * Builds a short display label from credential type, format, and optional id suffix.
+     * Builds a holder-facing label; omits internal ids when only one credential is available.
      */
-    private fun buildLabel(candidate: CredentialCandidate): String {
-        val formatLabel = when (candidate.format) {
-            CredentialFormat.SD_JWT -> "SD-JWT"
-            CredentialFormat.MDOC -> "mDoc"
+    private fun buildLabel(candidate: CredentialCandidate, showCredentialId: Boolean): String {
+        val typeLabel = CredentialTypeLabels.displayLabel(candidate.credentialType)
+        if (!showCredentialId) {
+            return typeLabel
         }
         val idSuffix = candidate.credentialId?.let { " #$it" }.orEmpty()
-        return "${candidate.credentialType} ($formatLabel)$idSuffix"
+        return "$typeLabel$idSuffix"
     }
 }

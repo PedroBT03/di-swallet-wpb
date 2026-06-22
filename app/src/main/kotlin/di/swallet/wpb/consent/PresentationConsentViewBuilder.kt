@@ -109,15 +109,16 @@ class PresentationConsentViewBuilder(
 
     /**
      * Looks up each candidate credential and sets whether it is device-bound.
+     * Drops synthetic demo candidates and credentials removed from the wallet since matching.
      */
     private fun enrichDeviceBound(groups: List<CredentialChoiceGroup>): List<CredentialChoiceGroup> =
         groups.map { group ->
             group.copy(
-                candidates = group.candidates.map { option ->
-                    val deviceBound = option.credentialId?.let { id ->
-                        walletCredentialRepository.findById(id).map { it.deviceBound }.orElse(false)
-                    } ?: false
-                    option.copy(deviceBound = deviceBound)
+                candidates = group.candidates.mapNotNull { option ->
+                    val credentialId = option.credentialId ?: return@mapNotNull null
+                    val credential = walletCredentialRepository.findById(credentialId).orElse(null)
+                        ?: return@mapNotNull null
+                    option.copy(deviceBound = credential.deviceBound)
                 },
             )
         }

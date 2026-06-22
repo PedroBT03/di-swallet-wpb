@@ -20,8 +20,8 @@ import java.util.*
 class WalletVerificationIntegrityTest : BaseIntegrationTest() {
 
     /**
-     * Runs wallet init, key creation, SD-JWT issuance, selective presentation of nationality
-     * only, and mock-RP verification, expecting verified claims to include nationality but not given_name.
+     * Runs wallet init, key creation, SD-JWT issuance, selective presentation of nationalities
+     * only, and mock-RP verification, expecting verified claims to include nationalities but not given_name.
      */
     @Test
     @Suppress("UNCHECKED_CAST")
@@ -53,7 +53,7 @@ class WalletVerificationIntegrityTest : BaseIntegrationTest() {
 
         // Step 3: Selective Presentation. Filter disclosures
         logger.info("Step 3: Selective Presentation. Handshake and presentation filtering")
-        val presRequest = PresentationRequest(claimsToDisclose = listOf("nationality"))
+        val presRequest = PresentationRequest(claimsToDisclose = listOf("nationalities"))
         val presResponse = restTemplate.postForEntity(
             "/api/v1/wallet/credentials/$credentialId/presentation",
             HttpEntity(presRequest, getDynamicHeaders(testUserId)),
@@ -72,7 +72,7 @@ class WalletVerificationIntegrityTest : BaseIntegrationTest() {
         val responseBody = verifyResponse.body as Map<String, Any>
         val verifiedClaims = responseBody["verifiedClaims"] as Map<String, Any>
         
-        assertThat(verifiedClaims).containsKey("nationality")
+        assertThat(verifiedClaims).containsKey("nationalities")
         assertThat(verifiedClaims).doesNotContainKey("given_name")
         
         logger.info("FinalResult: Integrity verified under dynamic SoleControl policy.")

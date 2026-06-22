@@ -6,9 +6,9 @@ interface PresentationStepperProps {
 }
 
 const STEPS = [
-  { id: "authorize" as const, label: "Authorize" },
-  { id: "consent" as const, label: "Consent" },
-  { id: "outcome" as const, label: "Outcome" },
+  { id: "authorize" as const, label: "Verifier request" },
+  { id: "consent" as const, label: "Review & approve" },
+  { id: "outcome" as const, label: "Result" },
 ];
 
 export function PresentationStepper({ state }: PresentationStepperProps) {

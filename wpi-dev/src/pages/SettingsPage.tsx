@@ -2,16 +2,31 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getWalletKey } from "../api/wallet";
 import { useAuth } from "../auth/AuthContext";
+import { useAuthedApi } from "../hooks/useAuthedApi";
 import { walletRpId, walletRpName } from "../auth/webauthn";
 import type { WalletKeyRecord } from "../types/wallet";
 import { formatApiError } from "../utils/apiError";
 
 export function SettingsPage() {
   const { session, busy, error, clearError, unlock, reregisterPasskey, signOut, forgetDevice } = useAuth();
+  const { withApiAuth } = useAuthedApi();
   const [testResult, setTestResult] = useState<WalletKeyRecord | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
 
-  async function handleTestAuth() {
+  async function handleTestSession() {
+    if (!session) return;
+    clearError();
+    setTestError(null);
+    setTestResult(null);
+    try {
+      const key = await withApiAuth((headers) => getWalletKey(session.holderId, headers));
+      setTestResult(key);
+    } catch (err) {
+      setTestError(formatApiError(err));
+    }
+  }
+
+  async function handleTestSoleControl() {
     if (!session) return;
     clearError();
     setTestError(null);
@@ -96,8 +111,11 @@ export function SettingsPage() {
       </div>
 
       <div className="toolbar">
-        <button type="button" onClick={() => void handleTestAuth()} disabled={busy}>
-          {busy ? "Authenticating…" : "Test authentication (GET keys)"}
+        <button type="button" onClick={() => void handleTestSession()} disabled={busy}>
+          Test holder session (GET keys)
+        </button>
+        <button type="button" onClick={() => void handleTestSoleControl()} disabled={busy}>
+          {busy ? "Authenticating…" : "Test sole control (passkey)"}
         </button>
         <button
           type="button"
@@ -130,8 +148,8 @@ export function SettingsPage() {
         <div className="card">
           <h2 className="card__title">Authenticated response</h2>
           <p className="hint">
-            <code>GET /api/v1/wallet/keys/{session.holderId}</code> succeeded with{" "}
-            <code>X-Wallet-Authorization</code>.
+            <code>GET /api/v1/wallet/keys/{session.holderId}</code> succeeded with holder session or
+            FIDO2 assertion.
           </p>
           <pre className="raw-json__pre">{JSON.stringify(testResult, null, 2)}</pre>
         </div>

@@ -7,7 +7,7 @@ interface IssuanceStepperProps {
 
 const STEPS: { id: IssuanceStep; label: string }[] = [
   { id: "offer", label: "Resolve offer" },
-  { id: "authorize", label: "Authorize" },
+  { id: "authorize", label: "CMD identity" },
   { id: "credential", label: "Request credential" },
   { id: "consent", label: "Storage consent" },
   { id: "outcome", label: "Outcome" },

@@ -42,7 +42,9 @@ export function OnboardingPage() {
       <header className="page__header">
         <h1>New holder</h1>
         <p className="page__lead">
-          Choose a holder id and register a platform passkey for the first time on WPB.
+          Choose a holder id and register a platform passkey. Then open{" "}
+          <Link to="/wallet">Wallet</Link> to complete device binding and HSM setup before{" "}
+          <Link to="/issue">issuing credentials</Link>.
         </p>
       </header>
 

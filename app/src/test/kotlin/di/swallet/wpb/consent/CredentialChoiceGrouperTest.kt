@@ -6,6 +6,7 @@ package di.swallet.wpb.consent
 
 import di.swallet.wpb.presentation.domain.CredentialCandidate
 import di.swallet.wpb.presentation.domain.CredentialFormat
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -39,6 +40,22 @@ class CredentialChoiceGrouperTest {
         assertTrue(grouper.requiresExplicitSelection(candidates))
         val groups = grouper.group(candidates)
         assertTrue(groups.single().requiresUserSelection)
+    }
+
+    fun `mdl candidate label uses holder-facing type name`() {
+        val candidates = listOf(
+            CredentialCandidate(
+                candidateId = "c1",
+                credentialId = 42L,
+                holderId = "holder-1",
+                queryId = "q1",
+                credentialType = "org.iso.18013.5.1.mDL",
+                format = CredentialFormat.MDOC,
+            ),
+        )
+        val group = grouper.group(candidates).single()
+        assertEquals("Driving licence", group.credentialType)
+        assertEquals("Driving licence", group.candidates.single().label)
     }
 
     /**

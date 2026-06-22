@@ -17,6 +17,7 @@ data class WalletProperties(
     var origins: String = "http://localhost,http://localhost:8080,http://localhost:5173,https://localhost",
     var allowUntrustedAttestation: Boolean = true,
     var challenge: ChallengeProperties = ChallengeProperties(),
+    var session: SessionProperties = SessionProperties(),
     var disclosures: DisclosuresProperties = DisclosuresProperties()
 ) {
     /** WebAuthn relying party id and display name. */
@@ -28,6 +29,11 @@ data class WalletProperties(
     /** TTL for stored FIDO2 assertion challenges. */
     data class ChallengeProperties(
         var ttlSeconds: Long = 120
+    )
+
+    /** TTL for holder session tokens issued after WebAuthn login (WIAM_15). */
+    data class SessionProperties(
+        var ttlSeconds: Long = 1800,
     )
 
     /** AES key used to encrypt SD-JWT disclosures at rest. */

@@ -27,6 +27,8 @@ import di.swallet.wpb.presentation.domain.toContext
 import di.swallet.wpb.presentation.domain.toSession
 import di.swallet.wpb.presentation.format.VpTokenBuilder
 import di.swallet.wpb.presentation.matching.CredentialMatcher
+import di.swallet.wpb.presentation.matching.walletBackedOnly
+import di.swallet.wpb.presentation.matching.dedupeLatestPerDocumentFamily
 import di.swallet.wpb.presentation.persistence.PresentationSessionRepository
 import di.swallet.wpb.presentation.policy.PolicyEngine
 import di.swallet.wpb.presentation.registry.RegistryValidator
@@ -212,7 +214,7 @@ class DefaultPresentationFlowOrchestrator(
             return dispatchTerminalNegative(context, "registry.dispatch.negative")
         }
 
-        context = credentialMatcher.match(context)
+        context = refreshWalletCandidates(credentialMatcher.match(context))
         context = persistUpdate(context)
         record(context, "matching.completed", mapOf("candidates" to context.credentialCandidates.size.toString()))
 
@@ -241,12 +243,7 @@ class DefaultPresentationFlowOrchestrator(
 
         if (context.credentialCandidates.isEmpty()) {
             val rejected = transitionTo(
-                context.copy(
-                    error = PresentationError(
-                        code = "no_matching_credentials",
-                        message = "No credentials matched the verifier request",
-                    ),
-                ),
+                context.copy(error = emptyMatchingError(context)),
                 PresentationState.REJECTED,
             )
             val persisted = persistUpdate(rejected)
@@ -264,7 +261,13 @@ class DefaultPresentationFlowOrchestrator(
     override suspend fun getConsentView(sessionId: UUID, holderId: String): PresentationConsentView {
         val current = getSession(sessionId)
         consentSessionGuard.requireHolderMatch(current.sessionMeta.holderId, holderId)
-        return consentViewBuilder.build(current)
+        val refreshed = refreshWalletCandidates(current)
+        val persisted = if (refreshed.credentialCandidates != current.credentialCandidates) {
+            persistUpdate(refreshed)
+        } else {
+            refreshed
+        }
+        return consentViewBuilder.build(persisted)
     }
 
     /** Applies a holder consent decision and continues the lifecycle when consent is granted. */
@@ -309,10 +312,25 @@ class DefaultPresentationFlowOrchestrator(
     /** Builds the VP token and dispatches a positive response after consent is granted. */
     private suspend fun handleConsentGranted(current: PresentationContext, decision: ConsentSubmission): PresentationContext {
         wscaSciGrantService.grant(decision.holderId)
-        val selected = consentCredentialSelector.select(current, decision.selectedCredentialIds)
-        val minimizationLevel = minimizationEvaluator.evaluate(current).level
+        val refreshed = refreshWalletCandidates(current)
+        if (refreshed.credentialCandidates.isEmpty()) {
+            val rejected = transitionTo(
+                refreshed.copy(error = emptyMatchingError(refreshed, afterConsent = true)),
+                PresentationState.REJECTED,
+            )
+            val persisted = persistUpdate(rejected)
+            record(persisted, "matching.empty", emptyMap())
+            return dispatchTerminalNegative(persisted, "matching.dispatch.negative")
+        }
+        val persistedRefresh = if (refreshed.credentialCandidates != current.credentialCandidates) {
+            persistUpdate(refreshed)
+        } else {
+            refreshed
+        }
+        val selected = consentCredentialSelector.select(persistedRefresh, decision.selectedCredentialIds)
+        val minimizationLevel = minimizationEvaluator.evaluate(persistedRefresh).level
         var context = transitionTo(
-            current.copy(
+            persistedRefresh.copy(
                 consentDecision = ConsentDecision(
                     granted = true,
                     reason = decision.reason,
@@ -450,6 +468,34 @@ class DefaultPresentationFlowOrchestrator(
             context.state,
             type,
             attributes,
+        )
+    }
+
+    /** Re-runs wallet matching and drops demo-mode synthetic candidates without a stored credential id. */
+    private fun refreshWalletCandidates(context: PresentationContext): PresentationContext {
+        val matched = credentialMatcher.match(context)
+        return matched.copy(
+            credentialCandidates = matched.credentialCandidates
+                .walletBackedOnly()
+                .dedupeLatestPerDocumentFamily(),
+        )
+    }
+
+    /** Explains why no presentable credentials were found after wallet matching. */
+    private fun emptyMatchingError(context: PresentationContext, afterConsent: Boolean = false): PresentationError {
+        if (credentialMatcher.hasRevokedMatches(context)) {
+            return PresentationError(
+                code = "credentials_revoked",
+                message = "A matching credential in your wallet is revoked and cannot be presented",
+            )
+        }
+        return PresentationError(
+            code = "no_matching_credentials",
+            message = if (afterConsent) {
+                "Selected credentials are no longer available in the wallet"
+            } else {
+                "No credential in your wallet matches this verifier request"
+            },
         )
     }
 

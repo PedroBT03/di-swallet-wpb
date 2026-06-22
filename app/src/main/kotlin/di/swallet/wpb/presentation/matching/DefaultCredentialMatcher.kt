@@ -7,6 +7,7 @@ package di.swallet.wpb.presentation.matching
 import di.swallet.wpb.domain.WalletCredentialRepository
 import di.swallet.wpb.format.mdoc.MdocCredentialCodec
 import di.swallet.wpb.format.mdoc.MdocDocTypeRegistry
+import di.swallet.wpb.format.mdoc.MdocEffectiveDocTypeResolver
 import di.swallet.wpb.format.sdjwt.SdJwtDisclosureSelector
 import di.swallet.wpb.openid4vp.protocol.DcqlSupport
 import di.swallet.wpb.service.format.DisclosureCipherService
@@ -27,49 +28,79 @@ class DefaultCredentialMatcher(
     private val walletCredentialRepository: WalletCredentialRepository,
     private val mdocCredentialCodec: MdocCredentialCodec,
     private val mdocDocTypeRegistry: MdocDocTypeRegistry,
+    private val mdocEffectiveDocTypeResolver: MdocEffectiveDocTypeResolver,
     private val disclosureCipherService: DisclosureCipherService,
     private val sdJwtDisclosureSelector: SdJwtDisclosureSelector,
     @param:Value("\${wpb.openid4vp.demo-mode:false}") private val demoMode: Boolean,
     private val credentialRevocationGuard: CredentialRevocationGuard,
 ) : CredentialMatcher {
 
-    /**
-     * Parses DCQL queries, searches the wallet, and attaches matching candidates to the context.
-     */
+    /** Parses DCQL queries, searches the wallet, and attaches matching candidates to the context. */
     override fun match(context: PresentationContext): PresentationContext {
-        val requirements = context.authorizationRequest?.requirements
-        val parsedQueries = requirements?.credentialQueries?.takeIf { it.isNotEmpty() }
-            ?: DcqlSupport.parse(requirements?.dcqlQueryJson)
-        val effectiveQueries = parsedQueries.ifEmpty {
-            requirements?.credentialQueryIds?.map { CredentialQuery(id = it, format = CredentialFormat.SD_JWT) }
-                ?: listOf(CredentialQuery(id = "query_0", format = CredentialFormat.SD_JWT))
-        }
+        val effectiveQueries = resolveQueries(context)
 
         val holderId = context.sessionMeta.holderId
-        val storedCredentials = when {
-            holderId.isNullOrBlank() -> walletCredentialRepository.findAll()
-            else -> walletCredentialRepository.findByUserId(holderId)
-        }
+        val storedCredentials = loadWalletCredentials(holderId)
 
         val candidates = effectiveQueries.flatMap { query ->
-            matchQueryAgainstWallet(query, storedCredentials)
+            matchQueryAgainstWallet(query, storedCredentials, RevocationScope.ACTIVE_ONLY)
                 .ifEmpty { syntheticCandidate(query, holderId) }
         }
 
         return context.copy(
             credentialCandidates = candidates,
-            presentationRequirements = requirements?.copy(credentialQueries = effectiveQueries),
+            presentationRequirements = context.presentationRequirements?.copy(credentialQueries = effectiveQueries)
+                ?: context.authorizationRequest?.requirements?.copy(credentialQueries = effectiveQueries),
         )
     }
 
-    /** Matches one DCQL query against all wallet credentials for the relevant format. */
+    /** Returns true when revoked wallet credentials would satisfy the verifier DCQL queries. */
+    override fun hasRevokedMatches(context: PresentationContext): Boolean {
+        val effectiveQueries = resolveQueries(context)
+        val storedCredentials = loadWalletCredentials(context.sessionMeta.holderId)
+        return effectiveQueries.any { query ->
+            matchQueryAgainstWallet(query, storedCredentials, RevocationScope.REVOKED_ONLY).isNotEmpty()
+        }
+    }
+
+    private fun resolveQueries(context: PresentationContext): List<CredentialQuery> {
+        val requirements = context.authorizationRequest?.requirements
+            ?: context.presentationRequirements
+        val parsedQueries = requirements?.credentialQueries?.takeIf { it.isNotEmpty() }
+            ?: DcqlSupport.parse(requirements?.dcqlQueryJson)
+        return parsedQueries.ifEmpty {
+            requirements?.credentialQueryIds?.map { CredentialQuery(id = it, format = CredentialFormat.SD_JWT) }
+                ?: listOf(CredentialQuery(id = "query_0", format = CredentialFormat.SD_JWT))
+        }
+    }
+
+    private fun loadWalletCredentials(holderId: String?): List<di.swallet.wpb.domain.WalletCredential> =
+        when {
+            holderId.isNullOrBlank() -> walletCredentialRepository.findAll()
+            else -> walletCredentialRepository.findByUserId(holderId)
+        }
+
+    private enum class RevocationScope {
+        ACTIVE_ONLY,
+        REVOKED_ONLY,
+    }
+
+    /** Matches one DCQL query against wallet credentials filtered by revocation scope. */
     private fun matchQueryAgainstWallet(
         query: CredentialQuery,
         wallet: List<di.swallet.wpb.domain.WalletCredential>,
+        revocationScope: RevocationScope,
     ): List<CredentialCandidate> {
+        val scopedWallet = wallet.filter { credential ->
+            val revoked = credentialRevocationGuard.isRevoked(credential)
+            when (revocationScope) {
+                RevocationScope.ACTIVE_ONLY -> !revoked
+                RevocationScope.REVOKED_ONLY -> revoked
+            }
+        }
         return when (query.format) {
-            CredentialFormat.SD_JWT -> matchSdJwt(query, wallet)
-            CredentialFormat.MDOC -> matchMdoc(query, wallet)
+            CredentialFormat.SD_JWT -> matchSdJwt(query, scopedWallet)
+            CredentialFormat.MDOC -> matchMdoc(query, scopedWallet)
         }
     }
 
@@ -86,7 +117,6 @@ class DefaultCredentialMatcher(
             )
         }
         return wallet.asSequence()
-            .filter { !credentialRevocationGuard.isRevoked(it) }
             .filter(typeFilter)
             .filter { credential -> sdJwtCredentialSatisfiesQuery(credential, query) }
             .mapNotNull { credential ->
@@ -129,11 +159,10 @@ class DefaultCredentialMatcher(
         wallet: List<di.swallet.wpb.domain.WalletCredential>,
     ): List<CredentialCandidate> {
         return wallet.asSequence()
-            .filter { !credentialRevocationGuard.isRevoked(it) }
             .mapNotNull { credential ->
                 val credentialPk = credential.id ?: return@mapNotNull null
                 val decoded = mdocCredentialCodec.decode(credential.encodedData) ?: return@mapNotNull null
-                val effectiveDocType = if (decoded.docType == "unknown") credential.credentialType else decoded.docType
+                val effectiveDocType = mdocEffectiveDocTypeResolver.resolve(credential.credentialType, decoded)
                 val docTypeMatches = CredentialTypeHintMatcher.mdocTypeMatches(
                     hints = query.credentialTypeHints,
                     docType = effectiveDocType,

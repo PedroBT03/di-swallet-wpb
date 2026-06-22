@@ -5,6 +5,7 @@
 package di.swallet.wpb.openid4vci.adapter
 
 import di.swallet.wpb.config.OpenId4VciProperties
+import di.swallet.wpb.format.sdjwt.SdJwtService
 import di.swallet.wpb.issuance.domain.DeferredIssuanceHandle
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.issuance.proof.ProofMaterial
@@ -27,6 +28,7 @@ import di.swallet.wpb.openid4vci.protocol.PreparedAuthorization
 import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.openid4vci.protocol.ResolvedOffer
 import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
+import di.swallet.wpb.service.DemoAttestationClaims
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Primary
@@ -37,6 +39,7 @@ import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.time.Instant
+import com.fasterxml.jackson.databind.ObjectMapper
 
 /**
  * In-process simulated OID4VCI adapter used in demo and tests.
@@ -57,6 +60,8 @@ class SimulatedOpenId4VciGateway(
     private val properties: OpenId4VciProperties,
     private val mdocDocTypeRegistry: MdocDocTypeRegistry,
     private val mdocCredentialCodec: MdocCredentialCodec,
+    private val sdJwtService: SdJwtService,
+    private val objectMapper: ObjectMapper,
 ) : OpenId4VciGateway {
 
     /** In-flight adapter session state keyed by adapterSessionId. */
@@ -409,7 +414,7 @@ class SimulatedOpenId4VciGateway(
             val normalized = id.lowercase()
             val inferredDocType = mdocDocTypeRegistry.infer(configurationId = id, docTypeHint = null, vctHint = null)
             val mdocById = inferredDocType != null
-            val requiresKa = normalized.contains("pid") || normalized.contains("device")
+            val requiresKa = normalized.contains("pid") || normalized.contains("device") || mdocById
             CredentialConfigurationDescriptor(
                 id = id,
                 format = if (mdocById) IssuanceCredentialFormat.MSO_MDOC else IssuanceCredentialFormat.SD_JWT_VC,
@@ -460,12 +465,35 @@ class SimulatedOpenId4VciGateway(
         val header = base64Url(
             """{"alg":"ES256","typ":"vc+sd-jwt","kid":"issuer-key-1"}"""
         )
+        val signature = base64Url(randomToken(43))
+
+        if (isPidConfiguration(configurationId, vct)) {
+            val issued = sdJwtService.disclosuresFromClaimMap(DemoAttestationClaims.pidClaims(proof.keyId))
+            val sdJson = objectMapper.writeValueAsString(issued.digests)
+            val cnf = """{"jwk":{"kty":"EC","crv":"P-256","alg":"${proof.algorithm}","kid":"${proof.keyId}"}}"""
+            val payloadJson =
+                """{"vct":"$vct","iss":"https://issuer.example.org","sub":"${proof.keyId}","cnf":$cnf,"_sd":$sdJson,"_sd_alg":"sha-256"}"""
+            val payload = base64Url(payloadJson)
+            return buildString {
+                append(header).append('.').append(payload).append('.').append(signature)
+                issued.disclosures.forEach { disclosure ->
+                    append('~').append(disclosure)
+                }
+                append('~')
+            }
+        }
+
         val payload = base64Url(
             """{"vct":"$vct","iss":"https://issuer.example.org","sub":"holder","cnf":{"jwk":{"kty":"EC","crv":"P-256","alg":"${proof.algorithm}","kid":"${proof.keyId}"}},"_sd":["${randomToken(43)}"]}"""
         )
-        val signature = base64Url(randomToken(43))
         val disclosure = base64Url("""["${randomToken(8)}","given_name","Alice"]""")
         return "$header.$payload.$signature~$disclosure~"
+    }
+
+    private fun isPidConfiguration(configurationId: String, vct: String): Boolean {
+        val id = configurationId.lowercase()
+        val type = vct.lowercase()
+        return id.contains("pid") || type.contains("pid")
     }
 
     /** Builds a fake mdoc payload for simulator issuance. */
@@ -479,17 +507,12 @@ class SimulatedOpenId4VciGateway(
             ?: mdocDocTypeRegistry.all().first()
         val claims = when (definition.docType) {
             "eu.europa.ec.eudi.pid.1" -> mapOf(
-                "given_name" to "Alice",
-                "family_name" to "Doe",
-                "birth_date" to "1990-01-01",
+                "given_name" to "Pedro",
+                "family_name" to "Tavares",
+                "birth_date" to "2000-01-01",
                 "nationalities" to listOf("PT"),
             )
-            "org.iso.18013.5.1.mDL" -> mapOf(
-                "given_name" to "Alice",
-                "family_name" to "Doe",
-                "birth_date" to "1990-01-01",
-                "driving_privileges" to listOf("B"),
-            )
+            "org.iso.18013.5.1.mDL" -> DemoAttestationClaims.mdlClaims()
             else -> mapOf("given_name" to "Alice")
         }
         val deviceKey = MdocCoseKeyMaterial.toCoseEc2PublicKey(proof.publicKey)

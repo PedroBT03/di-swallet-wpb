@@ -83,6 +83,8 @@ export interface RevokeKeyResult {
 export interface CredentialMutationResult {
   credentialId: number;
   status: string;
+  /** True when only the wallet marked the credential revoked (OID4VCI / issuer status list). */
+  walletLocalOnly?: boolean;
 }
 
 export interface WalletUnitRevokeResult {

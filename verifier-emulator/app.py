@@ -98,20 +98,111 @@ def list_requests():
     return jsonify({"requests": sorted(files)})
 
 
-@app.route("/request/<path:name>")
-def serve_request(name):
+def _build_custom_dcql_request(claim_paths: list[str]) -> dict:
+    dcql_claims = [{"path": path.split(".")} for path in claim_paths]
+    state_suffix = "-".join(path.replace(".", "-") for path in claim_paths)
+    return {
+        "client_id": "verifier-demo-client",
+        "response_type": "vp_token",
+        "response_mode": "direct_post",
+        "response_uri": "http://127.0.0.1:8081/direct_post",
+        "state": f"custom-{state_suffix}",
+        "nonce": f"nonce-custom-{uuid.uuid4().hex[:8]}",
+        "dcql": {
+            "credentials": [
+                {
+                    "id": "pid",
+                    "format": "vc+sd-jwt",
+                    "meta": {"vct_values": ["PID"]},
+                    "claims": dcql_claims,
+                }
+            ]
+        },
+    }
+
+
+def _build_mdl_dcql_request(claim_paths: list[str]) -> dict:
+    dcql_claims = [{"path": path.split(".")} for path in claim_paths]
+    state_suffix = "-".join(path.replace(".", "-") for path in claim_paths)
+    return {
+        "client_id": "verifier-demo-client",
+        "response_type": "vp_token",
+        "response_mode": "direct_post",
+        "response_uri": "http://127.0.0.1:8081/direct_post",
+        "state": f"mdl-custom-{state_suffix}",
+        "nonce": f"nonce-mdl-custom-{uuid.uuid4().hex[:8]}",
+        "dcql": {
+            "credentials": [
+                {
+                    "id": "mdl",
+                    "format": "mso_mdoc",
+                    "meta": {"doctype_values": ["org.iso.18013.5.1.mDL"]},
+                    "claims": dcql_claims,
+                }
+            ]
+        },
+    }
+
+
+def _parse_claim_paths(raw: str) -> list[str]:
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+@app.route("/request/custom")
+def serve_custom_request():
+    """Build a DCQL authorization request from comma-separated claim paths (query param)."""
     if not VERIFIER_X5C_B64 or not REQUEST_SIGNING_KEY:
         return jsonify({"error": "trust material not loaded; see verifier-emulator/trust/README.md"}), 500
 
-    path = os.path.normpath(os.path.join(REQ_DIR, name))
-    req_root = os.path.abspath(REQ_DIR)
-    if not os.path.abspath(path).startswith(req_root + os.sep) and os.path.abspath(path) != req_root:
-        return jsonify({"error": "not found"}), 404
-    if not os.path.isfile(path):
-        return jsonify({"error": "not found"}), 404
-    with open(path, "r", encoding="utf-8") as handle:
-        data = json.load(handle)
+    raw = request.args.get("claims", "")
+    claim_paths = _parse_claim_paths(raw)
+    if not claim_paths:
+        return jsonify({
+            "error": "claims query param required",
+            "example": "/request/custom?claims=given_name,address.locality",
+        }), 400
 
+    data = _build_custom_dcql_request(claim_paths)
+    return _serve_authorization_request(data, f"custom?claims={raw}")
+
+
+@app.route("/request/build/<path:claimspec>")
+def serve_build_request(claimspec: str):
+    """Build a DCQL authorization request from comma-separated claim paths in the URL path."""
+    if not VERIFIER_X5C_B64 or not REQUEST_SIGNING_KEY:
+        return jsonify({"error": "trust material not loaded; see verifier-emulator/trust/README.md"}), 500
+
+    claims_raw = claimspec[:-5] if claimspec.endswith(".json") else claimspec
+    claim_paths = _parse_claim_paths(claims_raw)
+    if not claim_paths:
+        return jsonify({
+            "error": "claim paths required",
+            "example": "/request/build/given_name,family_name.json",
+        }), 400
+
+    data = _build_custom_dcql_request(claim_paths)
+    return _serve_authorization_request(data, f"build/{claimspec}")
+
+
+@app.route("/request/build-mdl/<path:claimspec>")
+def serve_build_mdl_request(claimspec: str):
+    """Build an mDL (mso_mdoc) DCQL authorization request from comma-separated claim paths."""
+    if not VERIFIER_X5C_B64 or not REQUEST_SIGNING_KEY:
+        return jsonify({"error": "trust material not loaded; see verifier-emulator/trust/README.md"}), 500
+
+    claims_raw = claimspec[:-5] if claimspec.endswith(".json") else claimspec
+    claim_paths = _parse_claim_paths(claims_raw)
+    if not claim_paths:
+        return jsonify({
+            "error": "claim paths required",
+            "example": "/request/build-mdl/given_name,driving_privileges.json",
+        }), 400
+
+    data = _build_mdl_dcql_request(claim_paths)
+    return _serve_authorization_request(data, f"build-mdl/{claimspec}")
+
+
+def _serve_authorization_request(data: dict, name: str):
     data = _with_verifier_info(data)
     correlation = str(uuid.uuid4())
     session = data.get("state") or str(uuid.uuid4())
@@ -136,6 +227,23 @@ def serve_request(name):
         resp = jsonify(data)
         resp.headers["X-Correlation-Id"] = correlation
         return resp
+
+
+@app.route("/request/<path:name>")
+def serve_request(name):
+    if not VERIFIER_X5C_B64 or not REQUEST_SIGNING_KEY:
+        return jsonify({"error": "trust material not loaded; see verifier-emulator/trust/README.md"}), 500
+
+    path = os.path.normpath(os.path.join(REQ_DIR, name))
+    req_root = os.path.abspath(REQ_DIR)
+    if not os.path.abspath(path).startswith(req_root + os.sep) and os.path.abspath(path) != req_root:
+        return jsonify({"error": "not found"}), 404
+    if not os.path.isfile(path):
+        return jsonify({"error": "not found"}), 404
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+
+    return _serve_authorization_request(data, name)
 
 
 @app.route("/request/play")

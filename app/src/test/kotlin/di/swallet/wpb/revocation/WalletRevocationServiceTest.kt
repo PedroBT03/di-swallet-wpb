@@ -18,6 +18,7 @@ import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.service.StatusListService
 import di.swallet.wpb.service.WalletUnitLifecycleService
 import di.swallet.wpb.wia.status.WiaStatusManagementService
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.springframework.http.HttpStatus
@@ -70,6 +71,29 @@ class WalletRevocationServiceTest {
         Mockito.verify(walletUnitLifecycleService).revoke(walletUnit)
     }
 
+    @Test
+    fun `revokeCredential marks issuer-managed credential revoked locally without status list`() {
+        val credential = WalletCredential(
+            id = 43L,
+            userId = "holder-1",
+            credentialType = "PID",
+            encodedData = "sd-jwt",
+            encryptedDisclosures = "enc",
+            issuerStatusUri = "https://issuer.example/status/1",
+            issuerStatusIndex = 9,
+        )
+        Mockito.`when`(walletCredentialRepository.findById(43L)).thenReturn(Optional.of(credential))
+        Mockito.`when`(credentialRevocationGuard.isWpManaged(credential)).thenReturn(false)
+
+        val statusListUpdated = service.revokeCredential(43L)
+
+        assertFalse(statusListUpdated)
+        Mockito.verify(statusListService, Mockito.never()).revoke(Mockito.anyInt())
+        Mockito.verify(walletCredentialRepository).save(
+            Mockito.argThat { it.revocationState == CredentialRevocationState.REVOKED },
+        )
+    }
+
     /**
      * Revokes a WP-managed credential that carries status list index 3.
      * statusListService.revoke(3) must be called and the saved credential must have REVOKED state.
@@ -87,7 +111,9 @@ class WalletRevocationServiceTest {
         Mockito.`when`(walletCredentialRepository.findById(42L)).thenReturn(Optional.of(credential))
         Mockito.`when`(credentialRevocationGuard.isWpManaged(credential)).thenReturn(true)
 
-        service.revokeCredential(42L)
+        val statusListUpdated = service.revokeCredential(42L)
+
+        org.junit.jupiter.api.Assertions.assertTrue(statusListUpdated)
 
         Mockito.verify(statusListService).revoke(3)
         Mockito.verify(walletCredentialRepository).save(

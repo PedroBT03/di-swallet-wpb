@@ -1,0 +1,18 @@
+{
+  "client_id": "verifier-demo-client",
+  "response_type": "vp_token",
+  "response_mode": "direct_post",
+  "response_uri": "http://127.0.0.1:8081/direct_post",
+  "state": "conformance-family-name",
+  "nonce": "nonce-conformance-family-name",
+  "dcql": {
+    "credentials": [
+      {
+        "id": "pid",
+        "format": "vc+sd-jwt",
+        "meta": { "vct_values": ["PID"] },
+        "claims": [{ "path": ["family_name"] }]
+      }
+    ]
+  }
+}

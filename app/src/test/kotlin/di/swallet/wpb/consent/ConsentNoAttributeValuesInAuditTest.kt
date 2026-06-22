@@ -164,6 +164,8 @@ class ConsentNoAttributeValuesInAuditTest {
                     ),
                 ),
             )
+
+        override fun hasRevokedMatches(context: PresentationContext): Boolean = false
     }
 
     private class StubVpBuilder : VpTokenBuilder {

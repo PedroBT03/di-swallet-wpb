@@ -7,7 +7,8 @@ package di.swallet.wpb.security
 import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.config.TrustMarkProperties
 import di.swallet.wpb.ops.metrics.WpbMetrics
-import di.swallet.wpb.security.WscaSciGrantService
+import di.swallet.wpb.security.HolderSessionService
+import di.swallet.wpb.security.SoleControlPathMatcher
 import di.swallet.wpb.service.Fido2Service
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -31,6 +32,7 @@ class AuthorizationInterceptor(
     private val trustMarkProperties: TrustMarkProperties,
     private val wpbMetrics: WpbMetrics,
     private val wscaSciGrantService: WscaSciGrantService,
+    private val holderSessionService: HolderSessionService,
 ) : HandlerInterceptor {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -67,6 +69,27 @@ class AuthorizationInterceptor(
             trustMarkProperties.allowAdminRefresh
         ) {
             return true
+        }
+
+        if (
+            request.requestURI.contains("/auth/challenge") ||
+            request.requestURI.contains("/auth/register") ||
+            request.requestURI.endsWith("/auth/session") ||
+            request.requestURI.endsWith("/wallet/init")
+        ) {
+            return true
+        }
+
+        val soleControlRequired = SoleControlPathMatcher.requiresSoleControl(request.method, request.requestURI)
+        if (!soleControlRequired) {
+            val sessionHolderId = holderSessionService.resolve(request.getHeader("X-Wallet-Session"))
+            if (!sessionHolderId.isNullOrBlank()) {
+                request.setAttribute(WalletSecurityAttributes.AUTHENTICATED_HOLDER_ID, sessionHolderId)
+                AuthenticatedHolderRequestBinder.bind(sessionHolderId)
+                bindRequestContext(request)
+                enforceRequestedHolderBinding(request, sessionHolderId)
+                return true
+            }
         }
 
         val authHeader = request.getHeader("X-Wallet-Authorization")
@@ -109,7 +132,13 @@ class AuthorizationInterceptor(
         }
 
         logger.warn("SecurityPolicy: Unauthorized access attempt to ${request.requestURI}")
-        throw UnauthorizedWalletException("Invalid or expired FIDO2 authorization context")
+        throw UnauthorizedWalletException(
+            if (soleControlRequired) {
+                "This operation requires a fresh FIDO2 assertion (sole control)"
+            } else {
+                "Invalid or expired holder authorization context"
+            },
+        )
     }
 
     /**

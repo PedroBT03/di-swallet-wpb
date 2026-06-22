@@ -8,7 +8,8 @@ Files
 
 - `app.py` - Flask emulator.
 - `requests/` - example Authorization Requests (`direct_post.json`, `redirect_query.json`, `redirect_fragment.json`).
-- `requests/conformance/` - DCQL fixtures for selective-disclosure smoke runs (`simple_claim.json`, `nested_claim.json`, etc.).
+- `requests/conformance/` - DCQL fixtures for selective-disclosure smoke runs (`simple_claim.json`, `nested_claim.json`, per-field fixtures, etc.).
+- `GET /request/build/<claims>.json` - dynamic DCQL request for multiple claim paths (e.g. `/request/build/given_name,family_name.json`).
 
 Quick start
 

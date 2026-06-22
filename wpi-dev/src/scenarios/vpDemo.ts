@@ -1,45 +1,81 @@
 export interface VpDemoScenario {
   id: string;
+  /** Short title shown on scenario cards */
   title: string;
+  /** Plain-language explanation of what the verifier asks for */
   description: string;
+  /** Who is asking (demo verifier label) */
+  verifierLabel: string;
+  /** Human-readable summary of disclosed attributes */
+  sharesLabel: string;
+  /** Claim paths included in the VP (for success summary) */
+  requestedClaims: string[];
   requestUri: string;
+  documentType: "pid" | "mdl";
   requiresPid?: boolean;
+  requiresMdl?: boolean;
 }
 
-const VERIFIER_BASE = "http://localhost:8081";
+import {
+  VERIFIER_EMULATOR_BASE,
+  type PresentDocumentType,
+} from "../features/present/pidClaims";
 
-/** Pre-filled request_uri values for the local verifier emulator (port 8081). */
-export const VP_DEMO_SCENARIOS: VpDemoScenario[] = [
+/** User-facing verifier demos that exercise selective disclosure (DCQL claim paths). */
+export const VP_PRESENT_SCENARIOS: VpDemoScenario[] = [
   {
     id: "pid-given-name",
-    title: "PID — given_name",
-    description: "DCQL selective disclosure of given_name from demo PID (issue on Wallet first).",
-    requestUri: `${VERIFIER_BASE}/request/conformance/simple_claim.json`,
+    title: "Shop asks for your first name",
+    description:
+      "A verifier only needs your given name to personalise a receipt. Your family name, birth date, full address, and other PID fields stay in the wallet.",
+    verifierLabel: "Demo shop (local emulator)",
+    sharesLabel: "Given name only",
+    requestedClaims: ["given_name"],
+    requestUri: `${VERIFIER_EMULATOR_BASE}/request/conformance/simple_claim.json`,
+    documentType: "pid",
     requiresPid: true,
   },
   {
     id: "pid-address-locality",
-    title: "PID — address.locality",
-    description: "Nested claim path from demo PID.",
-    requestUri: `${VERIFIER_BASE}/request/conformance/nested_claim.json`,
+    title: "Service asks for your city",
+    description:
+      "Nested selective disclosure: only the city (address.locality) is revealed, not your street, postal code, or identity attributes.",
+    verifierLabel: "Demo shop (local emulator)",
+    sharesLabel: "City (address.locality)",
+    requestedClaims: ["address.locality"],
+    requestUri: `${VERIFIER_EMULATOR_BASE}/request/conformance/nested_claim.json`,
+    documentType: "pid",
     requiresPid: true,
   },
   {
-    id: "direct-post-legacy",
-    title: "Legacy direct_post",
-    description: "Minimal authorization request (may not match wallet credentials).",
-    requestUri: `${VERIFIER_BASE}/request/direct_post.json`,
+    id: "mdl-driving-categories",
+    title: "Rental asks for licence categories",
+    description:
+      "A car rental only needs your driving categories (e.g. B). Name, birth date, and other mDL fields stay in the wallet.",
+    verifierLabel: "Demo rental (local emulator)",
+    sharesLabel: "Driving categories",
+    requestedClaims: ["driving_privileges"],
+    requestUri: `${VERIFIER_EMULATOR_BASE}/request/conformance/mdl_driving_privileges.json`,
+    documentType: "mdl",
+    requiresMdl: true,
   },
   {
-    id: "redirect-query",
-    title: "Redirect (query)",
-    description: "Response mode query with redirect return to emulator.",
-    requestUri: `${VERIFIER_BASE}/request/redirect_query.json`,
-  },
-  {
-    id: "redirect-fragment",
-    title: "Redirect (fragment)",
-    description: "Response mode fragment with redirect return to emulator.",
-    requestUri: `${VERIFIER_BASE}/request/redirect_fragment.json`,
+    id: "mdl-given-name",
+    title: "Counter asks for your first name",
+    description:
+      "Selective disclosure from your mobile driving licence: only given_name is shared from the mDL document.",
+    verifierLabel: "Demo counter (local emulator)",
+    sharesLabel: "Given name (mDL)",
+    requestedClaims: ["given_name"],
+    requestUri: `${VERIFIER_EMULATOR_BASE}/request/conformance/mdl_given_name.json`,
+    documentType: "mdl",
+    requiresMdl: true,
   },
 ];
+
+/** @deprecated Use VP_PRESENT_SCENARIOS. Kept for scenario docs and advanced tooling. */
+export const VP_DEMO_SCENARIOS = VP_PRESENT_SCENARIOS;
+
+export function scenariosForDocument(documentType: PresentDocumentType): VpDemoScenario[] {
+  return VP_PRESENT_SCENARIOS.filter((scenario) => scenario.documentType === documentType);
+}

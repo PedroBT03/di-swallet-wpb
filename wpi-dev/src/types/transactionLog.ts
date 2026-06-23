@@ -6,12 +6,12 @@ export interface TransactionLogSummary {
   deletedByUser: boolean;
 }
 
-export interface Ts10ClaimInfo {
+export interface LogClaimInfo {
   credentialIdentifier: string;
   claims: string[];
 }
 
-export interface Ts10Transaction {
+export interface LogTransactionDetail {
   transactionIdentifier: string;
   time: string;
   transactionType: string;

@@ -102,7 +102,7 @@ export function OpsPage() {
       <header className="page__header">
         <h1>Ops</h1>
         <p className="page__lead">
-          Public WPB surfaces for trust mark (TS1) and revocation status lists (verifier lookup).
+          Public WPB surfaces for trust mark and revocation status lists (verifier lookup).
         </p>
       </header>
 

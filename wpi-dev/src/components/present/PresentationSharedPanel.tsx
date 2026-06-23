@@ -85,7 +85,7 @@ export function PresentationSharedPanel({ vpToken }: PresentationSharedPanelProp
           <>
             {" "}
             mDL uses an ISO 18013-5 <code>DeviceResponse</code> (CBOR, base64url) with
-            device-signed namespaces — not a JWT.
+            device-signed namespaces, not a JWT.
           </>
         ) : null}
       </p>
@@ -136,7 +136,7 @@ export function PresentationSharedPanel({ vpToken }: PresentationSharedPanelProp
           ) : null}
           {parsed.some((item) => item.kind === "mdoc" && item.isDemoStub) ? (
             <p className="hint">
-              Demo mdoc fallback (<code>demo.mdoc</code>) — the wallet had no stored mDL bound to
+              Demo mdoc fallback (<code>demo.mdoc</code>): the wallet had no stored mDL bound to
               this presentation. Sync an issued mDL on Wallet, then pick the real credential at
               consent (not the synthetic demo candidate).
             </p>

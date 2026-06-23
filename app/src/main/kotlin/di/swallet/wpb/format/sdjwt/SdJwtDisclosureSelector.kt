@@ -48,7 +48,7 @@ class SdJwtDisclosureSelector(
 
         val selected = linkedSetOf<ParsedDisclosure>()
         paths.forEach { path ->
-            parsed.filter { matchesPath(it, path) }.forEach { selected.add(it) }
+            parsed.filter { matchesPath(it, path, parsed) }.forEach { selected.add(it) }
         }
         expandAncestorClosure(parsed, selected)
         return selected.map { it.raw }
@@ -61,28 +61,44 @@ class SdJwtDisclosureSelector(
         if (parsed.isEmpty()) return false
         return paths.all { path ->
             parsed.any { disclosure ->
-                matchesPath(disclosure, path) && hasAncestorClosure(parsed, disclosure, path)
+                matchesPath(disclosure, path, parsed) && hasAncestorClosure(parsed, disclosure, path)
             }
         }
     }
 
     /** Tests whether a disclosure satisfies a DCQL claim path directly or via nested values. */
-    private fun matchesPath(disclosure: ParsedDisclosure, path: ClaimPath): Boolean {
+    private fun matchesPath(
+        disclosure: ParsedDisclosure,
+        path: ClaimPath,
+        all: List<ParsedDisclosure>,
+    ): Boolean {
         if (disclosure.claimName == path.toDotNotation()) return true
         val firstKey = path.segments.first() as? ClaimPathSegment.Key
         if (firstKey != null && disclosure.claimName == firstKey.name) {
             return valueMatchesPathSuffix(disclosure, path)
         }
-        return matchesNestedLeafInObject(disclosure, path)
+        return matchesNestedLeafInObject(disclosure, path, all)
     }
 
     /** Leaf disclosure inside a nested object (claim name = last key segment only). */
-    private fun matchesNestedLeafInObject(disclosure: ParsedDisclosure, path: ClaimPath): Boolean {
+    private fun matchesNestedLeafInObject(
+        disclosure: ParsedDisclosure,
+        path: ClaimPath,
+        all: List<ParsedDisclosure>,
+    ): Boolean {
         if (path.segments.size < 2) return false
         if (path.segments.any { it !is ClaimPathSegment.Key }) return false
-        val leaf = path.leafKey()
-        if (disclosure.claimName != leaf) return false
-        return disclosure.value != null
+        if (disclosure.claimName != path.leafKey()) return false
+        if (disclosure.value == null) return false
+        return qualifyNestedClaimPath(all, disclosure) == path.toDotNotation()
+    }
+
+    /** Builds a dot-notation claim path for a nested leaf using its `_sd` parent container. */
+    private fun qualifyNestedClaimPath(all: List<ParsedDisclosure>, disclosure: ParsedDisclosure): String {
+        if ('.' in disclosure.claimName) return disclosure.claimName
+        val parent = buildParentIndex(all)[disclosure.digest]?.firstOrNull()
+            ?: return disclosure.claimName
+        return "${parent.claimName}.${disclosure.claimName}"
     }
 
     /** Checks path tail segments against the disclosure value when present. */

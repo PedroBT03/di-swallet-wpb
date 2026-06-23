@@ -61,6 +61,7 @@ export function WalletPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lastRaw, setLastRaw] = useState<unknown>(null);
+  const [syncing, setSyncing] = useState(false);
   const [lastInitRequest, setLastInitRequest] = useState<{
     platform: string;
     devicePubJwk: string;
@@ -117,10 +118,6 @@ export function WalletPage() {
     [clearError],
   );
 
-  function refreshFromCache() {
-    applyCache(cacheRef.current);
-  }
-
   async function performSync() {
     const summary = await withApiAuth((headers) => fetchWalletSummary(holderId, headers));
     const syncedAt = new Date().toISOString();
@@ -149,11 +146,16 @@ export function WalletPage() {
       clearError();
       setError(null);
       setSuccessMessage(null);
+      setSyncing(true);
       try {
         await performSyncRef.current();
       } catch (err) {
         if (!cancelled) {
           setError(formatApiError(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setSyncing(false);
         }
       }
     })();
@@ -162,10 +164,17 @@ export function WalletPage() {
     };
   }, [holderId, clearError]);
 
-  async function syncFromServer() {
-    await runAction(async () => {
+  async function refreshWalletData() {
+    setSyncing(true);
+    try {
       await performSync();
-    });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleRefresh() {
+    await runAction(refreshWalletData);
   }
 
   async function handleInit(event: React.FormEvent) {
@@ -242,7 +251,7 @@ export function WalletPage() {
     await runAction(async () => {
       const result = await withSoleControl((headers) => deleteCredential(credentialId, headers));
       setLastRaw(result);
-      await syncFromServer();
+      await refreshWalletData();
     });
   }
 
@@ -255,14 +264,14 @@ export function WalletPage() {
           ? `Credential #${credentialId} marked revoked in this wallet. The issuer status list was not updated (OID4VCI credential).`
           : `Credential #${credentialId} revoked on the wallet status list.`,
       );
-      await syncFromServer();
+      await refreshWalletData();
     });
   }
 
   async function handleIssueDemo() {
     if (!isIssuanceEligible(walletState?.state)) {
       setError(
-        "Initialize the wallet unit first (state must be OPERATIONAL). Use Sync from server to refresh status.",
+        "Initialize the wallet unit first (state must be OPERATIONAL). Use Refresh to update status.",
       );
       return;
     }
@@ -351,7 +360,7 @@ export function WalletPage() {
     event.preventDefault();
     if (walletKey?.revoked) {
       setError(
-        "This HSM key has been revoked and can no longer sign data. Sync from server to refresh status, or create a new key.",
+        "This HSM key has been revoked and can no longer sign data. Use Refresh to update status, or create a new key.",
       );
       return;
     }
@@ -413,7 +422,7 @@ export function WalletPage() {
           </div>
         ) : null}
 
-        <div className="wallet-hero">
+        <div className={`wallet-hero${syncing ? " wallet-hero--refreshing" : ""}`}>
           <div className="wallet-hero__main">
             <h1>Wallet</h1>
             <p className="wallet-hero__lead">
@@ -421,24 +430,28 @@ export function WalletPage() {
               <Link to="/issue">credential issuance</Link>. Holder <code>{holderId}</code>.
             </p>
             <p className="wallet-hero__sync">
-              {lastSyncedAt
-                ? `Last synced ${new Date(lastSyncedAt).toLocaleString()}`
-                : busy
-                  ? "Syncing from server…"
-                  : "Not synced yet."}
+              {syncing
+                ? "Refreshing wallet data…"
+                : lastSyncedAt
+                  ? `Last refreshed ${new Date(lastSyncedAt).toLocaleString()}`
+                  : "Not loaded yet."}
             </p>
           </div>
           <div className="wallet-hero__actions">
-            <button type="button" onClick={() => void syncFromServer()} disabled={busy}>
-              {busy ? "Syncing…" : "Sync from server"}
-            </button>
             <button
               type="button"
               className="button button--secondary"
-              onClick={refreshFromCache}
-              disabled={busy || !lastSyncedAt}
+              onClick={() => void handleRefresh()}
+              disabled={busy || syncing}
             >
-              Refresh view
+              {syncing ? (
+                <>
+                  <span className="btn-spinner" aria-hidden="true" />
+                  Refreshing…
+                </>
+              ) : (
+                "Refresh"
+              )}
             </button>
           </div>
         </div>
@@ -509,7 +522,7 @@ export function WalletPage() {
         ) : null}
 
         <div
-          className={`wallet-layout${asideHeight != null ? " wallet-layout--synced" : ""}`}
+          className={`wallet-layout${asideHeight != null ? " wallet-layout--synced" : ""}${syncing ? " wallet-layout--refreshing" : ""}`}
           style={
             asideHeight != null
               ? ({ "--wallet-aside-height": `${asideHeight}px` } as React.CSSProperties)
@@ -720,7 +733,7 @@ export function WalletPage() {
                   </div>
                 </dl>
               ) : (
-                <p className="hint">Sync from server or create a key to enable signing and issuance.</p>
+                <p className="hint">Refresh or create a key to enable signing and issuance.</p>
               )}
               {keyRevoked ? (
                 <div className="alert alert--info" role="status">

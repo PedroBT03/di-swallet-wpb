@@ -4,6 +4,10 @@
 
 package di.swallet.wpb.transactionlog.mapper
 
+import di.swallet.wpb.config.DataDeletionRequestProperties
+import di.swallet.wpb.config.DpaReportProperties
+import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.config.ProviderFallbackDpa
 import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
 import di.swallet.wpb.dpareport.RpDnsNameResolver
 import di.swallet.wpb.dpareport.Ts10DpaContactBuilder
@@ -18,6 +22,7 @@ import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.PresentationState
 import di.swallet.wpb.presentation.domain.RpRegistryRecord
 import di.swallet.wpb.presentation.domain.SelectedCredential
+import di.swallet.wpb.presentation.domain.SupervisoryAuthorityContact
 import di.swallet.wpb.transactionlog.domain.Ts10ClaimInfo
 import di.swallet.wpb.transactionlog.domain.Ts10CredentialDeletion
 import di.swallet.wpb.transactionlog.domain.Ts10CredentialIssuance
@@ -42,6 +47,9 @@ class PresentationTransactionMapper(
     private val contactBuilder: Ts10InteractingPartyContactBuilder,
     private val dpaContactBuilder: Ts10DpaContactBuilder,
     private val rpDnsNameResolver: RpDnsNameResolver,
+    private val openId4VpProperties: OpenId4VpProperties,
+    private val dataDeletionProperties: DataDeletionRequestProperties,
+    private val dpaReportProperties: DpaReportProperties,
 ) {
     /** Maps a terminal presentation context to a TS10 Presentation transaction. Returns null when not loggable. */
     fun fromContext(context: PresentationContext, now: Instant = Instant.now()): Ts10Transaction? {
@@ -82,8 +90,8 @@ class PresentationTransactionMapper(
                     policyUri = it,
                 )
             },
-            dpaName = dpa?.name,
-            dpaCountry = dpa?.country,
+            dpaName = resolveDpaName(registry),
+            dpaCountry = resolveDpaCountry(registry),
             dpaContact = buildDpaContact(dpa),
             rpDnsName = rpDnsNameResolver.fromContext(context),
             listOfClaimsRequested = requested,
@@ -188,16 +196,64 @@ class PresentationTransactionMapper(
             }
     }
 
-    /** Builds interacting-party contact strings from RP registry support URIs. */
+    /** Builds interacting-party contact strings from RP registry support URIs or demo fallbacks. */
     private fun buildContact(registry: RpRegistryRecord?): List<String> {
-        if (registry == null) return emptyList()
-        return contactBuilder.fromRegistry(registry)
+        if (registry != null) {
+            val fromRegistry = contactBuilder.fromRegistry(registry)
+            if (fromRegistry.isNotEmpty()) return fromRegistry
+        }
+        return demoRpDeletionContacts()
     }
 
-    /** Builds DPA contact strings from supervisory authority registry data. */
-    private fun buildDpaContact(dpa: di.swallet.wpb.presentation.domain.SupervisoryAuthorityContact?): List<String> {
-        if (dpa == null) return emptyList()
-        return dpaContactBuilder.fromSupervisoryAuthority(dpa)
+    /** Builds DPA contact strings from registry data or demo fallbacks. */
+    private fun buildDpaContact(dpa: SupervisoryAuthorityContact?): List<String> {
+        if (dpa != null) {
+            val fromRegistry = dpaContactBuilder.fromSupervisoryAuthority(dpa)
+            if (fromRegistry.isNotEmpty()) return fromRegistry
+        }
+        return demoDpaContacts()
+    }
+
+    private fun resolveDpaName(registry: RpRegistryRecord?): String? =
+        registry?.supervisoryAuthority?.name?.takeIf { it.isNotBlank() }
+            ?: demoDpaValue { it.name.takeIf { name -> name.isNotBlank() } }
+
+    private fun resolveDpaCountry(registry: RpRegistryRecord?): String? =
+        registry?.supervisoryAuthority?.country?.takeIf { it.isNotBlank() }
+            ?: demoDpaValue { it.country.takeIf { country -> country.isNotBlank() } }
+
+    private fun demoRpDeletionContacts(): List<String> {
+        if (!openId4VpProperties.demoMode) return emptyList()
+        val fallback = dataDeletionProperties.providerFallbackRp
+        if (!fallback.hasDeletionChannel()) return emptyList()
+        return contactBuilder.fromSupportUris(
+            country = fallback.country.takeIf { it.isNotBlank() },
+            supportUris = listOfNotNull(
+                fallback.email.takeIf { it.isNotBlank() },
+                fallback.phone.takeIf { it.isNotBlank() },
+                fallback.webUri.takeIf { it.isNotBlank() },
+            ),
+        )
+    }
+
+    private fun demoDpaContacts(): List<String> {
+        if (!openId4VpProperties.demoMode) return emptyList()
+        val fallback = dpaReportProperties.providerFallbackDpa
+        if (!fallback.hasContactChannel()) return emptyList()
+        return dpaContactBuilder.fromSupervisoryAuthority(
+            SupervisoryAuthorityContact(
+                name = fallback.name.takeIf { it.isNotBlank() },
+                country = fallback.country.takeIf { it.isNotBlank() },
+                email = listOfNotNull(fallback.email.takeIf { it.isNotBlank() }),
+                phone = listOfNotNull(fallback.phone.takeIf { it.isNotBlank() }),
+                formUri = listOfNotNull(fallback.formUri.takeIf { it.isNotBlank() }),
+            ),
+        )
+    }
+
+    private fun demoDpaValue(selector: (ProviderFallbackDpa) -> String?): String? {
+        if (!openId4VpProperties.demoMode) return null
+        return selector(dpaReportProperties.providerFallbackDpa)
     }
 }
 

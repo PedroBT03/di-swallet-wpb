@@ -4,6 +4,15 @@
 
 package di.swallet.wpb.transactionlog
 
+import di.swallet.wpb.config.DataDeletionRequestProperties
+import di.swallet.wpb.config.DpaReportProperties
+import di.swallet.wpb.config.OpenId4VpProperties
+import di.swallet.wpb.config.ProviderFallbackDpa
+import di.swallet.wpb.config.ProviderFallbackRpDeletion
+import di.swallet.wpb.datadeletion.SupportUriClassifier
+import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
+import di.swallet.wpb.dpareport.RpDnsNameResolver
+import di.swallet.wpb.dpareport.Ts10DpaContactBuilder
 import di.swallet.wpb.presentation.domain.ClaimPath
 import di.swallet.wpb.presentation.domain.ClaimPathSegment
 import di.swallet.wpb.presentation.domain.CredentialCandidate
@@ -12,30 +21,42 @@ import di.swallet.wpb.presentation.domain.CredentialQuery
 import di.swallet.wpb.presentation.domain.PresentationContext
 import di.swallet.wpb.presentation.domain.PresentationRequirements
 import di.swallet.wpb.presentation.domain.PresentationState
-import di.swallet.wpb.presentation.domain.SelectedCredential
-import di.swallet.wpb.presentation.domain.SessionMetadata
-import di.swallet.wpb.datadeletion.SupportUriClassifier
-import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
-import di.swallet.wpb.dpareport.RpDnsNameResolver
-import di.swallet.wpb.dpareport.Ts10DpaContactBuilder
-import di.swallet.wpb.presentation.trust.DefaultVerifierCertificateExtractor
 import di.swallet.wpb.presentation.domain.RegistryIntendedUse
 import di.swallet.wpb.presentation.domain.RpRegistryRecord
+import di.swallet.wpb.presentation.domain.SelectedCredential
+import di.swallet.wpb.presentation.domain.SessionMetadata
 import di.swallet.wpb.presentation.domain.SupervisoryAuthorityContact
+import di.swallet.wpb.presentation.trust.DefaultVerifierCertificateExtractor
 import di.swallet.wpb.transactionlog.mapper.PresentationTransactionMapper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID
 
 class PresentationTransactionMapperTest {
     private val classifier = SupportUriClassifier()
-    private val mapper = PresentationTransactionMapper(
-        Ts10InteractingPartyContactBuilder(classifier),
-        Ts10DpaContactBuilder(classifier),
-        RpDnsNameResolver(DefaultVerifierCertificateExtractor()),
-    )
+    private val contactBuilder = Ts10InteractingPartyContactBuilder(classifier)
+    private val dpaContactBuilder = Ts10DpaContactBuilder(classifier)
+    private val rpDnsNameResolver = RpDnsNameResolver(DefaultVerifierCertificateExtractor())
+    private val mapper = mapper(demoMode = false)
+
+    private fun mapper(
+        demoMode: Boolean,
+        dataDeletion: DataDeletionRequestProperties = DataDeletionRequestProperties(),
+        dpaReporting: DpaReportProperties = DpaReportProperties(),
+    ): PresentationTransactionMapper {
+        val openId4Vp = OpenId4VpProperties().apply { this.demoMode = demoMode }
+        return PresentationTransactionMapper(
+            contactBuilder,
+            dpaContactBuilder,
+            rpDnsNameResolver,
+            openId4Vp,
+            dataDeletion,
+            dpaReporting,
+        )
+    }
 
     /**
      * Maps a dispatched presentation context where given_name was selected but no attribute values appear in the context.
@@ -157,7 +178,57 @@ class PresentationTransactionMapperTest {
     @Test
     fun `maps demo presentation party reference from authorization request`() {
         val now = Instant.parse("2025-07-29T09:11:20Z")
-        val context = PresentationContext(
+        val context = demoAuthorizationContext(now)
+
+        val tx = mapper.fromContext(context, now)!!
+        assertEquals("openid_client_id", tx.presentation?.interactingPartyIdentifier?.type)
+        assertEquals("verifier-demo-client", tx.presentation?.interactingPartyIdentifier?.identifier)
+        assertEquals(
+            "http://127.0.0.1:8081/request/conformance/simple_claim.json",
+            tx.presentation?.registrarURL,
+        )
+        assertEquals(listOf("given_name"), tx.presentation?.listOfClaimsPresented?.first()?.claims)
+        assertTrue(tx.presentation?.interactingPartyContact.isNullOrEmpty())
+    }
+
+    /**
+     * Demo-mode presentations without registry store provider fallback contacts in the log
+     * so Privacy deletion and DPA flows can reuse them later.
+     */
+    @Test
+    fun `stores demo fallback contacts when registry is absent in demo mode`() {
+        val now = Instant.parse("2025-07-29T09:11:20Z")
+        val demoMapper = mapper(
+            demoMode = true,
+            dataDeletion = DataDeletionRequestProperties().apply {
+                providerFallbackRp = ProviderFallbackRpDeletion().apply {
+                    country = "PT"
+                    email = "privacy@demo-verifier.local"
+                    webUri = "http://localhost:8081/privacy"
+                }
+            },
+            dpaReporting = DpaReportProperties().apply {
+                providerFallbackDpa = ProviderFallbackDpa().apply {
+                    name = "CNPD (demo only)"
+                    country = "PT"
+                    email = "dpa-demo@local.test"
+                }
+            },
+        )
+
+        val tx = demoMapper.fromContext(demoAuthorizationContext(now), now)!!
+
+        assertEquals(
+            listOf("PT", "privacy@demo-verifier.local", "http://localhost:8081/privacy"),
+            tx.presentation?.interactingPartyContact,
+        )
+        assertEquals("CNPD (demo only)", tx.presentation?.dpaName)
+        assertEquals("PT", tx.presentation?.dpaCountry)
+        assertEquals(listOf("dpa-demo@local.test"), tx.presentation?.dpaContact)
+    }
+
+    private fun demoAuthorizationContext(now: Instant): PresentationContext =
+        PresentationContext(
             sessionMeta = SessionMetadata(
                 sessionId = UUID.randomUUID(),
                 holderId = "holder-1",
@@ -204,14 +275,4 @@ class PresentationTransactionMapperTest {
             ),
             consentDecision = di.swallet.wpb.presentation.domain.ConsentDecision(granted = true),
         )
-
-        val tx = mapper.fromContext(context, now)!!
-        assertEquals("openid_client_id", tx.presentation?.interactingPartyIdentifier?.type)
-        assertEquals("verifier-demo-client", tx.presentation?.interactingPartyIdentifier?.identifier)
-        assertEquals(
-            "http://127.0.0.1:8081/request/conformance/simple_claim.json",
-            tx.presentation?.registrarURL,
-        )
-        assertEquals(listOf("given_name"), tx.presentation?.listOfClaimsPresented?.first()?.claims)
-    }
 }

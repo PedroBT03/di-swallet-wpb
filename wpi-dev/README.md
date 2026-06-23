@@ -47,7 +47,7 @@ Open **Wallet** after signing in. Typical demo flow:
 
 Protected **sole-control** actions (consent approve/reject, HSM sign, revoke, delete) show an “Authenticating with passkey…” banner. Dashboard reads (wallet sync, consent **view**, transaction log) reuse the **holder session** opened at login (WIAM_15) and do not prompt again.
 
-On **Wallet**, **Sync from server** loads key and credentials without a new passkey prompt after login. **Refresh view** replays cached data locally. **Ensure HSM key** creates or returns an HSM key and **does** require a fresh passkey (WIAM_14).
+On **Wallet**, **Refresh** loads key and credentials from the server without a new passkey prompt after login. **Ensure HSM key** creates or returns an HSM key and **does** require a fresh passkey (WIAM_14).
 
 ### OpenID4VP present
 
@@ -66,19 +66,19 @@ Session state, `PresentationContext`, and audit events are shown at the bottom a
 3. Open **Issue**: pick PID or mDL, then **Start issuance**.
 4. **Continue** to prepare issuer authorization, then complete the **CMD** step (simulated citizen login).
 5. **Continue** for credential request; the storage consent screen loads automatically. **Approve** or **Reject** with your passkey (WIAM_14 / ISSU_11).
-6. Open **Wallet** → **Sync from server** to see the new credential.
+6. Open **Wallet** → **Refresh** to see the new credential.
 
 WIA, KA, `IssuanceContext`, and audit events appear in **Developer details** on Issue and Wallet.
 
 ### Transaction log and privacy
 
-1. After **Present** or **Issue** flows, open **Log** → **Load transactions** (uses holder session; no extra passkey).
-2. Click a row to load the decrypted TS10 payload (holder `dek-mode` needs log passphrase first).
+1. After **Present** or **Issue** flows, open **Log** (entries load automatically; use **Refresh** to update). Uses holder session; no extra passkey.
+2. Click a row to load the decrypted transaction record (holder `dek-mode` needs log passphrase first).
 3. Select entries and **Download JWE** with an export password.
 4. Open **Privacy** → load eligible presentations, then **Request deletion** or **Initiate report**.
 5. Use **Copy** / **Open** on returned `mailto:`, `tel:`, or `https:` contact URIs.
 
-**DPA report (demo):** local WPB uses a **dummy** DPA fallback (`dpa-demo@local.test`, labelled “CNPD (demo only)”) because emulator presentations do not store real supervisory-authority contacts and the RP registry is off by default. This lets you exercise mailto/actions in the lab only: configure real DPA contacts for production (see `application-dev.properties` comments and TS8).
+**DPA report (demo):** local WPB uses a **dummy** DPA fallback (`dpa-demo@local.test`, labelled “CNPD (demo only)”) because emulator presentations do not store real supervisory-authority contacts and the RP registry is off by default. This lets you exercise mailto/actions in the lab only: configure real DPA contacts for production (see `application-dev.properties` comments).
 
 When WPB runs with `wpb.transaction-log.dek-mode=holder`, derive the log key on **Log** before viewing detail or exporting.
 

@@ -77,7 +77,7 @@ function formatConflictMessage(detail: string): string {
   if (lower.includes("issuer-managed")) {
     return (
       "This credential was issued via OID4VCI and is managed by the issuer status list. " +
-      "The wallet cannot update that list from here — use Delete to remove it from the wallet, " +
+      "The wallet cannot update that list from here. Use Delete to remove it from the wallet, " +
       "or contact the issuer for formal revocation."
     );
   }

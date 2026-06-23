@@ -135,7 +135,42 @@ export function isSdContainerValue(value: unknown): boolean {
   return Array.isArray(record._sd) && record._sd_alg === "sha-256";
 }
 
-const ADDRESS_NESTED_LEAF_CLAIMS = new Set(["locality", "country"]);
+
+function sdDigestsInValue(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return [];
+  }
+  const sd = (value as Record<string, unknown>)._sd;
+  if (!Array.isArray(sd)) {
+    return [];
+  }
+  return sd.filter((item): item is string => typeof item === "string");
+}
+
+function parentClaimByChildDigest(disclosures: DecodedDisclosure[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const disc of disclosures) {
+    if (!isSdContainerValue(disc.value)) {
+      continue;
+    }
+    for (const digest of sdDigestsInValue(disc.value)) {
+      map.set(digest, disc.claim);
+    }
+  }
+  return map;
+}
+
+/** Maps nested leaf claim names to qualified paths using the parent SD-JWT container. */
+export function qualifyDisclosureClaimPath(
+  disc: DecodedDisclosure,
+  allInPresentation: DecodedDisclosure[],
+): string {
+  if (disc.claim.includes(".")) {
+    return disc.claim;
+  }
+  const parent = parentClaimByChildDigest(allInPresentation).get(disc.digest);
+  return parent ? `${parent}.${disc.claim}` : disc.claim;
+}
 
 /** Leaf disclosures carry holder-visible values; container disclosures are structural only. */
 export function isLeafDisclosure(
@@ -155,18 +190,8 @@ export function isLeafDisclosure(
   return true;
 }
 
-/** Maps nested leaf claim names (e.g. country) to DCQL-style paths (address.country). */
-export function formatDisclosureClaimPath(
-  disc: DecodedDisclosure,
-  allInPresentation: DecodedDisclosure[],
-): string {
-  const hasAddressContainer = allInPresentation.some(
-    (d) => d.claim === "address" && isSdContainerValue(d.value),
-  );
-  if (hasAddressContainer && ADDRESS_NESTED_LEAF_CLAIMS.has(disc.claim)) {
-    return `address.${disc.claim}`;
-  }
-  return disc.claim;
+function sharedClaimKey(claim: string, value: unknown): string {
+  return `${claim}\0${JSON.stringify(value)}`;
 }
 
 export interface SharedLeafClaim {
@@ -177,13 +202,22 @@ export interface SharedLeafClaim {
 
 /** Human-visible claims included in this presentation (wire-token disclosures, leaf only). */
 export function listSharedLeafClaims(parsed: ParsedSdJwtPresentation): SharedLeafClaim[] {
-  return parsed.disclosures
-    .filter((disc) => isLeafDisclosure(disc, parsed.disclosures))
-    .map((disc) => ({
-      queryId: parsed.queryId,
-      claim: formatDisclosureClaimPath(disc, parsed.disclosures),
-      value: disc.value,
-    }));
+  const seen = new Set<string>();
+  const rows: SharedLeafClaim[] = [];
+  for (const disc of parsed.disclosures) {
+    if (!isLeafDisclosure(disc, parsed.disclosures)) {
+      continue;
+    }
+    const claim = qualifyDisclosureClaimPath(disc, parsed.disclosures);
+    const key = sharedClaimKey(claim, disc.value);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    rows.push({ queryId: parsed.queryId, claim, value: disc.value });
+  }
+  rows.sort((a, b) => a.claim.localeCompare(b.claim));
+  return rows;
 }
 
 /** Parses an SD-JWT VP string into issuer JWT, disclosures, and optional KB-JWT. */

@@ -1,11 +1,11 @@
-import type { Ts10ClaimInfo, Ts10Transaction } from "./transactionLog";
+import type { LogClaimInfo, LogTransactionDetail } from "./transactionLog";
 
 export interface EligiblePresentation {
   presentationTransactionId: string;
   rpIdentifier: string | null;
   rpName: string | null;
   presentationTime: string;
-  presentedClaims: Ts10ClaimInfo[];
+  presentedClaims: LogClaimInfo[];
   hasStoredDeletionContacts: boolean;
 }
 
@@ -17,7 +17,7 @@ export interface PrivacyAction {
 export interface DataDeletionInitiateRequest {
   holderId: string;
   presentationTransactionId: string;
-  claimsToDelete?: Ts10ClaimInfo[];
+  claimsToDelete?: LogClaimInfo[];
   deleteAllPresented?: boolean;
   consentRegistryLookup?: boolean;
 }
@@ -59,5 +59,5 @@ export interface DpaReportInitiateResponse {
   availableActions: PrivacyAction[];
   registryLookupPerformed: boolean;
   userNotice: string | null;
-  substantiationDocument: Ts10Transaction;
+  substantiationDocument: LogTransactionDetail;
 }

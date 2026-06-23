@@ -105,4 +105,38 @@ class SdJwtDisclosureSelectorTest {
         val names = selector.parseDisclosures(selected).map { it.claimName }.toSet()
         assertEquals(setOf("address", "locality"), names)
     }
+
+    /**
+     * Homonymous nested leaves (country/locality) under address vs place_of_birth must not cross-match.
+     */
+    @Test
+    fun `nested path selects only leaves under the requested parent object`() {
+        val address = sdJwtService.createNestedObjectDisclosures(
+            "address",
+            mapOf("locality" to "Lisbon", "country" to "PT"),
+        )
+        val placeOfBirth = sdJwtService.createNestedObjectDisclosures(
+            "place_of_birth",
+            mapOf("locality" to "Lisbon", "country" to "PT"),
+        )
+        val given = sdJwtService.createDisclosure("given_name", "Pedro")
+        val issuing = sdJwtService.createDisclosure("issuing_country", "PT")
+        val stored = address.disclosures + placeOfBirth.disclosures + listOf(given, issuing)
+
+        val paths = listOf(
+            ClaimPath.fromDotNotation("address.locality"),
+            ClaimPath.fromDotNotation("address.country"),
+            ClaimPath.key("given_name"),
+            ClaimPath.key("issuing_country"),
+        )
+        val selected = selector.selectDisclosures(stored, paths)
+        val parsed = selector.parseDisclosures(selected)
+
+        assertFalse(parsed.any { it.claimName == "place_of_birth" })
+        assertEquals(1, parsed.count { it.claimName == "locality" })
+        assertEquals(1, parsed.count { it.claimName == "country" })
+        assertTrue(parsed.any { it.claimName == "address" })
+        assertTrue(parsed.any { it.claimName == "given_name" })
+        assertTrue(parsed.any { it.claimName == "issuing_country" })
+    }
 }

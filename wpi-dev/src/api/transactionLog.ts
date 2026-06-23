@@ -1,7 +1,7 @@
 import type {
   TransactionExportRequest,
   TransactionLogSummary,
-  Ts10Transaction,
+  LogTransactionDetail,
 } from "../types/transactionLog";
 import { apiFetch } from "./client";
 
@@ -28,8 +28,8 @@ export function fetchTransaction(
   transactionId: string,
   authHeaders: Headers,
   logKeyBase64?: string | null,
-): Promise<Ts10Transaction> {
-  return apiFetch<Ts10Transaction>(
+): Promise<LogTransactionDetail> {
+  return apiFetch<LogTransactionDetail>(
     `/api/v1/wallet/transactions/${encodeURIComponent(transactionId)}?holderId=${encodeURIComponent(holderId)}`,
     { raw: true, headers: mergeHeaders(authHeaders, logKeyBase64) },
   );

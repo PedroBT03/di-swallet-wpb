@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   deleteTransaction,
@@ -19,12 +19,13 @@ import {
 import {
   downloadTextFile,
   formatOccurredAt,
+  logAccessCopy,
   resultBadgeVariant,
   sortNewestFirst,
   transactionTypeLabel,
 } from "../features/log/state";
 import { useAuthedApi } from "../hooks/useAuthedApi";
-import type { TransactionLogSummary, Ts10Transaction } from "../types/transactionLog";
+import type { LogTransactionDetail, TransactionLogSummary } from "../types/transactionLog";
 import { formatApiError } from "../utils/apiError";
 
 export function LogPage() {
@@ -37,13 +38,16 @@ export function LogPage() {
   const [transactions, setTransactions] = useState<TransactionLogSummary[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<Ts10Transaction | null>(null);
+  const [detail, setDetail] = useState<LogTransactionDetail | null>(null);
   const [exportPassword, setExportPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [lastRaw, setLastRaw] = useState<unknown>(null);
+  const [showLogUnlock, setShowLogUnlock] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const holderDekMode = dekMode === "holder";
   const needsLogKey = holderDekMode && !logKeyReady;
+  const logAccess = logAccessCopy(dekMode);
 
   const refreshDekMode = useCallback(() => {
     fetchWpbOperationalInfo()
@@ -77,6 +81,7 @@ export function LogPage() {
     saveLogKeyBase64(bytesToBase64(derived));
     setLogKeyReady(true);
     setLogPassphrase("");
+    setShowLogUnlock(false);
   }
 
   function forgetLogKey() {
@@ -84,21 +89,65 @@ export function LogPage() {
     setLogKeyReady(false);
     setDetail(null);
     setActiveId(null);
+    setShowLogUnlock(false);
   }
 
-  async function loadList() {
+  function promptLogUnlock(message: string) {
+    setShowLogUnlock(true);
+    setError(message);
+  }
+
+  const refreshList = useCallback(async () => {
     await withApiAuth(async (headers) => {
       const list = await fetchTransactions(holderId, headers);
       setTransactions(sortNewestFirst(list));
       setSelectedIds(list.map((entry) => entry.transactionId));
       setLastRaw(list);
     });
+  }, [holderId, withApiAuth]);
+
+  const refreshListRef = useRef(refreshList);
+  refreshListRef.current = refreshList;
+
+  useEffect(() => {
+    if (!holderId) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      clearError();
+      setError(null);
+      setRefreshing(true);
+      try {
+        await refreshListRef.current();
+      } catch (err) {
+        if (!cancelled) {
+          setError(formatApiError(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setRefreshing(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [holderId, clearError]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await refreshList();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   async function loadDetail(transactionId: string) {
     const logKey = loadLogKeyBase64();
     if (needsLogKey) {
-      setError("Unlock the transaction log with your passphrase first.");
+      promptLogUnlock("Enter your log passphrase to view transaction details.");
       return;
     }
     await withApiAuth(async (headers) => {
@@ -113,7 +162,7 @@ export function LogPage() {
     await withSoleControl(async (headers) => {
       const result = await deleteTransaction(holderId, transactionId, headers);
       setLastRaw(result);
-      await loadList();
+      await refreshList();
       if (activeId === transactionId) {
         setActiveId(null);
         setDetail(null);
@@ -128,7 +177,7 @@ export function LogPage() {
     }
     const logKey = loadLogKeyBase64();
     if (needsLogKey) {
-      setError("Unlock the transaction log with your passphrase first.");
+      promptLogUnlock("Enter your log passphrase before exporting.");
       return;
     }
     await withApiAuth(async (headers) => {
@@ -157,82 +206,53 @@ export function LogPage() {
 
   return (
     <AuthGate>
-      <section className="page">
+      <section className="page page--log">
         <header className="page__header">
           <h1>Transaction log</h1>
           <p className="page__lead">
-            Holder transaction history, detail view, and password-protected JWE export.
+            Review presentations, issuances, and other wallet activity. Open a row for the full
+            record, or export selected entries as a password-protected file.
           </p>
         </header>
 
         {busy ? <AuthenticatingBanner /> : null}
         {error ? <div className="alert alert--error">{error}</div> : null}
 
-        <div className="card">
+        <div className="page-stack">
+        <div className="card log-access-card">
           <h2 className="card__title">Log access</h2>
-          <p className="hint">
-            DEK mode: <code>{dekMode ?? "unknown"}</code>
-            {holderDekMode ? (
-              <>
-                . WPB cannot decrypt payloads without <code>X-Wallet-Log-Key</code> from this UI.
-              </>
-            ) : (
-              <>. Server-side DEK (typical dev profile).</>
-            )}
+          <p className="hint log-access-hint">
+            <strong className="log-access-hint__summary">{logAccess.summary}</strong>
+            <span className="log-access-hint__detail">{logAccess.detail}</span>
           </p>
-          {holderDekMode ? (
-            <div className="form">
-              <label className="form__field">
-                <span className="form__label">Log passphrase</span>
-                <input
-                  type="password"
-                  value={logPassphrase}
-                  onChange={(event) => setLogPassphrase(event.target.value)}
-                  autoComplete="current-password"
-                  disabled={logKeyReady}
-                />
-              </label>
-              <div className="toolbar">
-                <button
-                  type="button"
-                  disabled={busy || logKeyReady}
-                  onClick={() => void runAction(unlockLogKey)}
-                >
-                  Derive log key
-                </button>
-                {logKeyReady ? (
-                  <button type="button" className="button button--secondary" onClick={forgetLogKey}>
-                    Forget log key
-                  </button>
-                ) : null}
-              </div>
-              {logKeyReady ? (
-                <p className="hint">Log key ready for this browser session.</p>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="toolbar">
+          <div className="toolbar log-access-card__toolbar">
             <button
               type="button"
-              disabled={busy || !holderId}
-              onClick={() => void runAction(loadList)}
+              className="button button--secondary"
+              disabled={busy || refreshing || !holderId}
+              onClick={() => void runAction(handleRefresh)}
             >
-              Load transactions
+              {refreshing ? "Refreshing…" : "Refresh"}
             </button>
           </div>
         </div>
 
-        {transactions ? (
+        {holderId ? (
           <div className="card">
-            <h2 className="card__title">Entries ({transactions.length})</h2>
-            {transactions.length === 0 ? (
+            <h2 className="card__title">
+              Entries{transactions ? ` (${transactions.length})` : ""}
+            </h2>
+            {refreshing && transactions === null ? (
+              <p className="hint">Loading transactions…</p>
+            ) : transactions && transactions.length === 0 ? (
               <p className="hint">
                 No transactions yet. Run a <Link to="/present">Present</Link> or{" "}
                 <Link to="/issue">Issue</Link> flow first.
               </p>
-            ) : (
-              <div className="table-wrap">
-                <table className="data-table">
+            ) : transactions && transactions.length > 0 ? (
+              <div className="log-entries__scroll panel-scroll">
+                <div className="table-wrap">
+                  <table className="data-table">
                   <thead>
                     <tr>
                       <th scope="col">Export</th>
@@ -283,15 +303,50 @@ export function LogPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
-            )}
+            ) : null}
           </div>
+        ) : null}
+
+        {showLogUnlock && !logKeyReady ? (
+          <div className="card">
+            <h2 className="card__title">Log passphrase</h2>
+            <p className="hint">
+              Required in production mode to decrypt transaction details on the server.
+            </p>
+            <div className="form">
+              <label className="form__field">
+                <span className="form__label">Log passphrase</span>
+                <input
+                  type="password"
+                  value={logPassphrase}
+                  onChange={(event) => setLogPassphrase(event.target.value)}
+                  autoComplete="current-password"
+                />
+              </label>
+              <div className="toolbar">
+                <button type="button" disabled={busy} onClick={() => void runAction(unlockLogKey)}>
+                  Derive log key
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {logKeyReady ? (
+          <p className="hint">
+            Log key ready for this browser session.{" "}
+            <button type="button" className="link-button" onClick={forgetLogKey}>
+              Forget log key
+            </button>
+          </p>
         ) : null}
 
         {detail ? (
           <div className="card">
             <h2 className="card__title">Transaction detail</h2>
-            <JsonPanel title="TS10 payload" data={detail} />
+            <JsonPanel title="Full record" data={detail} />
           </div>
         ) : null}
 
@@ -326,6 +381,7 @@ export function LogPage() {
         ) : null}
 
         {lastRaw ? <JsonPanel title="Last API response" data={lastRaw} /> : null}
+        </div>
       </section>
     </AuthGate>
   );

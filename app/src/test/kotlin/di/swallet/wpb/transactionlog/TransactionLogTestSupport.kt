@@ -7,6 +7,9 @@ package di.swallet.wpb.transactionlog
 import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.testTransactionLogProperties
 import di.swallet.wpb.transactionlog.CredentialIssuerResolver
+import di.swallet.wpb.config.DataDeletionRequestProperties
+import di.swallet.wpb.config.DpaReportProperties
+import di.swallet.wpb.config.OpenId4VpProperties
 import di.swallet.wpb.datadeletion.SupportUriClassifier
 import di.swallet.wpb.datadeletion.Ts10InteractingPartyContactBuilder
 import di.swallet.wpb.dpareport.RpDnsNameResolver
@@ -34,8 +37,21 @@ object TransactionLogTestSupport {
     private val rpDnsNameResolver = RpDnsNameResolver(DefaultVerifierCertificateExtractor())
 
     /** Builds a presentation mapper wired with real contact classifiers and RP DNS resolution for unit tests. */
-    fun presentationTransactionMapper(): PresentationTransactionMapper =
-        PresentationTransactionMapper(contactBuilder, dpaContactBuilder, rpDnsNameResolver)
+    fun presentationTransactionMapper(
+        demoMode: Boolean = false,
+        dataDeletion: DataDeletionRequestProperties = DataDeletionRequestProperties(),
+        dpaReporting: DpaReportProperties = DpaReportProperties(),
+    ): PresentationTransactionMapper {
+        val openId4Vp = OpenId4VpProperties().apply { this.demoMode = demoMode }
+        return PresentationTransactionMapper(
+            contactBuilder,
+            dpaContactBuilder,
+            rpDnsNameResolver,
+            openId4Vp,
+            dataDeletion,
+            dpaReporting,
+        )
+    }
 
     /** Returns a TransactionLogger whose recorder drops all entries but still exercises the full mapper stack. */
     fun noopTransactionLogger(): TransactionLogger =

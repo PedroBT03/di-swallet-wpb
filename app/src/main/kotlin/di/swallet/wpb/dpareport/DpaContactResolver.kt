@@ -168,6 +168,7 @@ class DpaContactResolver(
                 )
             }
             is RegistryResolution.Rejected -> null
+            else -> null
         }
 
     /** Builds a configured provider fallback DPA candidate when registry and log data are missing. */

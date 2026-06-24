@@ -130,6 +130,7 @@ class DeletionContactResolver(
                 contactBuilder.parseStoredContact(classified)
             }
             is RegistryResolution.Rejected -> ParsedDeletionContacts()
+            else -> ParsedDeletionContacts()
         }
 
     private fun buildProviderFallbackContacts(): ParsedDeletionContacts? {

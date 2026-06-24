@@ -116,7 +116,7 @@ class MdocOpenId4VpRuntimeE2ETest {
             storage = storage,
             holderId = "holder-1",
             configurationId = "org.iso.18013.5.1.mDL",
-            keyAttestation = null,
+            keyAttestation = keyAttestation(),
         )
 
         val gateway = PresentationGatewayStub()

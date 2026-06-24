@@ -214,7 +214,7 @@ class DefaultPresentationFlowOrchestrator(
             return dispatchTerminalNegative(context, "registry.dispatch.negative")
         }
 
-        context = refreshWalletCandidates(credentialMatcher.match(context))
+        context = credentialMatcher.match(context)
         context = persistUpdate(context)
         record(context, "matching.completed", mapOf("candidates" to context.credentialCandidates.size.toString()))
 

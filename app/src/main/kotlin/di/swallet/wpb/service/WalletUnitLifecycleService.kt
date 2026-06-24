@@ -32,47 +32,52 @@ class WalletUnitLifecycleService(
         )
 
     /**
-     * Moves a candidate wallet unit to OPERATIONAL after device binding is complete.
-     */
-    fun activate(walletUnit: WalletUnit): WalletUnit =
-        transition(walletUnit, WalletUnitState.OPERATIONAL)
-
-    /**
-     * Marks an operational wallet unit as VALID after successful credential key binding.
+     * Activates a candidate wallet unit to VALID after identity establishment / first issuance.
      */
     fun markValid(walletUnit: WalletUnit): WalletUnit =
         transition(walletUnit, WalletUnitState.VALID)
 
     /**
      * Returns the holder's wallet unit when it is eligible for credential issuance.
+     *
+     * A CANDIDATE wallet is eligible: an anonymous, provisioned wallet may obtain its first
+     * credential (PID via CMD), which then promotes it to VALID. A VALID wallet stays eligible.
      */
     fun requireIssuanceEligible(holderId: String): WalletUnit {
         val walletUnit = walletUnitRepository.findFirstByHolderId(holderId)
             .orElseThrow {
                 ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Wallet unit for holder '$holderId' is not activated (WIAM_07)",
+                    "Wallet unit for holder '$holderId' is not provisioned (WIAM_07)",
                 )
             }
         if (walletUnit.state !in ISSUANCE_ELIGIBLE) {
             throw ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Wallet '${walletUnit.walletId}' must be OPERATIONAL or VALID before issuance (current=${walletUnit.state})",
+                "Wallet '${walletUnit.walletId}' must be CANDIDATE or VALID before issuance (current=${walletUnit.state})",
             )
         }
         return walletUnit
     }
 
     /**
-     * Rejects operations when the wallet unit is not OPERATIONAL or VALID.
+     * Returns the holder's wallet unit when holder-facing signing is allowed (VALID only).
      */
-    fun requireOperational(walletUnit: WalletUnit) {
-        if (walletUnit.state !in OPERATIONAL_OR_VALID) {
+    fun requireSignCapable(holderId: String): WalletUnit {
+        val walletUnit = walletUnitRepository.findFirstByHolderId(holderId)
+            .orElseThrow {
+                ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Wallet unit for holder '$holderId' is not provisioned",
+                )
+            }
+        if (walletUnit.state != WalletUnitState.VALID) {
             throw ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Wallet '${walletUnit.walletId}' is not operational (current=${walletUnit.state})",
+                "Wallet '${walletUnit.walletId}' must be VALID before holder signing (current=${walletUnit.state})",
             )
         }
+        return walletUnit
     }
 
     /**
@@ -80,6 +85,18 @@ class WalletUnitLifecycleService(
      */
     fun revoke(walletUnit: WalletUnit): WalletUnit =
         transition(walletUnit, WalletUnitState.REVOKED)
+
+    /**
+     * Temporarily blocks a valid wallet unit.
+     */
+    fun suspend(walletUnit: WalletUnit): WalletUnit =
+        transition(walletUnit, WalletUnitState.SUSPENDED)
+
+    /**
+     * Restores a suspended wallet unit to VALID.
+     */
+    fun unsuspend(walletUnit: WalletUnit): WalletUnit =
+        transition(walletUnit, WalletUnitState.VALID)
 
     /**
      * Persists a wallet unit state change when the transition is allowed by lifecycle rules.
@@ -107,15 +124,14 @@ class WalletUnitLifecycleService(
      */
     private fun isAllowed(from: WalletUnitState, to: WalletUnitState): Boolean =
         when (from) {
-            WalletUnitState.CANDIDATE -> to == WalletUnitState.OPERATIONAL
-            WalletUnitState.OPERATIONAL -> to in setOf(WalletUnitState.VALID, WalletUnitState.SUSPENDED, WalletUnitState.REVOKED)
-            WalletUnitState.VALID -> to in setOf(WalletUnitState.SUSPENDED, WalletUnitState.REVOKED)
-            WalletUnitState.SUSPENDED -> to == WalletUnitState.OPERATIONAL
-            else -> false
+            WalletUnitState.CANDIDATE -> to in setOf(WalletUnitState.VALID, WalletUnitState.REVOKED, WalletUnitState.DELETED)
+            WalletUnitState.VALID -> to in setOf(WalletUnitState.SUSPENDED, WalletUnitState.REVOKED, WalletUnitState.DELETED)
+            WalletUnitState.SUSPENDED -> to in setOf(WalletUnitState.VALID, WalletUnitState.REVOKED, WalletUnitState.DELETED)
+            WalletUnitState.REVOKED -> to == WalletUnitState.DELETED
+            WalletUnitState.DELETED -> false
         }
 
     companion object {
-        private val ISSUANCE_ELIGIBLE = setOf(WalletUnitState.OPERATIONAL, WalletUnitState.VALID)
-        private val OPERATIONAL_OR_VALID = ISSUANCE_ELIGIBLE
+        private val ISSUANCE_ELIGIBLE = setOf(WalletUnitState.CANDIDATE, WalletUnitState.VALID)
     }
 }

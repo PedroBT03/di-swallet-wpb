@@ -11,7 +11,6 @@ export interface WalletInitRequest {
   holderId: string;
   platform: string;
   devicePubJwk: string;
-  pidPubJwk?: string;
   userDeviceId?: number;
 }
 
@@ -19,7 +18,10 @@ export interface WalletInitResult {
   walletId: string;
   state: string;
   dpopBound: boolean;
-  pidKeyBound: boolean;
+  /** Wallet Instance Attestation JWT issued at provisioning (WUA part 1). */
+  wia?: string;
+  /** Key Attestation JWT issued at provisioning for the holder key (WUA part 2). */
+  ka?: string;
 }
 
 export interface WalletKeyRecord {

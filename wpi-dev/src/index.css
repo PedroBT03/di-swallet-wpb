@@ -577,6 +577,56 @@ button:disabled {
   color: var(--up);
 }
 
+.wallet-provision-status {
+  margin: 0.75rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.wallet-provision-status__summary {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.wallet-provision-status__valid {
+  margin: 0;
+}
+
+.wallet-cmd-prompt {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.wallet-cmd-prompt__text {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.wallet-cmd-prompt__lab {
+  margin: 0;
+}
+
+.wallet-init-dev {
+  margin-top: 0;
+}
+
+.wallet-init-dev summary {
+  font-size: 0.9rem;
+}
+
 .wallet-layout {
   display: grid;
   gap: 1.25rem;
@@ -674,15 +724,14 @@ button:disabled {
 
 .wallet-key-meta {
   display: grid;
-  gap: 0.5rem;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.75rem;
+  row-gap: 0.5rem;
+  font-size: 0.88rem;
 }
 
 .wallet-key-meta__row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.75rem;
-  font-size: 0.88rem;
+  display: contents;
 }
 
 .wallet-key-meta__row dt {
@@ -692,7 +741,7 @@ button:disabled {
 
 .wallet-key-meta__row dd {
   margin: 0;
-  text-align: right;
+  min-width: 0;
 }
 
 .wallet-credentials {
@@ -1281,6 +1330,10 @@ button:disabled {
   background: var(--surface-muted);
 }
 
+.page > .present-dev-details {
+  margin-top: 1.25rem;
+}
+
 .present-dev-details summary {
   cursor: pointer;
   font-size: 0.9rem;
@@ -1666,6 +1719,37 @@ button:disabled {
   white-space: nowrap;
   width: 100%;
   max-width: 100%;
+  cursor: help;
+}
+
+.middle-truncate {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.middle-truncate__start {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.middle-truncate__sep,
+.middle-truncate__end {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.wallet-key-meta__row dd code {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   cursor: help;
 }
 

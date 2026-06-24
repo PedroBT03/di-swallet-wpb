@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { createHolderSession, fetchAuthChallenge, registerDevice } from "../api/auth";
 import { ApiError } from "../api/client";
+import { clearWalletState } from "../features/wallet/storage";
 import {
   clearSession,
   forgetRememberedSession,
@@ -217,11 +218,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const forgetDevice = useCallback(() => {
+    const holderId = session?.holderId ?? rememberedSession?.holderId;
     forgetRememberedSession();
+    if (holderId) {
+      clearWalletState(holderId);
+    }
     setSession(null);
     setRememberedSession(null);
     setError(null);
-  }, []);
+  }, [session?.holderId, rememberedSession?.holderId]);
 
   const value = useMemo(
     () => ({

@@ -13,6 +13,7 @@ import di.swallet.wpb.service.DeviceBindingService
 import di.swallet.wpb.service.WalletInitCommand
 import di.swallet.wpb.service.WalletUnitLifecycleService
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -34,10 +35,10 @@ class WalletUnitLifecycleTest : BaseIntegrationTest() {
     lateinit var deviceWalletBindingRepository: DeviceWalletBindingRepository
 
     /**
-     * initWallet with device JWK returns OPERATIONAL and persists an operational wallet unit for the holder.
+     * initWallet provisions an anonymous CANDIDATE wallet unit and issues the WUA (WIA + KA).
      */
     @Test
-    fun `init creates candidate then activates to operational`() {
+    fun `init provisions candidate wallet with wua`() {
         val holderId = "lifecycle-${UUID.randomUUID()}"
         val result = deviceBindingService.initWallet(
             WalletInitCommand(
@@ -46,20 +47,40 @@ class WalletUnitLifecycleTest : BaseIntegrationTest() {
                 devicePubJwk = WalletTestSupport.ecPublicJwk(),
             ),
         )
-        assertEquals(WalletUnitState.OPERATIONAL, result.state)
+        assertEquals(WalletUnitState.CANDIDATE, result.state)
+        assertNotNull(result.wiaJwt)
+        assertNotNull(result.kaJwt)
         val wallet = walletUnitRepository.findFirstByHolderId(holderId).orElseThrow()
-        assertEquals(WalletUnitState.OPERATIONAL, wallet.state)
+        assertEquals(WalletUnitState.CANDIDATE, wallet.state)
     }
 
     /**
-     * requireIssuanceEligible for a holder without init throws ResponseStatusException.
+     * requireIssuanceEligible for a holder without a provisioned wallet throws ResponseStatusException.
      */
     @Test
-    fun `issuance requires operational wallet`() {
+    fun `issuance requires provisioned wallet`() {
         val holderId = "not-init-${UUID.randomUUID()}"
         assertThrows(ResponseStatusException::class.java) {
             walletUnitLifecycleService.requireIssuanceEligible(holderId)
         }
+    }
+
+  /**
+   * requireSignCapable rejects CANDIDATE wallets until identity activation.
+   */
+    @Test
+    fun `holder sign requires valid wallet`() {
+        val holderId = "sign-eligible-${UUID.randomUUID()}"
+        deviceBindingService.initWallet(
+            WalletInitCommand(holderId = holderId, platform = "web", devicePubJwk = WalletTestSupport.ecPublicJwk()),
+        )
+        assertThrows(ResponseStatusException::class.java) {
+            walletUnitLifecycleService.requireSignCapable(holderId)
+        }
+        val wallet = walletUnitRepository.findFirstByHolderId(holderId).orElseThrow()
+        walletUnitLifecycleService.markValid(wallet)
+        val eligible = walletUnitLifecycleService.requireSignCapable(holderId)
+        assertEquals(WalletUnitState.VALID, eligible.state)
     }
 
     /**

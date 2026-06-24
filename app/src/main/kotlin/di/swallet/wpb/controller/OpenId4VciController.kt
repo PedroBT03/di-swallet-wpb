@@ -56,7 +56,10 @@ class OpenId4VciController(
     @PostMapping("/authorize/prepare")
     @Operation(summary = "Prepare an authorization-code grant (PKCE / PAR / DPoP)")
     fun prepareAuthorization(@RequestBody request: SessionScopedRequest): IssuanceContext =
-        orchestrator.prepareAuthorization(UUID.fromString(request.sessionId))
+        orchestrator.prepareAuthorization(
+            UUID.fromString(request.sessionId),
+            request.walletAttestationPopJwt,
+        )
 
     /**
      * Exchanges an authorization code for tokens and advances the issuance session.
@@ -79,6 +82,7 @@ class OpenId4VciController(
         orchestrator.completePreAuthorizedCode(
             sessionId = UUID.fromString(request.sessionId),
             txCode = request.txCode,
+            walletAttestationPopJwt = request.walletAttestationPopJwt,
         )
 
     /**
@@ -172,13 +176,20 @@ class OpenId4VciController(
 data class OfferResolveRequest(val offerUri: String, val holderId: String? = null)
 
 /** Request body that identifies an issuance session by id. */
-data class SessionScopedRequest(val sessionId: String)
+data class SessionScopedRequest(
+    val sessionId: String,
+    val walletAttestationPopJwt: String? = null,
+)
 
 /** Request body for completing an authorization-code grant. */
 data class AuthorizationCodeRequest(val sessionId: String, val authorizationCode: String, val state: String)
 
 /** Request body for completing a pre-authorized code grant. */
-data class PreAuthorizedRequest(val sessionId: String, val txCode: String? = null)
+data class PreAuthorizedRequest(
+    val sessionId: String,
+    val txCode: String? = null,
+    val walletAttestationPopJwt: String? = null,
+)
 
 /** Request body for requesting credential issuance from the issuer. */
 data class CredentialRequest(

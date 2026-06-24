@@ -8,7 +8,7 @@ interface Uc1StepperProps {
 
 const STEPS: { id: Uc1Step; label: string }[] = [
   { id: "passkey", label: "Register passkey" },
-  { id: "init", label: "Initialize wallet" },
+  { id: "init", label: "Provision wallet" },
   { id: "hsm", label: "HSM key" },
   { id: "ready", label: "Ready to issue" },
 ];

@@ -85,10 +85,10 @@ class HsmService(
         }
         val key = existing.get()
         if (!statusListService.isRevoked(key.revocationIndex)) {
-            return key
+            return relinkWalletUnitIfNeeded(key, walletUnit)
         }
         logger.info("WSCA: Rotating revoked key for user $userId")
-        return rotateRevokedKey(key)
+        return rotateRevokedKey(key, walletUnit)
     }
 
     /**
@@ -115,7 +115,7 @@ class HsmService(
         }
     }
 
-    private fun rotateRevokedKey(existing: WalletKey): WalletKey {
+    private fun rotateRevokedKey(existing: WalletKey, walletUnit: WalletUnit? = null): WalletKey {
         try {
             val material = createHsmKeyMaterial(existing.userId)
             runCatching { deleteKeyEntry(existing.keyAlias) }
@@ -129,13 +129,31 @@ class HsmService(
                     publicKeyBase64 = material.publicKeyBase64,
                     revocationIndex = statusListService.getNextRevocationIndex(),
                     createdAt = java.time.LocalDateTime.now(),
-                    walletUnit = existing.walletUnit,
+                    walletUnit = existing.walletUnit ?: walletUnit,
                 ),
             )
         } catch (e: Exception) {
             logger.error("WSCA: Key rotation failed for user ${existing.userId}: ${e.message}")
             throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "HSM key rotation failed: ${e.message}")
         }
+    }
+
+    /** Backfills wallet_unit_id when a legacy key predates wallet init. */
+    private fun relinkWalletUnitIfNeeded(key: WalletKey, walletUnit: WalletUnit?): WalletKey {
+        if (key.walletUnit != null || walletUnit == null) {
+            return key
+        }
+        return walletKeyRepository.save(
+            WalletKey(
+                id = key.id,
+                userId = key.userId,
+                keyAlias = key.keyAlias,
+                publicKeyBase64 = key.publicKeyBase64,
+                revocationIndex = key.revocationIndex,
+                createdAt = key.createdAt,
+                walletUnit = walletUnit,
+            ),
+        )
     }
 
     private data class HsmKeyMaterial(val alias: String, val publicKeyBase64: String)

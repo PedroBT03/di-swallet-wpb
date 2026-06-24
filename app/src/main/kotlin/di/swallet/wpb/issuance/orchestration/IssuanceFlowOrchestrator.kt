@@ -23,13 +23,13 @@ interface IssuanceFlowOrchestrator {
     fun resolveOffer(offerUri: String, holderId: String?): IssuanceContext
 
     /** Prepares authorization with proof material and wallet instance attestation attached. */
-    fun prepareAuthorization(sessionId: UUID): IssuanceContext
+    fun prepareAuthorization(sessionId: UUID, walletAttestationPopJwt: String? = null): IssuanceContext
 
     /** Exchanges an authorization code for tokens and validates WIA binding. */
     fun completeAuthorizationCode(sessionId: UUID, authorizationCode: String, state: String): IssuanceContext
 
     /** Completes a pre-authorized offer, optionally supplying a transaction code. */
-    fun completePreAuthorizedCode(sessionId: UUID, txCode: String?): IssuanceContext
+    fun completePreAuthorizedCode(sessionId: UUID, txCode: String?, walletAttestationPopJwt: String? = null): IssuanceContext
 
     /** Requests credentials from the issuer, attaching key attestation when required. */
     fun requestCredential(sessionId: UUID, request: IssuanceRequest): IssuanceContext

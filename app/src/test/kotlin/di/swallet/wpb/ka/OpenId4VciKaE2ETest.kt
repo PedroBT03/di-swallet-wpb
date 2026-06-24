@@ -17,6 +17,7 @@ import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.service.DeviceBindingService
 import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.wallet.WalletTestSupport
+import di.swallet.wpb.wia.validation.WiaPopTestSupport
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -49,13 +50,25 @@ class OpenId4VciKaE2ETest : BaseIntegrationTest() {
     @ConformanceScenario("vci_ka_binding_e2e")
     fun `device bound issuance performs KA generation attachment and validation`() {
         val holderId = "ka-e2e-${UUID.randomUUID()}"
-        WalletTestSupport.bootstrapHolderForIssuance(deviceBindingService, walletUnitRepository, hsmService, holderId)
+        val deviceKey = WalletTestSupport.bootstrapHolderWithDeviceKey(
+            deviceBindingService,
+            walletUnitRepository,
+            hsmService,
+            holderId,
+        )
 
         var ctx = orchestrator.resolveOffer(
             offerUri = """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}""",
             holderId = holderId,
         )
         ctx = orchestrator.prepareAuthorization(ctx.sessionMeta.sessionId)
+        val popJwt = WiaPopTestSupport.signPop(
+            privateKey = deviceKey.privateKey,
+            walletInstanceId = holderId,
+            cnfJkt = ctx.wia!!.attestation!!.cnfJkt,
+            audience = "https://issuer.example",
+        )
+        ctx = orchestrator.prepareAuthorization(ctx.sessionMeta.sessionId, popJwt)
         ctx = orchestrator.completeAuthorizationCode(ctx.sessionMeta.sessionId, "auth-code", ctx.preparedAuthorization!!.state)
         ctx = orchestrator.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"))
         ctx = IssuanceConsentTestSupport.approveStorageIfPending(orchestrator, ctx, holderId)

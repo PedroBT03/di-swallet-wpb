@@ -1,18 +1,12 @@
-import { ProtocolExchangePanel } from "../ProtocolExchangePanel";
-
 const CMD_PORTAL_URL = "https://cmd.autenticacao.gov.pt/";
 
 interface CmdIdentityPanelProps {
-  authorizationUrl?: string | null;
-  wiaJwtPreview?: string | null;
   busy?: boolean;
   onContinue: () => void;
   onCancel: () => void;
 }
 
 export function CmdIdentityPanel({
-  authorizationUrl,
-  wiaJwtPreview,
   busy = false,
   onContinue,
   onCancel,
@@ -23,16 +17,23 @@ export function CmdIdentityPanel({
       <p className="present-unlock__lead">
         In production, the PID Provider redirects you to the{" "}
         <strong>Chave Móvel Digital</strong> portal to prove your identity at LoA High before the
-        credential is issued. You authenticate with <strong>NIF + PIN + OTP</strong>; the issuer
-        receives an <code>id_token</code> with your citizen <code>sub</code> and binds it to this
-        wallet.
+        credential is issued. The issuer receives an <code>id_token</code> with your citizen{" "}
+        <code>sub</code> and binds it to this wallet.
       </p>
 
       <ol className="issue-cmd__steps">
         <li>Wallet resolves the credential offer and authenticates the issuer.</li>
-        <li>Browser opens the issuer authorization endpoint (below in a real deployment).</li>
-        <li>CMD portal: citizen login (NIF, PIN, OTP).</li>
-        <li>Issuer validates wallet (WIA/WUA) and issues the PID or attestation.</li>
+        <li>
+          Browser opens the{" "}
+          <a href={CMD_PORTAL_URL} target="_blank" rel="noreferrer">
+            CMD portal
+          </a>{" "}
+          (NIF, PIN, OTP).
+        </li>
+        <li>Issuer validates wallet attestations (WIA + KA) and issues the credential.</li>
+        <li>
+          Lab: use <strong>Simulate CMD login &amp; continue</strong> below to skip the redirect.
+        </li>
       </ol>
 
       <div className="toolbar toolbar--compact">
@@ -43,30 +44,6 @@ export function CmdIdentityPanel({
           Cancel
         </button>
       </div>
-
-      <ProtocolExchangePanel
-        title="Developer: CMD & OAuth exchange"
-        summary="Lab shortcut: the button above skips the real CMD redirect and exchanges a simulated authorization code. WIA is attached to the OAuth request per ARF Topic 9 / ISSU_21."
-        items={[
-          { label: "CMD portal (production)", value: CMD_PORTAL_URL },
-          {
-            label: "Issuer authorization URL (simulated)",
-            value: authorizationUrl ?? "(available after Prepare authorization)",
-          },
-          {
-            label: "WIA JWT (preview)",
-            value: wiaJwtPreview
-              ? wiaJwtPreview.length > 72
-                ? `${wiaJwtPreview.slice(0, 72)}…`
-                : wiaJwtPreview
-              : "(attached when authorization is prepared)",
-          },
-          {
-            label: "Identity binding (production)",
-            value: "PATCH /wallet/{wallet_id}/identity { user_sub }",
-          },
-        ]}
-      />
     </section>
   );
 }

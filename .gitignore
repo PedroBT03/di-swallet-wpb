@@ -40,6 +40,9 @@ pkcs11.cfg
 *.log
 logs/
 
+# Local env (docker compose / secrets)
+.env
+
 # Virtual Environments
 .venv/
 __pycache__/

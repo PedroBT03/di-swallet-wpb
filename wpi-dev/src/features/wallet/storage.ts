@@ -1,6 +1,9 @@
 import { formatCredentialTypeLabel } from "../../utils/credentialType";
 import type { CredentialSummary, WalletCredentialRecord, WalletInitResult } from "../../types/wallet";
 
+import { clearWalletInitExchange } from "./initExchange";
+import { clearDevicePrivateJwk } from "../../crypto/deviceJwk";
+
 const walletStateKey = (holderId: string) => `wpi-dev.walletState.${holderId}`;
 
 export function loadWalletState(holderId: string): WalletInitResult | null {
@@ -15,6 +18,12 @@ export function loadWalletState(holderId: string): WalletInitResult | null {
 
 export function saveWalletState(holderId: string, state: WalletInitResult): void {
   localStorage.setItem(walletStateKey(holderId), JSON.stringify(state));
+}
+
+export function clearWalletState(holderId: string): void {
+  localStorage.removeItem(walletStateKey(holderId));
+  clearDevicePrivateJwk(holderId);
+  clearWalletInitExchange(holderId);
 }
 
 export function summarizeCredential(credential: WalletCredentialRecord): CredentialSummary {

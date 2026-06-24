@@ -84,6 +84,12 @@ function formatConflictMessage(detail: string): string {
   if (lower.includes("status list index")) {
     return "This credential cannot be revoked because it has no wallet status list index.";
   }
+  if (lower.includes("must be valid before holder signing")) {
+    return (
+      "Holder signing is only available when the wallet is VALID. " +
+      "Complete identity verification on Issue (CMD step), then try again."
+    );
+  }
   if (detail.length > 0) {
     return detail;
   }
@@ -145,5 +151,5 @@ function formatForbiddenMessage(detail: string): string {
 }
 
 export function isIssuanceEligible(state: string | undefined): boolean {
-  return state === "OPERATIONAL" || state === "VALID";
+  return state === "CANDIDATE" || state === "VALID";
 }

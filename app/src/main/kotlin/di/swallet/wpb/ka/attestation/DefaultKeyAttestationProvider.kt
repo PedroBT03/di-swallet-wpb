@@ -32,12 +32,49 @@ class DefaultKeyAttestationProvider(
     private val signingCertificateResolver: KaSigningCertificateResolver,
     private val properties: OpenId4VciProperties,
 ) : KeyAttestationProvider {
+    private companion object {
+        const val PROVISIONING_CONFIGURATION_ID = "wallet_provisioning"
+    }
+
     /** Issues a KA JWT with attested_keys, key_storage_status, and signing x5c chain. */
     override fun issue(
         holderId: String,
         issuerId: String?,
         metadata: ResolvedIssuerMetadata,
         configuration: CredentialConfigurationDescriptor,
+        proofPublicKey: ECPublicKey,
+        proofKeyId: String,
+    ): KeyAttestation =
+        build(
+            holderId = holderId,
+            audience = issuerId ?: metadata.credentialIssuerId,
+            configurationId = configuration.id,
+            issuerScope = if (properties.ka.reusePerIssuer) issuerId else null,
+            proofPublicKey = proofPublicKey,
+            proofKeyId = proofKeyId,
+        )
+
+    /** Issues a provisioning KA attesting the holder key with no issuer audience or configuration. */
+    override fun issueForProvisioning(
+        holderId: String,
+        keyAlias: String,
+        proofPublicKey: ECPublicKey,
+    ): KeyAttestation =
+        build(
+            holderId = holderId,
+            audience = null,
+            configurationId = PROVISIONING_CONFIGURATION_ID,
+            issuerScope = null,
+            proofPublicKey = proofPublicKey,
+            proofKeyId = keyAlias,
+        )
+
+    /** Shared KA assembly for both issuance-time and provisioning-time attestations. */
+    private fun build(
+        holderId: String,
+        audience: String?,
+        configurationId: String,
+        issuerScope: String?,
         proofPublicKey: ECPublicKey,
         proofKeyId: String,
     ): KeyAttestation {
@@ -47,40 +84,48 @@ class DefaultKeyAttestationProvider(
         val walletKey = walletKeyRepository.findByUserId(holderId)
             .orElseThrow { IllegalStateException("wallet key not found for holder '$holderId'") }
         val attestedJkt = Rfc7638JwkThumbprint.fromEcPublicKey(proofPublicKey)
-        val issuerScope = if (properties.ka.reusePerIssuer) issuerId else null
-        val attestationFingerprint = fingerprint(holderId, issuerScope, configuration.id, attestedJkt)
+        val attestationFingerprint = fingerprint(holderId, issuerScope, configurationId, attestedJkt)
         val status = statusManagementService.getOrAllocateStatus(holderId, issuerScope, attestationFingerprint)
-        val payload = mapOf(
-            "iss" to properties.ka.issuer,
-            "sub" to holderId,
-            "aud" to (issuerId ?: metadata.credentialIssuerId),
-            "iat" to now.epochSecond,
-            "exp" to tokenExp.epochSecond,
-            "jti" to "ka-$attestationFingerprint",
-            "key_storage" to properties.ka.keyStorage,
-            "user_authentication" to properties.ka.userAuthentication,
-            "certification" to mapOf(
-                "scheme" to properties.ka.certificationScheme,
-                "assurance_level" to properties.ka.certificationAssuranceLevel,
-                "details" to properties.ka.certificationInfo,
-            ),
-            "key_storage_status" to mapOf(
-                "status" to mapOf(
-                    "status_list" to mapOf(
-                        "idx" to status.index,
-                        "uri" to status.uri,
+        val payload = buildMap<String, Any> {
+            put("iss", properties.ka.issuer)
+            put("sub", holderId)
+            audience?.let { put("aud", it) }
+            put("iat", now.epochSecond)
+            put("exp", tokenExp.epochSecond)
+            put("jti", "ka-$attestationFingerprint")
+            put("key_storage", properties.ka.keyStorage)
+            put("user_authentication", properties.ka.userAuthentication)
+            put(
+                "certification",
+                mapOf(
+                    "scheme" to properties.ka.certificationScheme,
+                    "assurance_level" to properties.ka.certificationAssuranceLevel,
+                    "details" to properties.ka.certificationInfo,
+                ),
+            )
+            put(
+                "key_storage_status",
+                mapOf(
+                    "status" to mapOf(
+                        "status_list" to mapOf(
+                            "idx" to status.index,
+                            "uri" to status.uri,
+                        ),
+                    ),
+                    "exp" to statusExp.epochSecond,
+                ),
+            )
+            put(
+                "attested_keys",
+                listOf(
+                    mapOf(
+                        "jwk" to rfc7638PublicJwk(proofPublicKey),
+                        "proof_type" to "jwt",
                     ),
                 ),
-                "exp" to statusExp.epochSecond,
-            ),
-            "attested_keys" to listOf(
-                mapOf(
-                    "jwk" to rfc7638PublicJwk(proofPublicKey),
-                    "proof_type" to "jwt",
-                ),
-            ),
-            "credential_configuration_id" to configuration.id,
-        )
+            )
+            put("credential_configuration_id", configurationId)
+        }
         val x5c = signingCertificateResolver.resolveSigningChain(walletKey)
         if (properties.ka.requireX5c && x5c.isEmpty()) {
             throw IllegalStateException("key attestation requires x5c but no certificate chain is available")

@@ -160,7 +160,7 @@ class KeyBindingRuntimeService(
 
         credential.userId.let { holderId ->
             walletUnitRepository.findFirstByHolderId(holderId).ifPresent { walletUnit ->
-                if (walletUnit.state == di.swallet.wpb.domain.WalletUnitState.OPERATIONAL) {
+                if (walletUnit.state == di.swallet.wpb.domain.WalletUnitState.CANDIDATE) {
                     walletUnitLifecycleService.markValid(walletUnit)
                 }
             }

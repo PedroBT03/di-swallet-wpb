@@ -4,18 +4,24 @@
 
 package di.swallet.wpb.wia.attestation
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.nimbusds.jose.JOSEObjectType
 import com.nimbusds.jose.JWSAlgorithm
 import com.nimbusds.jose.JWSHeader
 import com.nimbusds.jose.util.Base64 as NimbusBase64
 import di.swallet.wpb.config.OpenId4VciProperties
+import di.swallet.wpb.domain.DeviceBindingType
+import di.swallet.wpb.domain.DeviceWalletBindingRepository
+import di.swallet.wpb.domain.DeviceWalletBindingState
 import di.swallet.wpb.domain.WalletKey
 import di.swallet.wpb.domain.WalletKeyRepository
+import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.issuance.crypto.JwsSigningService
 import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
 import di.swallet.wpb.issuance.domain.WalletInstanceAttestation
 import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.wia.status.WiaStatusManagementService
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.time.Instant
 
@@ -26,8 +32,12 @@ class DefaultWalletAttestationProvider(
     private val statusManagementService: WiaStatusManagementService,
     private val jwsSigningService: JwsSigningService,
     private val hsmService: HsmService,
+    private val walletUnitRepository: WalletUnitRepository,
+    private val deviceWalletBindingRepository: DeviceWalletBindingRepository,
     private val properties: OpenId4VciProperties,
 ) : WalletAttestationProvider {
+    private val logger = LoggerFactory.getLogger(DefaultWalletAttestationProvider::class.java)
+    private val objectMapper = ObjectMapper()
 
     /** Issues attestation and proof JWTs with cnf.jkt and client_status list binding. */
     override fun issue(
@@ -46,7 +56,8 @@ class DefaultWalletAttestationProvider(
             issuerId = if (properties.wia.reusePerIssuer) issuerId else null,
         )
 
-        val cnfJkt = Rfc7638JwkThumbprint.fromPublicKeyBase64(key.publicKeyBase64)
+        val cnf = resolveCnfKey(holderId, key)
+        val cnfJkt = cnf.thumbprint
         val x5c = resolveSigningX5cChain(key)
         val payload = mapOf(
             "sub" to walletInstanceId,
@@ -65,7 +76,7 @@ class DefaultWalletAttestationProvider(
                 ),
                 "exp" to statusExp.epochSecond,
             ),
-            "cnf" to mapOf("jkt" to cnfJkt),
+            "cnf" to cnf.claim,
         )
         val wiaJwt = signJwt(
             walletKey = key,
@@ -73,22 +84,10 @@ class DefaultWalletAttestationProvider(
             payload = payload,
             x5c = x5c,
         )
-        val popJwt = signJwt(
-            walletKey = key,
-            typ = "oauth-client-attestation-pop+jwt",
-            payload = mapOf(
-                "iss" to walletInstanceId,
-                "iat" to now.epochSecond,
-                "exp" to now.plusSeconds(300).epochSecond,
-                "aud" to (issuerId ?: "issuer"),
-                "cnf" to mapOf("jkt" to cnfJkt),
-            ),
-            x5c = emptyList(),
-        )
-
+        // PoP is signed client-side with the device (cnf) private key during OAuth preparation.
         return WalletInstanceAttestation(
             jwt = wiaJwt,
-            popJwt = popJwt,
+            popJwt = "",
             walletInstanceId = walletInstanceId,
             walletName = properties.wia.walletName,
             walletVersion = properties.wia.walletVersion,
@@ -101,6 +100,40 @@ class DefaultWalletAttestationProvider(
             issuedAt = now,
             issuerScope = if (properties.wia.reusePerIssuer) issuerId else null,
         )
+    }
+
+    /** WIA cnf claim and its RFC 7638 thumbprint. */
+    private data class CnfKey(val claim: Map<String, Any?>, val thumbprint: String)
+
+    /**
+     * Resolves the WIA cnf key. The wallet instance proves possession of its device (DPoP) key at
+     * the token endpoint, so the WIA attests that device key here, keeping it distinct from the
+     * holder HSM key attested by the KA. Falls back to the HSM key when no device JWK is stored
+     * (e.g. wallets provisioned before device JWK persistence).
+     */
+    private fun resolveCnfKey(holderId: String, hsmKey: WalletKey): CnfKey {
+        val deviceJwk = resolveDeviceJwk(holderId)
+        if (deviceJwk != null) {
+            return CnfKey(
+                claim = mapOf("jwk" to objectMapper.readValue(deviceJwk, Map::class.java)),
+                thumbprint = Rfc7638JwkThumbprint.fromJwkJson(deviceJwk),
+            )
+        }
+        logger.warn("No device JWK bound for holder '$holderId'; WIA cnf falls back to the HSM key")
+        return CnfKey(
+            claim = mapOf("jkt" to Rfc7638JwkThumbprint.fromPublicKeyBase64(hsmKey.publicKeyBase64)),
+            thumbprint = Rfc7638JwkThumbprint.fromPublicKeyBase64(hsmKey.publicKeyBase64),
+        )
+    }
+
+    /** Returns the active DPoP device public JWK bound to the holder's wallet unit, if any. */
+    private fun resolveDeviceJwk(holderId: String): String? {
+        val walletUnit = walletUnitRepository.findFirstByHolderId(holderId).orElse(null) ?: return null
+        val walletUnitId = walletUnit.id ?: return null
+        return deviceWalletBindingRepository
+            .findByWalletUnitIdAndBindingType(walletUnitId, DeviceBindingType.DPOP)
+            .firstOrNull { it.state == DeviceWalletBindingState.ACTIVE && !it.devicePublicJwk.isNullOrBlank() }
+            ?.devicePublicJwk
     }
 
     /** Prefers configured x5c chain, falling back to the HSM certificate chain. */

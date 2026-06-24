@@ -43,6 +43,8 @@ import di.swallet.wpb.openid4vci.protocol.KeyAttestationTransport
 import di.swallet.wpb.openid4vci.protocol.NotificationEvent
 import di.swallet.wpb.openid4vci.protocol.WalletAttestationTransport
 import di.swallet.wpb.wia.attestation.WalletAttestationProvider
+import di.swallet.wpb.wia.validation.WiaPopValidationException
+import di.swallet.wpb.wia.validation.WiaPopValidationService
 import di.swallet.wpb.wia.validation.WiaValidationException
 import di.swallet.wpb.wia.validation.WiaValidationService
 import di.swallet.wpb.security.WscaSciGrantService
@@ -66,6 +68,7 @@ class DefaultIssuanceFlowOrchestrator(
     private val proofProvider: ProofMaterialProvider,
     private val attestationProvider: WalletAttestationProvider,
     private val wiaValidationService: WiaValidationService,
+    private val wiaPopValidationService: WiaPopValidationService,
     private val keyAttestationProvider: KeyAttestationProvider,
     private val keyAttestationValidationService: KeyAttestationValidationService,
     private val credentialStorage: IssuedCredentialStorage,
@@ -139,7 +142,7 @@ class DefaultIssuanceFlowOrchestrator(
     }
 
     /** Builds proof and WIA material, then asks the issuer to prepare authorization. */
-    override fun prepareAuthorization(sessionId: UUID): IssuanceContext {
+    override fun prepareAuthorization(sessionId: UUID, walletAttestationPopJwt: String?): IssuanceContext {
         val ctx = loadActive(sessionId)
         require(ctx.state == IssuanceState.OFFER_RESOLVED) {
             "session $sessionId is not in OFFER_RESOLVED state (current=${ctx.state})"
@@ -150,9 +153,23 @@ class DefaultIssuanceFlowOrchestrator(
             return fail(ctx, IssuanceError("invalid_flow", "offer is not authorization_code"))
         }
 
-        val proof = proofProvider.provide(ctx.sessionMeta.holderId ?: "anonymous", metadata)
         val wia = issueOrReuseWia(ctx, metadata.credentialIssuerId)
-        val wiaTransport = wia.toTransport()
+        if (walletAttestationPopJwt.isNullOrBlank()) {
+            val withWia = ctx.copy(wia = WiaContext(state = WiaState.ATTACHED, attestation = wia))
+            val saved = persistUpdate(withWia)
+            record(saved, "wia.issued", mapOf("cnfJkt" to wia.cnfJkt, "walletInstanceId" to wia.walletInstanceId))
+            return saved
+        }
+
+        val wiaWithPop = try {
+            wiaPopValidationService.validate(walletAttestationPopJwt, wia)
+            wia.copy(popJwt = walletAttestationPopJwt)
+        } catch (ex: WiaPopValidationException) {
+            return fail(ctx.copy(wia = WiaContext(state = WiaState.FAILED, attestation = wia, lastErrorCode = ex.code)), IssuanceError(ex.code, ex.message ?: "wia pop validation failed"))
+        }
+
+        val proof = proofProvider.provide(ctx.sessionMeta.holderId ?: "anonymous", metadata)
+        val wiaTransport = wiaWithPop.toTransport()
         val prepared = try {
             gateway.prepareAuthorization(
                 adapterSessionId = ctx.sessionMeta.sessionId.toString(),
@@ -165,7 +182,7 @@ class DefaultIssuanceFlowOrchestrator(
             return fail(ctx, IssuanceError("authorization_prepare_failed", ex.message ?: "prepare failed"))
         }
 
-        val withAuth = ctx.copy(preparedAuthorization = prepared, wia = WiaContext(state = WiaState.ATTACHED, attestation = wia))
+        val withAuth = ctx.copy(preparedAuthorization = prepared, wia = WiaContext(state = WiaState.ATTACHED, attestation = wiaWithPop))
         val saved = transitionAndPersist(withAuth, IssuanceState.AUTHORIZATION_PREPARED)
         record(
             saved,
@@ -177,7 +194,8 @@ class DefaultIssuanceFlowOrchestrator(
                 "wiaAttached" to prepared.wiaAttached.toString(),
             ),
         )
-        record(saved, "wia.attached", mapOf("cnfJkt" to wia.cnfJkt, "walletInstanceId" to wia.walletInstanceId))
+        record(saved, "wia.attached", mapOf("cnfJkt" to wiaWithPop.cnfJkt, "walletInstanceId" to wiaWithPop.walletInstanceId))
+        record(saved, "wia.pop.verified", mapOf("cnfJkt" to wiaWithPop.cnfJkt))
         return saved
     }
 
@@ -224,7 +242,7 @@ class DefaultIssuanceFlowOrchestrator(
     }
 
     /** Completes pre-authorized issuance with optional tx_code and WIA validation. */
-    override fun completePreAuthorizedCode(sessionId: UUID, txCode: String?): IssuanceContext {
+    override fun completePreAuthorizedCode(sessionId: UUID, txCode: String?, walletAttestationPopJwt: String?): IssuanceContext {
         val ctx = loadActive(sessionId)
         require(ctx.state == IssuanceState.OFFER_RESOLVED) {
             "session $sessionId not in OFFER_RESOLVED (current=${ctx.state})"
@@ -234,8 +252,26 @@ class DefaultIssuanceFlowOrchestrator(
         if (offer.authorizationFlow != AuthorizationFlowKind.PRE_AUTHORIZED_CODE) {
             return fail(ctx, IssuanceError("invalid_flow", "offer is not pre-authorized_code"))
         }
-        val proof = proofProvider.provide(ctx.sessionMeta.holderId ?: "anonymous", metadata)
+
         val wia = issueOrReuseWia(ctx, metadata.credentialIssuerId)
+        if (walletAttestationPopJwt.isNullOrBlank()) {
+            val withWia = ctx.copy(wia = WiaContext(state = WiaState.ATTACHED, attestation = wia))
+            val saved = persistUpdate(withWia)
+            record(saved, "wia.issued", mapOf("cnfJkt" to wia.cnfJkt, "walletInstanceId" to wia.walletInstanceId))
+            return saved
+        }
+
+        val wiaWithPop = try {
+            wiaPopValidationService.validate(walletAttestationPopJwt, wia)
+            wia.copy(popJwt = walletAttestationPopJwt)
+        } catch (ex: WiaPopValidationException) {
+            return fail(
+                ctx.copy(wia = WiaContext(state = WiaState.FAILED, attestation = wia, lastErrorCode = ex.code)),
+                IssuanceError(ex.code, ex.message ?: "wia pop validation failed"),
+            )
+        }
+
+        val proof = proofProvider.provide(ctx.sessionMeta.holderId ?: "anonymous", metadata)
         val authorized = try {
             gateway.authorizeWithPreAuthorizedCode(
                 adapterSessionId = ctx.sessionMeta.sessionId.toString(),
@@ -243,20 +279,21 @@ class DefaultIssuanceFlowOrchestrator(
                 metadata = metadata,
                 proof = proof,
                 txCode = txCode,
-                walletAttestation = wia.toTransport(),
+                walletAttestation = wiaWithPop.toTransport(),
             )
         } catch (ex: Exception) {
-            return handleWiaAwareAuthorizationFailure(ctx.copy(wia = WiaContext(state = WiaState.ATTACHED, attestation = wia)), ex, "pre_authorized_failed")
+            return handleWiaAwareAuthorizationFailure(ctx.copy(wia = WiaContext(state = WiaState.ATTACHED, attestation = wiaWithPop)), ex, "pre_authorized_failed")
         }
         val validatedWia = try {
-            validateWiaBinding(ctx.copy(wia = WiaContext(state = WiaState.ATTACHED, attestation = wia)), authorized)
+            validateWiaBinding(ctx.copy(wia = WiaContext(state = WiaState.ATTACHED, attestation = wiaWithPop)), authorized)
         } catch (ex: WiaValidationException) {
-            return handleWiaValidationFailure(ctx.copy(wia = WiaContext(state = WiaState.ATTACHED, attestation = wia)), ex)
+            return handleWiaValidationFailure(ctx.copy(wia = WiaContext(state = WiaState.ATTACHED, attestation = wiaWithPop)), ex)
         }
         val withAuth = ctx.copy(authorizedContext = authorized, wia = validatedWia)
         val saved = transitionAndPersist(withAuth, IssuanceState.AUTHORIZED)
         record(saved, "authorization.pre_authorized", mapOf("txCode" to (if (txCode != null) "provided" else "absent")))
         record(saved, "wia.binding.verified", mapOf("cnfJkt" to (authorized.wiaCnfJkt ?: "")))
+        record(saved, "wia.pop.verified", mapOf("cnfJkt" to wiaWithPop.cnfJkt))
         return saved
     }
 

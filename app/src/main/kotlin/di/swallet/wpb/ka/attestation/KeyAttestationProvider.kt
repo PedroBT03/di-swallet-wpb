@@ -20,4 +20,14 @@ interface KeyAttestationProvider {
         proofPublicKey: ECPublicKey,
         proofKeyId: String,
     ): KeyAttestation
+
+    /**
+     * Creates a KA JWT for wallet provisioning, attesting the holder's freshly generated key
+     * before any issuer interaction. Together with the WIA this forms the WUA emitted at init.
+     */
+    fun issueForProvisioning(
+        holderId: String,
+        keyAlias: String,
+        proofPublicKey: ECPublicKey,
+    ): KeyAttestation
 }

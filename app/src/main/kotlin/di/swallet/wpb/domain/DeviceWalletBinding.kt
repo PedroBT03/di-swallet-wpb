@@ -38,6 +38,10 @@ class DeviceWalletBinding(
     @Column(nullable = false, unique = true)
     val deviceKeyThumbprint: String,
 
+    /** Full device public JWK (JSON); lets the WIA attest the device key in its cnf claim. */
+    @Column(name = "device_public_jwk", nullable = true, columnDefinition = "TEXT")
+    val devicePublicJwk: String? = null,
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     val state: DeviceWalletBindingState = DeviceWalletBindingState.ACTIVE,

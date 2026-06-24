@@ -382,8 +382,7 @@ curl http://localhost:8080/openid4vci/session/<uuid>/events | jq .
 
 ## OpenID4VCI / WIA (Wallet Instance Attestation)
 
-WIA is integrated as a **sub-context inside the existing issuance flow**, not as a
-separate top-level lifecycle. The issuance orchestrator selects or issues a WIA,
+Per the WUA technical specification, a **Wallet Unit Attestation (WUA)** is the umbrella term covering a **Wallet Instance Attestation (WIA)** and a **Key Attestation (KA)**. Both are issued at **`POST /wallet/init`** (provisioning; JWTs returned in the response) and attest **distinct keys**: the WIA's `cnf` binds the **device (DPoP) key** bound at init (the key the wallet proves possession of at the token endpoint, ts3 §2.2.1.1), while the KA's `attested_keys` binds the **holder HSM key** the credential is cryptographically tied to. The WIA is then reused or re-issued as a **sub-context inside the OID4VCI issuance flow**, where the KA is also re-issued per credential request. The issuance orchestrator selects or issues a WIA,
 attaches it to PAR/token transport, validates technical freshness, and verifies
 that the access token `cnf.jkt` matches the WIA `cnf` key before credential
 issuance proceeds.
@@ -394,13 +393,15 @@ There is **no** public `POST /wia/issue` endpoint in this increment.
 
 | Capability | Status |
 |---|---|
+| WUA (WIA + KA) issued at `POST /wallet/init` (provisioning; JWTs in response) | Implemented |
 | WIA sub-context on `IssuanceContext` (`WiaState`, `WiaContext`, `WalletInstanceAttestation`) | Implemented |
 | `WalletAttestationProvider` abstraction with `DefaultWalletAttestationProvider` (generation) | Implemented |
 | WIA transport envelope on `OpenId4VciGateway` (`WalletAttestationTransport` on PAR/token paths) | Implemented (simulated adapter) |
 | WIA validation service (technical expiry + `cnf.jkt` binding against access token) | Implemented |
 | Simplified WIA status management via existing bitstring status list (`WiaStatusManagementService`) | Implemented |
-| Persistent `cnf` key per wallet instance (RFC 7638 JWK thumbprint of `WalletKey` EC public key) | Implemented |
-| HSM-backed WIA/PoP JWT signing via `JwsSigningService` with parsed `x5c` certificate chain | Implemented |
+| WIA `cnf` binds the device (DPoP) key bound at init (RFC 7638 JWK thumbprint), distinct from the holder HSM key attested by the KA | Implemented |
+| HSM-backed WIA JWT signing via `JwsSigningService` with parsed `x5c` certificate chain | Implemented |
+| WIA PoP JWT signed client-side with the device (WIA `cnf`) private key; validated server-side before OAuth | Implemented (wpi-dev browser key) |
 | Durable WIA status index mapping (`JpaWiaStatusManagementService` + `wia_status_indexes`) | Implemented |
 | Structured issuance events: `wia.attached`, `wia.binding.verified` | Implemented |
 | Retry semantics for nonce mismatch / expired WIA (configurable limits, recoverable errors) | Implemented |
@@ -689,14 +690,15 @@ WalletUnit
 | Capability | Status |
 |---|---|
 | Flyway baseline (`V1__baseline.sql`) + `ddl-auto=validate` in production | Implemented |
-| `WalletUnitLifecycleService` with enforced transitions (`CANDIDATE` → `OPERATIONAL` → `VALID`) | Implemented |
+| `WalletUnitLifecycleService` with enforced transitions (`CANDIDATE` → `VALID`, plus `SUSPENDED`, `REVOKED`, `DELETED`) | Implemented |
+| `POST /wallet/init` provisions unit: DPoP bind, remote HSM key, WUA (WIA + KA) JWTs in response | Implemented |
 | Partial FK enforcement: `WalletKey` → `WalletUnit`, `AttestedKey` → `WalletKey`, `DeviceWalletBinding` → `UserDevice` | Implemented |
 | Synthetic KA bypass removed (fail-closed credential binding) | Implemented |
 | RFC 7638 JWK thumbprints for DPoP / device bindings (`Rfc7638JwkThumbprint.fromJwkJson`) | Implemented |
 | FIDO2 bridge: `userDeviceId` on wallet init (required in prod, optional in test/demo) | Implemented |
 | Integration tests for lifecycle, thumbprints, and updated issuance E2E paths | Implemented |
 
-`CANDIDATE` maps to ARF **Installed**; activation (DPoP bind during init) moves the unit to **OPERATIONAL**; the first device-bound credential moves it to **VALID** (no issuance before activation).
+`CANDIDATE` — provisioned by `POST /wallet/init`: DPoP device binding, remote holder HSM key, and the WUA (WIA + KA) issued; the wallet stays anonymous until UC2 identity (CMD placeholder in wpi-dev). `VALID` — activated after the first device-bound credential issuance (simulated CMD + PID). Issuance is allowed in `CANDIDATE` or `VALID`. `pid_key` binding is not used in the web lab (no offline proximity flows).
 
 ### Configuration knobs (wallet lifecycle)
 
@@ -710,7 +712,7 @@ Test profile (`application-test.properties`) disables Flyway and sets `wpb.walle
 
 ### Breaking changes
 
-- Wallets created directly at `OPERATIONAL` without init must be re-initialized.
+- Removed `OPERATIONAL` wallet state; existing databases with legacy `OPERATIONAL` rows should be reset (`docker compose down -v && docker compose up -d`) and wallets re-provisioned.
 - Legacy SHA-256-of-JWK-string device thumbprints are invalid after RFC 7638 migration.
 - Credentials without a real KA binding (including former synthetic paths) fail presentation validation.
 - Existing PostgreSQL dev databases created with `ddl-auto=update` should be reset (`docker compose down -v && docker compose up -d`) before first Flyway boot.

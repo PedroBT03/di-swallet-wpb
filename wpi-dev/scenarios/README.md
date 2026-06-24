@@ -7,7 +7,7 @@ Step-by-step flows for thesis demonstrations. Each scenario assumes WPB on `:808
 1. `./gradlew :app:bootRun` from repo root (`dev` profile).
 2. `cd wpi-dev && npm run dev`.
 3. **Onboarding**: register a new holder + passkey.
-4. **Wallet**: Initialize wallet unit → Ensure HSM key.
+4. **Wallet**: Provision wallet unit (device bind, HSM key, WUA = WIA + KA, state **CANDIDATE**).
 
 ---
 
@@ -15,14 +15,13 @@ Step-by-step flows for thesis demonstrations. Each scenario assumes WPB on `:808
 
 | Step | Screen | Action |
 |------|--------|--------|
-| 1 | Wallet | Initialize wallet unit |
-| 2 | Wallet | Ensure HSM key |
-| 3 | Wallet | Issue demo PID |
-| 4 | Wallet | Sign test payload |
-| 5 | Wallet | Revoke credential → Ops → Status lists → lookup index |
-| 6 | Wallet | Delete from wallet (optional) |
+| 1 | Wallet | Provision wallet unit |
+| 2 | Issue | Issue demo PID (simulated CMD → **VALID**) |
+| 3 | Wallet | Sign test payload |
+| 4 | Wallet | Revoke credential → Ops → Status lists → lookup index |
+| 5 | Wallet | Delete from wallet (optional) |
 
-**Screenshots:** wallet grid with OPERATIONAL state; credential list with ACTIVE badge; signature JSON panel.
+**Screenshots:** wallet grid with **CANDIDATE** state after provision and **VALID** after issuance; credential list with ACTIVE badge; signature JSON panel.
 
 ---
 

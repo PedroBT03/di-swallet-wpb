@@ -1,4 +1,4 @@
-import { loadWalletState, saveWalletState } from "./storage";
+import { clearWalletState, loadWalletState, saveWalletState } from "./storage";
 import type { WalletInitResult, WalletUnitSummary } from "../../types/wallet";
 
 export function walletInitFromUnit(unit: WalletUnitSummary): WalletInitResult {
@@ -6,7 +6,6 @@ export function walletInitFromUnit(unit: WalletUnitSummary): WalletInitResult {
     walletId: unit.walletId,
     state: unit.state,
     dpopBound: true,
-    pidKeyBound: false,
   };
 }
 
@@ -15,9 +14,15 @@ export function mergeWalletStateFromSummary(
   walletUnit: WalletUnitSummary | null | undefined,
 ): WalletInitResult | null {
   if (!walletUnit) {
-    return loadWalletState(holderId);
+    clearWalletState(holderId);
+    return null;
   }
-  const merged = walletInitFromUnit(walletUnit);
+  const previous = loadWalletState(holderId);
+  const merged: WalletInitResult = {
+    ...walletInitFromUnit(walletUnit),
+    wia: previous?.wia,
+    ka: previous?.ka,
+  };
   saveWalletState(holderId, merged);
   return merged;
 }

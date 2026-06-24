@@ -39,10 +39,18 @@ class WalletUnit(
     val createdAt: LocalDateTime = LocalDateTime.now(),
 )
 
-/** Allowed lifecycle states for a wallet unit from creation through revocation. */
+/**
+ * Allowed lifecycle states for a wallet unit (ARF / ARTE UC1 model).
+ *
+ * CANDIDATE  - provisioned by `/wallet/init`: device key bound, holder HSM key generated and WIA
+ *              issued, but no citizen identity yet (anonymous, awaiting CMD identity in UC2).
+ * VALID      - activated after identity establishment / first credential issuance (CMD).
+ * SUSPENDED  - temporarily blocked; can return to VALID.
+ * REVOKED    - permanently invalidated (security breach / holder request).
+ * DELETED    - GDPR erasure terminal state.
+ */
 enum class WalletUnitState {
     CANDIDATE,
-    OPERATIONAL,
     VALID,
     SUSPENDED,
     REVOKED,

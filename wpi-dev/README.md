@@ -40,10 +40,11 @@ If WebAuthn fails, confirm `http://localhost:5173` is listed in `wallet.origins`
 
 Open **Wallet** after signing in. Typical demo flow:
 
-1. **Initialize wallet**: creates wallet unit + DPoP binding (needs FIDO2 device id from passkey registration).
-2. **Ensure HSM key**: generates holder key in SoftHSM (or returns existing).
-3. **Issue demo PID**: requires wallet state **OPERATIONAL** (or VALID) and an HSM key.
-4. **Sign test**: remote signature inside the HSM.
+1. **Provision wallet**: creates a **CANDIDATE** wallet unit, binds `device_pub` (DPoP), generates the holder key in SoftHSM, and issues the **WUA** (a **WIA** for the instance plus a **KA** for the holder key) (needs FIDO2 device id from passkey registration).
+2. **Issue demo PID** (UC2): requires wallet state **CANDIDATE** or **VALID** and an active HSM key (created at provision). Completing the simulated **CMD** step promotes the unit to **VALID**.
+3. **Sign test**: remote signature inside the HSM.
+
+**Ensure HSM key** remains available to rotate or relink after revocation; it is no longer a separate UC1 prerequisite because provision creates the key.
 
 Protected **sole-control** actions (consent approve/reject, HSM sign, revoke, delete) show an “Authenticating with passkey…” banner. Dashboard reads (wallet sync, consent **view**, transaction log) reuse the **holder session** opened at login (WIAM_15) and do not prompt again.
 
@@ -61,7 +62,7 @@ Session state, `PresentationContext`, and audit events are shown at the bottom a
 
 ### OpenID4VCI issue (UC2)
 
-1. Complete **UC1** first: **Onboarding** (passkey) → **Wallet** (init + HSM key).
+1. Complete **UC1** first: **Onboarding** (passkey) → **Wallet** (provision: device bind + HSM key + WUA (WIA + KA)).
 2. WPB with simulated issuer: `wpb.openid4vci.demo-mode=true` (default in `dev` profile).
 3. Open **Issue**: pick PID or mDL, then **Start issuance**.
 4. **Continue** to prepare issuer authorization, then complete the **CMD** step (simulated citizen login).
@@ -107,7 +108,7 @@ See [FEATURE_MATRIX.md](./FEATURE_MATRIX.md) and [scenarios/README.md](./scenari
 
 ### 15-minute thesis demo
 
-1. Onboarding (UC1) → Wallet init → HSM key (~3 min)
+1. Onboarding (UC1) → Wallet provision (~3 min)
 2. Present (verifier emulator) → Log (~4 min)
 3. Issue (UC2, CMD + PID) → Wallet sync (~4 min)
 4. Privacy deletion + DPA report (~3 min)

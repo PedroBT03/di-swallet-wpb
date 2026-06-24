@@ -63,7 +63,7 @@ class OpenId4VciControllerTest {
             resolveCalls++; return produced
         }
         /** Increments prepareCalls and records the session id before returning the stub context. */
-        override fun prepareAuthorization(sessionId: UUID): IssuanceContext {
+        override fun prepareAuthorization(sessionId: UUID, walletAttestationPopJwt: String?): IssuanceContext {
             prepareCalls++; lastSessionId = sessionId; return produced
         }
         /** Increments codeCalls and returns the stub context with state AUTHORIZED. */
@@ -71,7 +71,7 @@ class OpenId4VciControllerTest {
             codeCalls++; lastSessionId = sessionId; return produced.copy(state = IssuanceState.AUTHORIZED)
         }
         /** Increments preAuthCalls and returns the stub context with state AUTHORIZED. */
-        override fun completePreAuthorizedCode(sessionId: UUID, txCode: String?): IssuanceContext {
+        override fun completePreAuthorizedCode(sessionId: UUID, txCode: String?, walletAttestationPopJwt: String?): IssuanceContext {
             preAuthCalls++; lastSessionId = sessionId; return produced.copy(state = IssuanceState.AUTHORIZED)
         }
         /** Records the credential request payload and returns the stub context with state CREDENTIAL_ISSUED. */

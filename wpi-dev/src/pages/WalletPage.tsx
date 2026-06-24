@@ -13,9 +13,16 @@ import {
 import { AuthGate } from "../components/AuthGate";
 import { AuthenticatingBanner } from "../components/AuthenticatingBanner";
 import { JsonPanel } from "../components/JsonPanel";
+import { MiddleTruncate } from "../components/MiddleTruncate";
 import { Uc1Stepper } from "../components/wallet/Uc1Stepper";
-import { generateDevicePublicJwk } from "../crypto/deviceJwk";
-import { loadWalletState, saveWalletState, sortCredentialsByIssuedAt } from "../features/wallet/storage";
+import { WalletInitDevPanel, WalletProvisionStatus } from "../components/wallet/WalletProvisionOutcome";
+import { generateDeviceKeyPair, saveDevicePrivateJwk } from "../crypto/deviceJwk";
+import {
+  loadWalletInitExchange,
+  saveWalletInitExchange,
+  type WalletInitExchange,
+} from "../features/wallet/initExchange";
+import { saveWalletState, sortCredentialsByIssuedAt } from "../features/wallet/storage";
 import { mergeWalletStateFromSummary } from "../features/wallet/walletUnit";
 import { useAuthedApi } from "../hooks/useAuthedApi";
 import type {
@@ -23,6 +30,7 @@ import type {
   SignResult,
   WalletInitResult,
   WalletKeyRecord,
+  WalletSummaryResponse,
 } from "../types/wallet";
 import { formatCredentialTypeLabel } from "../utils/credentialType";
 import { formatApiError, isIssuanceEligible } from "../utils/apiError";
@@ -45,7 +53,8 @@ export function WalletPage() {
 
   const [walletState, setWalletState] = useState<WalletInitResult | null>(null);
   const [platform, setPlatform] = useState("web");
-  const [pidPubJwk, setPidPubJwk] = useState("");
+  const [wiaJwt, setWiaJwt] = useState<string | null>(null);
+  const [initExchange, setInitExchange] = useState<WalletInitExchange | null>(null);
   const [walletKey, setWalletKey] = useState<WalletKeyRecord | null>(null);
   const [credentials, setCredentials] = useState<CredentialSummary[]>([]);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
@@ -64,9 +73,15 @@ export function WalletPage() {
   }, []);
 
   useEffect(() => {
-    if (holderId) {
-      setWalletState(loadWalletState(holderId));
+    if (!holderId) {
+      setWalletState(null);
+      setInitExchange(null);
+      setWiaJwt(null);
+      return;
     }
+    const storedExchange = loadWalletInitExchange(holderId);
+    setInitExchange(storedExchange);
+    setWiaJwt(storedExchange?.response.wia ?? null);
   }, [holderId]);
 
   const runAction = useCallback(
@@ -83,7 +98,10 @@ export function WalletPage() {
     [clearError],
   );
 
-  async function performSync() {
+  async function performSync(): Promise<WalletSummaryResponse | null> {
+    if (!holderId) {
+      return null;
+    }
     const summary = await withApiAuth((headers) => fetchWalletSummary(holderId, headers));
     const syncedAt = new Date().toISOString();
     cacheRef.current = {
@@ -93,9 +111,11 @@ export function WalletPage() {
     };
     applyCache(cacheRef.current);
     const mergedWallet = mergeWalletStateFromSummary(holderId, summary.walletUnit);
-    if (mergedWallet) {
-      setWalletState(mergedWallet);
+    setWalletState(mergedWallet);
+    if (mergedWallet?.wia) {
+      setWiaJwt(mergedWallet.wia);
     }
+    return summary;
   }
 
   const performSyncRef = useRef(performSync);
@@ -149,22 +169,48 @@ export function WalletPage() {
           "FIDO2 device id is missing. Re-register your passkey from Settings, then try again.",
         );
       }
-      const devicePubJwk = await generateDevicePublicJwk();
-      const resolvedPidPub = pidPubJwk.trim() || (await generateDevicePublicJwk());
+      const deviceKeyPair = await generateDeviceKeyPair();
+      saveDevicePrivateJwk(holderId, deviceKeyPair.privateJwkJson);
       const initPayload = {
         holderId,
         platform,
-        devicePubJwk,
-        pidPubJwk: resolvedPidPub,
+        devicePubJwk: deviceKeyPair.publicJwkJson,
         userDeviceId: session.userDeviceId,
       };
       const result = await initWalletUnit(initPayload);
+      const completedAt = new Date().toISOString();
+      const exchange: WalletInitExchange = {
+        completedAt,
+        endpoint: "POST /api/v1/wallet/init",
+        request: initPayload,
+        response: result,
+      };
+      setInitExchange(exchange);
+      saveWalletInitExchange(holderId, exchange);
       setWalletState(result);
+      setWiaJwt(result.wia ?? null);
       saveWalletState(holderId, result);
+      const summary = await performSync();
+      if (summary) {
+        const withSync: WalletInitExchange = {
+          ...exchange,
+          postSync: {
+            completedAt: new Date().toISOString(),
+            walletUnit: summary.walletUnit,
+            key: summary.key,
+          },
+        };
+        setInitExchange(withSync);
+        saveWalletInitExchange(holderId, withSync);
+      }
     });
   }
 
   async function handleCreateKey() {
+    if (!walletInitialized) {
+      setError("Initialize the wallet unit before creating an HSM key.");
+      return;
+    }
     await runAction(async () => {
       const previousAlias = cacheRef.current.key?.keyAlias;
       const wasRevoked = cacheRef.current.key?.revoked === true;
@@ -244,6 +290,12 @@ export function WalletPage() {
 
   async function handleSign(event: React.FormEvent) {
     event.preventDefault();
+    if (!walletValid) {
+      setError(
+        "Holder signing is only available when the wallet is VALID. Identify with CMD on Issue first.",
+      );
+      return;
+    }
     if (walletKey?.revoked) {
       setError(
         "This HSM key has been revoked and can no longer sign data. Use Refresh to update status, or create a new key.",
@@ -259,7 +311,9 @@ export function WalletPage() {
   const keyRevoked = walletKey?.revoked === true;
   const issuanceReady = isIssuanceEligible(walletState?.state);
   const walletInitialized = issuanceReady && !!walletState?.walletId;
+  const walletValid = walletState?.state === "VALID";
   const hsmReady = !!walletKey && !keyRevoked;
+  const canSign = walletValid && hsmReady;
   const setupComplete = walletInitialized && hsmReady;
 
   function formatIssuedAt(iso: string): string {
@@ -390,17 +444,21 @@ export function WalletPage() {
               </li>
               <li className={`wallet-setup__step ${walletInitialized ? "is-done" : ""}`}>
                 <span className="wallet-setup__step-marker">{walletInitialized ? "✓" : "2"}</span>
-                Initialize wallet unit (<code>POST /wallet/init</code>)
+                Provision wallet
               </li>
-              <li className={`wallet-setup__step ${hsmReady ? "is-done" : ""}`}>
-                <span className="wallet-setup__step-marker">{hsmReady ? "✓" : "3"}</span>
-                Create or ensure HSM key
+              <li
+                className={`wallet-setup__step ${walletState?.state === "VALID" || credentials.length > 0 ? "is-done" : ""}`}
+              >
+                <span className="wallet-setup__step-marker">
+                  {walletState?.state === "VALID" || credentials.length > 0 ? "✓" : "3"}
+                </span>
+                <Link to="/issue">Identify with CMD</Link> and issue PID
               </li>
               <li className={`wallet-setup__step ${credentials.length > 0 ? "is-done" : ""}`}>
                 <span className="wallet-setup__step-marker">
                   {credentials.length > 0 ? "✓" : "4"}
                 </span>
-                <Link to="/issue">Issue a credential</Link>
+                Present or manage credentials
               </li>
             </ol>
           </div>
@@ -471,7 +529,7 @@ export function WalletPage() {
                       <button
                         type="button"
                         className="button button--secondary button--sm"
-                        disabled={busy || credential.revocationState === "REVOKED"}
+                        disabled={busy || !walletInitialized || credential.revocationState === "REVOKED"}
                         onClick={() => void handleRevokeCredential(credential.id)}
                       >
                         Revoke
@@ -479,7 +537,7 @@ export function WalletPage() {
                       <button
                         type="button"
                         className="button button--danger button--sm"
-                        disabled={busy}
+                        disabled={busy || !walletInitialized}
                         onClick={() => void handleDeleteCredential(credential.id)}
                       >
                         Delete
@@ -516,7 +574,24 @@ export function WalletPage() {
                         </code>
                       </dd>
                     </div>
+                    {(walletState?.wia ?? wiaJwt) ? (
+                      <div className="wallet-key-meta__row">
+                        <dt>WIA</dt>
+                        <dd>
+                          <MiddleTruncate text={(walletState?.wia ?? wiaJwt)!} endChars={10} />
+                        </dd>
+                      </div>
+                    ) : null}
+                    {walletState?.ka ? (
+                      <div className="wallet-key-meta__row">
+                        <dt>KA</dt>
+                        <dd>
+                          <MiddleTruncate text={walletState.ka} endChars={10} />
+                        </dd>
+                      </div>
+                    ) : null}
                   </dl>
+                  <WalletProvisionStatus walletState={walletState} />
                   <div className="wallet-danger-zone">
                     <p className="wallet-danger-zone__label">Danger zone</p>
                     <button
@@ -532,8 +607,9 @@ export function WalletPage() {
               ) : (
                 <>
                   <p className="hint">
-                    Binds <code>device_pub</code> (DPoP) and optional <code>pid_pub</code> (SCAL2 +
-                    holder binding) to a new wallet unit. Does not require passkey.
+                    Creates your wallet, binds this device, and issues a wallet attestation. State
+                    stays <code>CANDIDATE</code> until you sign in with CMD on{" "}
+                    <Link to="/issue">Issue</Link>.
                   </p>
                   {!session?.userDeviceId ? (
                     <div className="alert alert--info">
@@ -550,21 +626,8 @@ export function WalletPage() {
                         disabled={busy}
                       />
                     </label>
-                    <details>
-                      <summary className="hint">Advanced: PID public JWK</summary>
-                      <label className="form__field">
-                        <textarea
-                          className="form__textarea"
-                          value={pidPubJwk}
-                          onChange={(event) => setPidPubJwk(event.target.value)}
-                          rows={3}
-                          placeholder='{"kty":"EC","crv":"P-256",...}'
-                          disabled={busy}
-                        />
-                      </label>
-                    </details>
                     <button type="submit" disabled={busy || !session?.userDeviceId}>
-                      {busy ? "Working…" : "Initialize wallet"}
+                      {busy ? "Working…" : "Provision wallet"}
                     </button>
                   </form>
                 </>
@@ -575,11 +638,20 @@ export function WalletPage() {
               <div className="wallet-panel__header">
                 <h2 className="wallet-panel__title">HSM key</h2>
                 <div className="wallet-panel__actions">
-                  <button type="button" onClick={() => void handleCreateKey()} disabled={busy}>
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateKey()}
+                    disabled={busy || !walletInitialized}
+                  >
                     {walletKey ? "Ensure key" : "Create key"}
                   </button>
                 </div>
               </div>
+              {!walletInitialized ? (
+                <div className="alert alert--info">
+                  Initialize the wallet unit before creating or using an HSM key.
+                </div>
+              ) : null}
               {walletKey ? (
                 <dl className="wallet-key-meta">
                   <div className="wallet-key-meta__row">
@@ -623,7 +695,7 @@ export function WalletPage() {
                   type="button"
                   className="button button--danger button--sm"
                   onClick={() => void handleRevokeKey()}
-                  disabled={busy || !walletKey || keyRevoked}
+                  disabled={busy || !walletInitialized || !walletKey || keyRevoked}
                 >
                   Revoke key
                 </button>
@@ -634,7 +706,18 @@ export function WalletPage() {
 
         <section className="card wallet-panel">
           <h2 className="wallet-panel__title">Sign test</h2>
-          <p className="hint">Remote signature inside SoftHSM (requires active key).</p>
+          <p className="hint">Remote signature inside SoftHSM (requires VALID wallet and active key).</p>
+          {!walletInitialized ? (
+            <div className="alert alert--info">
+              Provision the wallet unit before signing.
+            </div>
+          ) : null}
+          {walletInitialized && !walletValid ? (
+            <div className="alert alert--info">
+              Wallet is <code>{walletState?.state}</code>. Identify with CMD on{" "}
+              <Link to="/issue">Issue</Link> before using holder signing.
+            </div>
+          ) : null}
           {keyRevoked ? (
             <div className="alert alert--info" role="status">
               Signing disabled. Key is revoked.
@@ -651,12 +734,16 @@ export function WalletPage() {
                 disabled={busy}
               />
             </label>
-            <button type="submit" disabled={busy || signInput.trim().length === 0 || keyRevoked}>
+            <button
+              type="submit"
+              disabled={busy || !canSign || signInput.trim().length === 0}
+            >
               Sign in HSM
             </button>
           </form>
           {signResult ? <JsonPanel title="Signature result" data={signResult} defaultOpen /> : null}
         </section>
+        <WalletInitDevPanel exchange={initExchange} walletState={walletState} />
         </div>
       </section>
     </AuthGate>

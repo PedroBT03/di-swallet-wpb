@@ -30,6 +30,7 @@ import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.service.DeviceBindingService
 import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.wallet.WalletTestSupport
+import di.swallet.wpb.wia.validation.WiaPopTestSupport
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -108,7 +109,12 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
     @ConformanceScenario("vci_haip_issuance_happy_path")
     fun `sdk gateway orchestrator flow uses hsm proof keys against wiremock issuer`() {
         val holderId = "sdk-orchestrator-${UUID.randomUUID()}"
-        WalletTestSupport.bootstrapHolderForIssuance(deviceBindingService, walletUnitRepository, hsmService, holderId)
+        val deviceKey = WalletTestSupport.bootstrapHolderWithDeviceKey(
+            deviceBindingService,
+            walletUnitRepository,
+            hsmService,
+            holderId,
+        )
         val issuer = issuerBaseUrl()
         val offer =
             """openid-credential-offer://credential_offer={"credential_issuer":"$issuer","credential_configuration_ids":["pid_jwt"]}"""
@@ -119,9 +125,17 @@ class SdkOpenId4VciOrchestratorE2ETest : BaseIntegrationTest() {
         assertEquals(issuer, ctx.credentialIssuerId)
 
         ctx = orchestrator.prepareAuthorization(ctx.sessionMeta.sessionId)
-        assertEquals(IssuanceState.AUTHORIZATION_PREPARED, ctx.state)
+        assertEquals(IssuanceState.OFFER_RESOLVED, ctx.state)
         val wiaCnfJkt = ctx.wia!!.attestation!!.cnfJkt
         assertNotNull(wiaCnfJkt)
+        val popJwt = WiaPopTestSupport.signPop(
+            privateKey = deviceKey.privateKey,
+            walletInstanceId = holderId,
+            cnfJkt = wiaCnfJkt,
+            audience = issuer,
+        )
+        ctx = orchestrator.prepareAuthorization(ctx.sessionMeta.sessionId, popJwt)
+        assertEquals(IssuanceState.AUTHORIZATION_PREPARED, ctx.state)
         stubTokenEndpoint(wiaCnfJkt)
 
         ctx = orchestrator.completeAuthorizationCode(

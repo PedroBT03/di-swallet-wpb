@@ -14,30 +14,41 @@ import di.swallet.wpb.domain.WalletUnit
 import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.domain.WalletUnitState
 import di.swallet.wpb.issuance.crypto.Rfc7638JwkThumbprint
+import di.swallet.wpb.ka.attestation.KeyAttestationProvider
+import di.swallet.wpb.security.WscaSciBootstrap
+import di.swallet.wpb.wia.attestation.WalletAttestationProvider
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
+import java.security.KeyFactory
+import java.security.interfaces.ECPublicKey
+import java.security.spec.X509EncodedKeySpec
 import java.time.LocalDateTime
+import java.util.Base64
 
-/** Input for creating a wallet unit and binding initial device keys in one step. */
+/** Input for creating a wallet unit and binding the bootstrap device key in one step. */
 data class WalletInitCommand(
     val holderId: String?,
     val devicePubJwk: String,
-    val pidPubJwk: String? = null,
     val platform: String,
     val userDeviceId: Long? = null,
 )
 
-/** Summary of wallet ID, lifecycle state, and which device binding types are active. */
+/**
+ * Outcome of wallet provisioning: wallet ID, lifecycle state, DPoP binding presence, and the
+ * Wallet Unit Attestation issued at init (its two parts: the WIA and the KA).
+ */
 data class WalletBindingResult(
     val walletId: String,
     val state: WalletUnitState,
     val dpopBound: Boolean,
-    val pidKeyBound: Boolean,
+    val wiaJwt: String? = null,
+    val kaJwt: String? = null,
 )
 
 /**
- * Creates wallet units and records DPoP and PID-key thumbprint bindings to authorized devices.
+ * Creates wallet units and records DPoP device-key thumbprint bindings to authorized devices.
  */
 @Service
 class DeviceBindingService(
@@ -46,24 +57,70 @@ class DeviceBindingService(
     private val userDeviceRepository: UserDeviceRepository,
     private val walletUnitLifecycleService: WalletUnitLifecycleService,
     private val walletBindingProperties: WalletBindingProperties,
+    private val hsmService: HsmService,
+    private val walletAttestationProvider: WalletAttestationProvider,
+    private val keyAttestationProvider: KeyAttestationProvider,
+    private val keyBindingRuntimeService: KeyBindingRuntimeService,
 ) {
+    private val logger = LoggerFactory.getLogger(DeviceBindingService::class.java)
+
     /**
-     * Initializes a wallet unit, binds device keys, and activates the unit when bindings succeed.
+     * Provisions a wallet unit: binds the bootstrap device key, generates the holder's remote HSM
+     * key, and issues the Wallet Unit Attestation (WIA + KA). The unit stays CANDIDATE (anonymous)
+     * until identity is established at the CMD step, which promotes it to VALID.
      */
     fun initWallet(command: WalletInitCommand): WalletBindingResult {
         val userDevice = resolveUserDevice(command)
         val walletUnit = walletUnitLifecycleService.createCandidate(command.holderId)
         bind(walletUnit, DeviceBindingType.DPOP, command.devicePubJwk, userDevice)
-        if (!command.pidPubJwk.isNullOrBlank()) {
-            bind(walletUnit, DeviceBindingType.PID_KEY, command.pidPubJwk, userDevice)
-        }
-        val activated = walletUnitLifecycleService.activate(walletUnit)
+        val attestations = issueProvisioningAttestation(command.holderId, walletUnit)
         return WalletBindingResult(
-            walletId = activated.walletId,
-            state = activated.state,
+            walletId = walletUnit.walletId,
+            state = walletUnit.state,
             dpopBound = true,
-            pidKeyBound = !command.pidPubJwk.isNullOrBlank(),
+            wiaJwt = attestations.wiaJwt,
+            kaJwt = attestations.kaJwt,
         )
+    }
+
+    private data class ProvisioningAttestations(val wiaJwt: String?, val kaJwt: String?)
+
+    /**
+     * Generates the holder HSM key and issues the WUA (WIA + KA) during provisioning. SCI checks
+     * are bypassed because init is the bootstrap moment (no holder session yet, anonymous wallet).
+     * Returns nulls for anonymous-only inits that carry no holder id.
+     */
+    private fun issueProvisioningAttestation(holderId: String?, walletUnit: WalletUnit): ProvisioningAttestations {
+        if (holderId.isNullOrBlank()) return ProvisioningAttestations(null, null)
+        return WscaSciBootstrap.allow {
+            val walletKey = hsmService.ensureKeyForUser(holderId, walletUnit)
+            val wiaJwt = runCatching {
+                walletAttestationProvider.issue(
+                    holderId = holderId,
+                    walletInstanceId = holderId,
+                    issuerId = null,
+                ).jwt
+            }.onFailure { logger.warn("WIA issuance at init failed for holder '$holderId': ${it.message}") }
+                .getOrNull()
+            val kaJwt = runCatching {
+                val publicKey = decodeEcPublicKey(walletKey.publicKeyBase64)
+                val attestation = keyAttestationProvider.issueForProvisioning(
+                    holderId = holderId,
+                    keyAlias = walletKey.keyAlias,
+                    proofPublicKey = publicKey,
+                )
+                keyBindingRuntimeService.registerKeyAttestation(holderId, attestation)
+                attestation.jwt
+            }.onFailure { logger.warn("KA issuance at init failed for holder '$holderId': ${it.message}") }
+                .getOrNull()
+            ProvisioningAttestations(wiaJwt, kaJwt)
+        }
+    }
+
+    /** Decodes a Base64URL X.509 EC public key (holder HSM key) into an ECPublicKey. */
+    private fun decodeEcPublicKey(publicKeyBase64: String): ECPublicKey {
+        val bytes = Base64.getUrlDecoder().decode(publicKeyBase64)
+        return KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(bytes)) as ECPublicKey
     }
 
     /**
@@ -74,30 +131,8 @@ class DeviceBindingService(
             .orElseThrow { IllegalArgumentException("wallet '$walletId' not found") }
         val userDevice = resolveOptionalUserDevice(userDeviceId, walletUnit.holderId)
         bind(walletUnit, DeviceBindingType.DPOP, devicePubJwk, userDevice)
-        val activated = maybeActivate(walletUnit)
-        return currentBindingStatus(activated)
-    }
-
-    /**
-     * Adds a PID holder public key binding to an operational wallet unit.
-     */
-    fun bindPidKey(walletId: String, pidPubJwk: String): WalletBindingResult {
-        val walletUnit = walletUnitRepository.findByWalletId(walletId)
-            .orElseThrow { IllegalArgumentException("wallet '$walletId' not found") }
-        walletUnitLifecycleService.requireOperational(walletUnit)
-        bind(walletUnit, DeviceBindingType.PID_KEY, pidPubJwk, userDevice = null)
         return currentBindingStatus(walletUnit)
     }
-
-    /**
-     * Activates a candidate wallet unit after its first binding when still in CANDIDATE state.
-     */
-    private fun maybeActivate(walletUnit: WalletUnit): WalletUnit =
-        if (walletUnit.state == WalletUnitState.CANDIDATE) {
-            walletUnitLifecycleService.activate(walletUnit)
-        } else {
-            walletUnit
-        }
 
     /**
      * Stores a device key thumbprint binding when the same thumbprint is not already registered.
@@ -116,6 +151,7 @@ class DeviceBindingService(
                 walletUnit = walletUnit,
                 bindingType = type,
                 deviceKeyThumbprint = thumbprint,
+                devicePublicJwk = jwk,
                 state = di.swallet.wpb.domain.DeviceWalletBindingState.ACTIVE,
                 boundAt = LocalDateTime.now(),
                 userDevice = userDevice,
@@ -129,12 +165,10 @@ class DeviceBindingService(
     private fun currentBindingStatus(walletUnit: WalletUnit): WalletBindingResult {
         val all = deviceWalletBindingRepository.findByWalletUnitId(walletUnit.id!!)
         val dpop = all.any { it.bindingType == DeviceBindingType.DPOP }
-        val pid = all.any { it.bindingType == DeviceBindingType.PID_KEY }
         return WalletBindingResult(
             walletId = walletUnit.walletId,
             state = walletUnit.state,
             dpopBound = dpop,
-            pidKeyBound = pid,
         )
     }
 

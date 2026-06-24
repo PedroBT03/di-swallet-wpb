@@ -42,6 +42,9 @@ import {
 } from "../features/issue/state";
 import { useAuthedApi } from "../hooks/useAuthedApi";
 import type { IssuanceConsentView, IssuanceContext, IssuanceEvent } from "../types/openid4vci";
+import { signIssuanceWiaPop } from "../features/issue/wiaPop";
+import { loadWalletState } from "../features/wallet/storage";
+import { decodeJwtParts } from "../features/wallet/initExchange";
 import { formatApiError } from "../utils/apiError";
 
 const SIMULATED_AUTH_CODE = "code-abc";
@@ -174,9 +177,17 @@ export function IssuePage() {
     switch (ctx.state) {
       case "OFFER_RESOLVED":
         if (flowKind(ctx) === "PRE_AUTHORIZED_CODE") {
-          return completePreAuthorized(id);
+          if (!ctx.wia?.attestation) {
+            return completePreAuthorized(id);
+          }
+          const preAuthPop = await signIssuanceWiaPop(holderId, ctx);
+          return completePreAuthorized(id, undefined, preAuthPop);
         }
-        return prepareAuthorization(id);
+        if (!ctx.wia?.attestation) {
+          return prepareAuthorization(id);
+        }
+        const authPop = await signIssuanceWiaPop(holderId, ctx);
+        return prepareAuthorization(id, authPop);
       case "AUTHORIZATION_PREPARED": {
         const oauthState = ctx.preparedAuthorization?.state;
         if (!oauthState) {
@@ -300,7 +311,10 @@ export function IssuePage() {
   }
 
   const wiaJwt = context?.wia?.attestation?.jwt ?? null;
-  const kaJwt = context?.ka?.attestation?.jwt ?? null;
+  const issuanceKa = context?.ka?.attestation ?? null;
+  const provisioningKaJwt = holderId ? loadWalletState(holderId)?.ka ?? null : null;
+  const provisioningWiaJwt =
+    holderId && !wiaJwt ? loadWalletState(holderId)?.wia ?? null : null;
 
   return (
     <AuthGate>
@@ -449,8 +463,6 @@ export function IssuePage() {
 
         {showCmdStep && context ? (
           <CmdIdentityPanel
-            authorizationUrl={context.preparedAuthorization?.authorizationCodeUrl}
-            wiaJwtPreview={wiaJwt}
             busy={busy}
             onContinue={() => void handleCmdContinue()}
             onCancel={handleReset}
@@ -581,35 +593,82 @@ export function IssuePage() {
         ) : null}
 
         {flowState && !showBuilder ? (
-          <details className="present-dev-details" open>
-            <summary>Developer details: protocol exchange</summary>
+          <details className="present-dev-details">
+            <summary>Developer details</summary>
             <div className="present-dev-details__body">
-              <ProtocolExchangePanel
-                title="WIA (Wallet Instance Attestation)"
-                summary="Attached during OAuth authorization. The issuer validates WIA signature and cnf.jkt binding (ISSU_21)."
-                items={[
-                  { label: "WIA state", value: context?.wia?.state },
-                  { label: "cnf.jkt", value: context?.wia?.attestation?.cnfJkt },
-                  { label: "walletInstanceId", value: context?.wia?.attestation?.walletInstanceId },
-                  {
-                    label: "WIA bound to access token",
-                    value: context?.authorizedContext?.wiaCnfJkt ?? "(after CMD step)",
-                  },
-                ]}
-                payload={context?.wia?.attestation ?? null}
-                payloadTitle="WIA attestation"
-              />
-
-              {kaJwt ? (
+              {showCmdStep ? (
                 <ProtocolExchangePanel
-                  title="KA (Key Attestation / WUA)"
-                  summary="Device-bound credentials include key attestation from the WSCD (ISSU_17)."
+                  title="CMD & OAuth (lab)"
+                  summary="The simulate button skips the real CMD redirect and exchanges a simulated authorization code. WIA is attached to the OAuth request."
                   items={[
-                    { label: "KA state", value: context?.ka?.state },
-                    { label: "keyId", value: context?.ka?.attestation?.keyId },
-                    { label: "attestedJkt", value: context?.ka?.attestation?.attestedJkt },
+                    { label: "CMD portal (production)", value: "https://cmd.autenticacao.gov.pt/" },
+                    {
+                      label: "Issuer authorization URL",
+                      value:
+                        context?.preparedAuthorization?.authorizationCodeUrl ??
+                        "(available after Prepare authorization)",
+                    },
+                    {
+                      label: "WIA attached to OAuth",
+                      value: context?.preparedAuthorization?.wiaAttached ? "yes" : "no",
+                    },
                   ]}
-                  payload={context?.ka?.attestation ?? null}
+                />
+              ) : null}
+
+              {context?.wia?.attestation || provisioningWiaJwt ? (
+                <ProtocolExchangePanel
+                  title="WIA (Wallet Instance Attestation)"
+                  summary="Attests the wallet instance and binds its device (DPoP) key. Sent to the authorization server during OAuth; the access token is bound to this cnf key (ISSU_21)."
+                  items={[
+                    { label: "Source", value: context?.wia?.attestation ? "issuance session" : "wallet provisioning" },
+                    { label: "WIA state", value: context?.wia?.state ?? "(provisioning)" },
+                    { label: "cnf.jkt (device key)", value: context?.wia?.attestation?.cnfJkt },
+                    {
+                      label: "walletInstanceId",
+                      value: context?.wia?.attestation?.walletInstanceId,
+                    },
+                    {
+                      label: "WIA bound to access token",
+                      value: context?.authorizedContext?.wiaCnfJkt ?? "(after CMD step)",
+                    },
+                  ]}
+                  payload={
+                    context?.wia?.attestation ??
+                    (provisioningWiaJwt
+                      ? {
+                          jwt: provisioningWiaJwt,
+                          decoded: decodeJwtParts(provisioningWiaJwt),
+                        }
+                      : null)
+                  }
+                  payloadTitle="WIA attestation"
+                />
+              ) : null}
+
+              {issuanceKa || provisioningKaJwt ? (
+                <ProtocolExchangePanel
+                  title="KA (Key Attestation)"
+                  summary={
+                    issuanceKa
+                      ? "Attests the holder HSM key the credential binds to (distinct from the WIA device key)."
+                      : "Issued at wallet provisioning for the holder HSM key. A session-specific KA is attached when the credential is requested."
+                  }
+                  items={[
+                    { label: "Source", value: issuanceKa ? "issuance session" : "wallet provisioning" },
+                    { label: "KA state", value: context?.ka?.state ?? "(provisioning)" },
+                    { label: "keyId", value: issuanceKa?.keyId },
+                    { label: "attestedJkt (holder HSM key)", value: issuanceKa?.attestedJkt },
+                  ]}
+                  payload={
+                    issuanceKa ??
+                    (provisioningKaJwt
+                      ? {
+                          jwt: provisioningKaJwt,
+                          decoded: decodeJwtParts(provisioningKaJwt),
+                        }
+                      : null)
+                  }
                   payloadTitle="Key attestation"
                 />
               ) : null}

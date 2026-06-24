@@ -33,6 +33,7 @@ import di.swallet.wpb.format.mdoc.MdocTestSupport
 import di.swallet.wpb.format.sdjwt.SdJwtService
 import com.fasterxml.jackson.databind.ObjectMapper
 import di.swallet.wpb.openid4vci.adapter.SimulatedOpenId4VciGateway
+import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.openid4vci.protocol.CredentialConfigurationDescriptor
 import di.swallet.wpb.openid4vci.protocol.IssuanceConsentSubmission
 import di.swallet.wpb.openid4vci.protocol.IssuanceRequest
@@ -42,6 +43,8 @@ import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import di.swallet.wpb.wia.attestation.WalletAttestationProvider
 import di.swallet.wpb.wia.status.WiaStatusManagementService
 import di.swallet.wpb.wia.validation.DefaultWiaValidationService
+import di.swallet.wpb.wia.validation.WiaPopValidationService
+import di.swallet.wpb.issuance.domain.WalletInstanceAttestation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -106,7 +109,7 @@ class DefaultIssuanceFlowOrchestratorTest {
             val now = java.time.Instant.now()
             return di.swallet.wpb.issuance.domain.WalletInstanceAttestation(
                 jwt = "wia.jwt.$holderId",
-                popJwt = "wia.pop.$holderId",
+                popJwt = "",
                 walletInstanceId = walletInstanceId,
                 walletName = "DI-Swallet-WPB",
                 walletVersion = "test",
@@ -150,6 +153,26 @@ class DefaultIssuanceFlowOrchestratorTest {
                 issuerScope = issuerId,
             )
         }
+
+        /** Provisioning KA stub reusing the issuance stub with no issuer scope. */
+        override fun issueForProvisioning(
+            holderId: String,
+            keyAlias: String,
+            proofPublicKey: java.security.interfaces.ECPublicKey,
+        ): KeyAttestation =
+            issue(
+                holderId = holderId,
+                issuerId = null,
+                metadata = ResolvedIssuerMetadata(credentialIssuerId = "https://provisioning.wpb.local"),
+                configuration = CredentialConfigurationDescriptor(
+                    id = "wallet_provisioning",
+                    format = IssuanceCredentialFormat.SD_JWT_VC,
+                    keyAttestationRequired = true,
+                    proofTypesSupported = listOf("jwt", "attestation"),
+                ),
+                proofPublicKey = proofPublicKey,
+                proofKeyId = keyAlias,
+            )
     }
 
     /**
@@ -200,6 +223,9 @@ class DefaultIssuanceFlowOrchestratorTest {
                     org.mockito.Mockito.`when`(it.isRevoked(org.mockito.ArgumentMatchers.anyInt())).thenReturn(false)
                 },
             ),
+            wiaPopValidationService = object : WiaPopValidationService {
+                override fun validate(popJwt: String, attestation: WalletInstanceAttestation) = Unit
+            },
             keyAttestationProvider = StubKeyAttestationProvider(),
             keyAttestationValidationService = validationService,
             credentialStorage = storage,
@@ -240,6 +266,21 @@ class DefaultIssuanceFlowOrchestratorTest {
         )
     }
 
+    /** Issues WIA on the first call, then completes authorization preparation once PoP is supplied. */
+    private fun DefaultIssuanceFlowOrchestrator.prepareWithPop(sessionId: java.util.UUID): di.swallet.wpb.issuance.domain.IssuanceContext {
+        prepareAuthorization(sessionId)
+        return prepareAuthorization(sessionId, walletAttestationPopJwt = "stub-pop")
+    }
+
+    /** Issues WIA on the first call, then completes pre-authorization once PoP is supplied. */
+    private fun DefaultIssuanceFlowOrchestrator.completePreAuthorizedWithPop(
+        sessionId: java.util.UUID,
+        txCode: String?,
+    ): di.swallet.wpb.issuance.domain.IssuanceContext {
+        completePreAuthorizedCode(sessionId, txCode = null)
+        return completePreAuthorizedCode(sessionId, txCode = txCode, walletAttestationPopJwt = "stub-pop")
+    }
+
     private val offerByValue =
         """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["pid_jwt"]}"""
 
@@ -259,7 +300,7 @@ class DefaultIssuanceFlowOrchestratorTest {
         assertTrue(ctx.trustDecision!!.trusted)
         assertTrue(ctx.policyDecision!!.allowed)
 
-        ctx = orch.prepareAuthorization(ctx.sessionMeta.sessionId)
+        ctx = orch.prepareWithPop(ctx.sessionMeta.sessionId)
         assertEquals(IssuanceState.AUTHORIZATION_PREPARED, ctx.state)
         assertNotNull(ctx.preparedAuthorization)
 
@@ -291,7 +332,7 @@ class DefaultIssuanceFlowOrchestratorTest {
     fun `revoked key attestation fails issuance and emits ka revoked event`() {
         val (orch, _) = orchestrator(kaRevoked = true)
         var ctx = orch.resolveOffer(offerByValue, holderId = "holder-revoked")
-        ctx = orch.prepareAuthorization(ctx.sessionMeta.sessionId)
+        ctx = orch.prepareWithPop(ctx.sessionMeta.sessionId)
         ctx = orch.completeAuthorizationCode(ctx.sessionMeta.sessionId, "code", ctx.preparedAuthorization!!.state)
         val failed = orch.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"))
 
@@ -309,8 +350,15 @@ class DefaultIssuanceFlowOrchestratorTest {
         val ctx = orch.resolveOffer(preAuthOffer, holderId = "holder-2")
         assertEquals(IssuanceState.OFFER_RESOLVED, ctx.state)
         val failed = orch.completePreAuthorizedCode(ctx.sessionMeta.sessionId, txCode = null)
-        assertEquals(IssuanceState.FAILED, failed.state)
-        assertEquals("pre_authorized_failed", failed.error?.code)
+        assertEquals(IssuanceState.OFFER_RESOLVED, failed.state)
+        assertNotNull(failed.wia?.attestation)
+        val withoutTxCode = orch.completePreAuthorizedCode(
+            failed.sessionMeta.sessionId,
+            txCode = null,
+            walletAttestationPopJwt = "stub-pop",
+        )
+        assertEquals(IssuanceState.FAILED, withoutTxCode.state)
+        assertEquals("pre_authorized_failed", withoutTxCode.error?.code)
     }
 
     /**
@@ -320,7 +368,7 @@ class DefaultIssuanceFlowOrchestratorTest {
     fun `pre-authorized_code path with tx_code completes`() {
         val (orch, _) = orchestrator()
         var ctx = orch.resolveOffer(preAuthOffer, holderId = "holder-3")
-        ctx = orch.completePreAuthorizedCode(ctx.sessionMeta.sessionId, txCode = "1234")
+        ctx = orch.completePreAuthorizedWithPop(ctx.sessionMeta.sessionId, txCode = "1234")
         assertEquals(IssuanceState.AUTHORIZED, ctx.state)
         ctx = orch.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"))
         assertNull(ctx.error)
@@ -338,7 +386,7 @@ class DefaultIssuanceFlowOrchestratorTest {
             """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["academic_card"]}"""
         val (orch, _) = orchestrator()
         var ctx = orch.resolveOffer(offer, holderId = "holder-no-ka")
-        ctx = orch.prepareAuthorization(ctx.sessionMeta.sessionId)
+        ctx = orch.prepareWithPop(ctx.sessionMeta.sessionId)
         ctx = orch.completeAuthorizationCode(ctx.sessionMeta.sessionId, "c", ctx.preparedAuthorization!!.state)
         ctx = orch.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest(credentialConfigurationId = "academic_card"))
 
@@ -360,7 +408,7 @@ class DefaultIssuanceFlowOrchestratorTest {
             simulator.deferredPollsBeforeIssue = 2
         })
         var ctx = orch.resolveOffer(offerByValue, holderId = "holder-deferred")
-        ctx = orch.prepareAuthorization(ctx.sessionMeta.sessionId)
+        ctx = orch.prepareWithPop(ctx.sessionMeta.sessionId)
         ctx = orch.completeAuthorizationCode(ctx.sessionMeta.sessionId, "c", ctx.preparedAuthorization!!.state)
         ctx = orch.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest("pid_jwt"))
         assertNull(ctx.error)
@@ -454,7 +502,7 @@ class DefaultIssuanceFlowOrchestratorTest {
         val storage = StubIssuedCredentialStorage()
         val (orch, stubStorage) = orchestrator(storage = storage)
         var ctx = orch.resolveOffer(offerByValue, holderId = "holder-reject")
-        ctx = orch.prepareAuthorization(ctx.sessionMeta.sessionId)
+        ctx = orch.prepareWithPop(ctx.sessionMeta.sessionId)
         ctx = orch.completeAuthorizationCode(ctx.sessionMeta.sessionId, "code", ctx.preparedAuthorization!!.state)
         ctx = orch.requestCredential(ctx.sessionMeta.sessionId, IssuanceRequest(credentialConfigurationId = "pid_jwt"))
         assertEquals(IssuanceState.ISSUANCE_CONSENT_PENDING, ctx.state)

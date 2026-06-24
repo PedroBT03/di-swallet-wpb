@@ -15,10 +15,13 @@ export function resolveOffer(request: OfferResolveRequest): Promise<IssuanceCont
   });
 }
 
-export function prepareAuthorization(sessionId: string): Promise<IssuanceContext> {
+export function prepareAuthorization(
+  sessionId: string,
+  walletAttestationPopJwt?: string,
+): Promise<IssuanceContext> {
   return apiFetch<IssuanceContext>("/openid4vci/authorize/prepare", {
     method: "POST",
-    body: JSON.stringify({ sessionId }),
+    body: JSON.stringify({ sessionId, walletAttestationPopJwt: walletAttestationPopJwt ?? null }),
   });
 }
 
@@ -36,10 +39,15 @@ export function completeAuthorizationCode(
 export function completePreAuthorized(
   sessionId: string,
   txCode?: string,
+  walletAttestationPopJwt?: string,
 ): Promise<IssuanceContext> {
   return apiFetch<IssuanceContext>("/openid4vci/authorize/pre-authorized", {
     method: "POST",
-    body: JSON.stringify({ sessionId, txCode: txCode ?? null }),
+    body: JSON.stringify({
+      sessionId,
+      txCode: txCode ?? null,
+      walletAttestationPopJwt: walletAttestationPopJwt ?? null,
+    }),
   });
 }
 

@@ -6,13 +6,36 @@ package di.swallet.wpb.controller
 
 import di.swallet.wpb.BaseIntegrationTest
 import di.swallet.wpb.domain.WalletKey
+import di.swallet.wpb.domain.WalletUnitRepository
+import di.swallet.wpb.service.DeviceBindingService
+import di.swallet.wpb.service.WalletUnitLifecycleService
+import di.swallet.wpb.wallet.WalletTestSupport
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpStatus
 import java.util.*
 
 class WalletKeyLifecycleTest : BaseIntegrationTest() {
+
+    @Autowired
+    lateinit var deviceBindingService: DeviceBindingService
+
+    @Autowired
+    lateinit var walletUnitRepository: WalletUnitRepository
+
+    @Autowired
+    lateinit var walletUnitLifecycleService: WalletUnitLifecycleService
+
+    private fun activateWalletForSigning(holderId: String) {
+        WalletTestSupport.initOperationalWallet(deviceBindingService, holderId)
+        WalletTestSupport.markHolderWalletValid(
+            walletUnitRepository,
+            walletUnitLifecycleService,
+            holderId,
+        )
+    }
 
     /**
      * Creates a wallet key with FIDO2 headers, signs sample data with a fresh challenge,
@@ -22,13 +45,14 @@ class WalletKeyLifecycleTest : BaseIntegrationTest() {
     fun `should manage full key lifecycle with dynamic auth`() {
         val testUserId = "user-${UUID.randomUUID()}"
 
-        // Step 1: Initialization - Handshake and key generation
         logger.info("Step 1: Initializing hardware key with dynamic challenge for $testUserId")
+        getDynamicHeaders(testUserId)
+        activateWalletForSigning(testUserId)
+
         val entity = HttpEntity<String>(getDynamicHeaders(testUserId))
         val createResponse = restTemplate.postForEntity("/api/v1/wallet/keys/$testUserId", entity, WalletKey::class.java)
         assertThat(createResponse.statusCode).isEqualTo(HttpStatus.OK)
 
-        // Step 2: Signing - Requesting signature with a new challenge
         logger.info("Step 2: Requesting digital signature using a new dynamic challenge")
         val signRequest = mapOf("data" to "PoC Signature")
         val signEntity = HttpEntity(signRequest, getDynamicHeaders(testUserId))
@@ -45,6 +69,8 @@ class WalletKeyLifecycleTest : BaseIntegrationTest() {
     @Test
     fun `should rotate revoked key when ensure is called again`() {
         val userId = "rotate-user-${UUID.randomUUID()}"
+        getDynamicHeaders(userId)
+        activateWalletForSigning(userId)
         val authEntity = { HttpEntity<String>(getDynamicHeaders(userId)) }
 
         val firstKey = restTemplate.postForEntity(
@@ -92,8 +118,9 @@ class WalletKeyLifecycleTest : BaseIntegrationTest() {
     @Test
     fun `should block signature when key is revoked in bitstring`() {
         val userId = "revoked-user-${UUID.randomUUID()}"
+        getDynamicHeaders(userId)
+        activateWalletForSigning(userId)
 
-        // Step 1: Initialization - Setup hardware key
         logger.info("Step 1: Setting up hardware key for $userId")
         restTemplate.postForEntity("/api/v1/wallet/keys/$userId", HttpEntity<String>(getDynamicHeaders(userId)), WalletKey::class.java)
 

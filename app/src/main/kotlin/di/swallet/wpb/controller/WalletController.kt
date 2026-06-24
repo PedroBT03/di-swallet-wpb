@@ -15,6 +15,7 @@ import di.swallet.wpb.service.StatusListService
 import di.swallet.wpb.service.Fido2Service
 import di.swallet.wpb.service.DeviceBindingService
 import di.swallet.wpb.service.WalletInitCommand
+import di.swallet.wpb.service.WalletUnitLifecycleService
 import di.swallet.wpb.service.format.PresentationService
 import di.swallet.wpb.service.format.DisclosureCipherService
 import di.swallet.wpb.domain.WalletKey
@@ -61,12 +62,11 @@ data class HolderSessionExchangeRequest(
     val signature: String,
 )
 
-/** Request body for wallet unit initialization and bootstrap key binding. */
+/** Request body for wallet unit provisioning and bootstrap device-key binding. */
 data class WalletInitRequest(
     val holderId: String? = null,
     val platform: String,
     val devicePubJwk: String,
-    val pidPubJwk: String? = null,
     val userDeviceId: Long? = null,
 )
 
@@ -74,12 +74,6 @@ data class WalletInitRequest(
 data class DpopBindRequest(
     val walletId: String,
     val devicePubJwk: String,
-)
-
-/** Request body for binding a PID key to an existing wallet unit. */
-data class PidKeyBindRequest(
-    val walletId: String,
-    val pidPubJwk: String,
 )
 
 /** Read-only wallet dashboard payload for WPI clients (no encoded credential bodies). */
@@ -135,6 +129,7 @@ class WalletController(
     private val statusListService: StatusListService,
     private val fido2Service: Fido2Service,
     private val deviceBindingService: DeviceBindingService,
+    private val walletUnitLifecycleService: WalletUnitLifecycleService,
     private val credentialRevocationGuard: CredentialRevocationGuard,
     private val walletRevocationService: WalletRevocationService,
     private val transactionLogger: TransactionLogger,
@@ -234,26 +229,28 @@ class WalletController(
     }
 
     /**
-     * Creates a wallet unit and binds bootstrap device and optional PID keys.
+     * Provisions a wallet unit (ARTE UC1): binds the bootstrap device key, generates the holder's
+     * remote HSM key, and issues a Wallet Instance Attestation (WIA). The unit stays CANDIDATE
+     * (anonymous) until identity is established at the CMD step.
      */
     @PostMapping("/init")
-    @Operation(summary = "Initialize wallet unit and bind bootstrap keys")
+    @Operation(summary = "Provision wallet unit, bind bootstrap device key, and issue WUA (WIA + KA)")
     fun walletInit(@RequestBody request: WalletInitRequest): Map<String, Any> {
         val result = deviceBindingService.initWallet(
             WalletInitCommand(
                 holderId = request.holderId,
                 platform = request.platform,
                 devicePubJwk = request.devicePubJwk,
-                pidPubJwk = request.pidPubJwk,
                 userDeviceId = request.userDeviceId,
             ),
         )
-        return mapOf(
-            "walletId" to result.walletId,
-            "state" to result.state.name,
-            "dpopBound" to result.dpopBound,
-            "pidKeyBound" to result.pidKeyBound,
-        )
+        return buildMap {
+            put("walletId", result.walletId)
+            put("state", result.state.name)
+            put("dpopBound", result.dpopBound)
+            result.wiaJwt?.let { put("wia", it) }
+            result.kaJwt?.let { put("ka", it) }
+        }
     }
 
     /**
@@ -268,23 +265,6 @@ class WalletController(
             "walletId" to result.walletId,
             "state" to result.state.name,
             "dpopBound" to result.dpopBound,
-            "pidKeyBound" to result.pidKeyBound,
-        )
-    }
-
-    /**
-     * Binds a PID public key to the authenticated holder's wallet unit.
-     */
-    @PostMapping("/auth/pid_key/bind")
-    @Operation(summary = "Bind PID key to wallet")
-    fun bindPidKey(@RequestBody request: PidKeyBindRequest): Map<String, Any> {
-        authenticatedHolderGuard.requireWalletUnitOwned(request.walletId)
-        val result = deviceBindingService.bindPidKey(request.walletId, request.pidPubJwk)
-        return mapOf(
-            "walletId" to result.walletId,
-            "state" to result.state.name,
-            "dpopBound" to result.dpopBound,
-            "pidKeyBound" to result.pidKeyBound,
         )
     }
 
@@ -428,6 +408,7 @@ class WalletController(
         @RequestBody request: SignRequest
     ): Map<String, String> {
         authenticatedHolderGuard.requireSelf(userId)
+        walletUnitLifecycleService.requireSignCapable(userId)
         val key = hsmService.getUserKey(userId)
 
         // Validate key state before cryptographic execution

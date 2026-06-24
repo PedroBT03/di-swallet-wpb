@@ -8,6 +8,8 @@ import di.swallet.wpb.domain.WalletUnitRepository
 import di.swallet.wpb.service.DeviceBindingService
 import di.swallet.wpb.service.HsmService
 import di.swallet.wpb.service.WalletInitCommand
+import di.swallet.wpb.service.WalletUnitLifecycleService
+import di.swallet.wpb.wia.validation.WiaPopTestSupport
 import java.security.KeyPairGenerator
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
@@ -36,8 +38,8 @@ object WalletTestSupport {
     }
 
     /**
-     * Initialises an operational wallet for the holder via DeviceBindingService and returns
-     * the persisted wallet unit id.
+     * Provisions a CANDIDATE wallet for the holder via DeviceBindingService (device binding, HSM
+     * key, and WIA) and returns the persisted wallet unit id.
      */
     fun initOperationalWallet(deviceBindingService: DeviceBindingService, holderId: String): String {
         val result = deviceBindingService.initWallet(
@@ -60,9 +62,38 @@ object WalletTestSupport {
         hsmService: HsmService,
         holderId: String,
     ) {
-        initOperationalWallet(deviceBindingService, holderId)
+        bootstrapHolderWithDeviceKey(deviceBindingService, walletUnitRepository, hsmService, holderId)
+    }
+
+    /**
+     * Provisions a holder wallet with a known device key pair so PoP JWTs can be signed in tests.
+     */
+    fun bootstrapHolderWithDeviceKey(
+        deviceBindingService: DeviceBindingService,
+        walletUnitRepository: WalletUnitRepository,
+        hsmService: HsmService,
+        holderId: String,
+    ): WiaPopTestSupport.DeviceKeyMaterial {
+        val material = WiaPopTestSupport.generateDeviceKeyMaterial()
+        deviceBindingService.initWallet(
+            WalletInitCommand(
+                holderId = holderId,
+                platform = "test",
+                devicePubJwk = material.publicJwkJson,
+            ),
+        )
         val walletUnit = walletUnitRepository.findFirstByHolderId(holderId).orElseThrow()
         runCatching { hsmService.getUserKey(holderId) }
             .getOrElse { hsmService.generateKeyForUser(holderId, walletUnit) }
+        return material
+    }
+
+    fun markHolderWalletValid(
+        walletUnitRepository: WalletUnitRepository,
+        walletUnitLifecycleService: WalletUnitLifecycleService,
+        holderId: String,
+    ) {
+        val walletUnit = walletUnitRepository.findFirstByHolderId(holderId).orElseThrow()
+        walletUnitLifecycleService.markValid(walletUnit)
     }
 }

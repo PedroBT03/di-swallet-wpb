@@ -305,8 +305,8 @@ export function PresentPage() {
         <div className="alert alert--info">
           <strong>Local demo setup</strong>
           <p>
-            Start the <code>verifier-emulator</code> on port 8081 and issue a demo PID or mDL on{" "}
-            <Link to="/wallet">Wallet</Link> before presenting. WPB needs{" "}
+            Start the <code>verifier-emulator</code> on port 8081 and issue a PID or mDL on{" "}
+            <Link to="/issue">Issue</Link> before presenting. WPB needs{" "}
             <code>wpb.openid4vp.demo-mode=true</code> (on by default in the <code>dev</code>{" "}
             profile).
           </p>

@@ -91,11 +91,3 @@ export interface WalletUnitRevokeResult {
   walletId: string;
   status: string;
 }
-
-export interface PresentationResult {
-  userId: string;
-  credentialType: string;
-  format: string;
-  presentation: string;
-  revealedClaims: string[];
-}

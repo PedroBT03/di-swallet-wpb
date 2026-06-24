@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" role="img" aria-label="Demo trust mark">
+  <rect width="120" height="120" rx="12" fill="#003399"/>
+  <circle cx="60" cy="54" r="28" fill="none" stroke="#FFCC00" stroke-width="3"/>
+  <g fill="#FFCC00">
+    <circle cx="60" cy="30" r="3"/>
+    <circle cx="72.5" cy="34" r="3"/>
+    <circle cx="81" cy="46" r="3"/>
+    <circle cx="81" cy="62" r="3"/>
+    <circle cx="72.5" cy="74" r="3"/>
+    <circle cx="60" cy="78" r="3"/>
+    <circle cx="47.5" cy="74" r="3"/>
+    <circle cx="39" cy="62" r="3"/>
+    <circle cx="39" cy="46" r="3"/>
+    <circle cx="47.5" cy="34" r="3"/>
+  </g>
+  <text x="60" y="108" text-anchor="middle" fill="#ffffff" font-family="system-ui,sans-serif" font-size="9" font-weight="600">DEMO</text>
+</svg>

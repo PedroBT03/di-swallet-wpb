@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   createWalletKey,
-  createCredentialPresentation,
   deleteCredential,
   fetchWalletSummary,
   initWalletUnit,
-  issueDemoSdCredential,
   revokeCredential,
   revokeWalletKey,
   revokeWalletUnit,
@@ -15,15 +13,13 @@ import {
 import { AuthGate } from "../components/AuthGate";
 import { AuthenticatingBanner } from "../components/AuthenticatingBanner";
 import { JsonPanel } from "../components/JsonPanel";
-import { ProtocolExchangePanel } from "../components/ProtocolExchangePanel";
 import { Uc1Stepper } from "../components/wallet/Uc1Stepper";
 import { generateDevicePublicJwk } from "../crypto/deviceJwk";
-import { loadWalletState, saveWalletState, sortCredentialsByIssuedAt, summarizeCredential } from "../features/wallet/storage";
+import { loadWalletState, saveWalletState, sortCredentialsByIssuedAt } from "../features/wallet/storage";
 import { mergeWalletStateFromSummary } from "../features/wallet/walletUnit";
 import { useAuthedApi } from "../hooks/useAuthedApi";
 import type {
   CredentialSummary,
-  PresentationResult,
   SignResult,
   WalletInitResult,
   WalletKeyRecord,
@@ -55,19 +51,9 @@ export function WalletPage() {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [signInput, setSignInput] = useState("Hello from WPI Dev");
   const [signResult, setSignResult] = useState<SignResult | null>(null);
-  const [presentationCredentialId, setPresentationCredentialId] = useState<number | "">("");
-  const [claimsInput, setClaimsInput] = useState("given_name, family_name");
-  const [presentationResult, setPresentationResult] = useState<PresentationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [lastRaw, setLastRaw] = useState<unknown>(null);
   const [syncing, setSyncing] = useState(false);
-  const [lastInitRequest, setLastInitRequest] = useState<{
-    platform: string;
-    devicePubJwk: string;
-    pidPubJwk?: string;
-  } | null>(null);
-  const presentationResultRef = useRef<HTMLDivElement | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
   const [asideHeight, setAsideHeight] = useState<number | null>(null);
 
@@ -82,27 +68,6 @@ export function WalletPage() {
       setWalletState(loadWalletState(holderId));
     }
   }, [holderId]);
-
-  const presentableCredentials = useMemo(
-    () => credentials.filter((credential) => credential.revocationState === "ACTIVE"),
-    [credentials],
-  );
-
-  useEffect(() => {
-    if (presentableCredentials.length === 0) {
-      setPresentationCredentialId("");
-      return;
-    }
-    setPresentationCredentialId((current) => {
-      if (
-        current !== "" &&
-        presentableCredentials.some((credential) => credential.id === current)
-      ) {
-        return current;
-      }
-      return presentableCredentials[0]?.id ?? "";
-    });
-  }, [presentableCredentials]);
 
   const runAction = useCallback(
     async (action: () => Promise<void>) => {
@@ -131,7 +96,6 @@ export function WalletPage() {
     if (mergedWallet) {
       setWalletState(mergedWallet);
     }
-    setLastRaw(summary);
   }
 
   const performSyncRef = useRef(performSync);
@@ -194,15 +158,9 @@ export function WalletPage() {
         pidPubJwk: resolvedPidPub,
         userDeviceId: session.userDeviceId,
       };
-      setLastInitRequest({
-        platform,
-        devicePubJwk,
-        pidPubJwk: resolvedPidPub,
-      });
       const result = await initWalletUnit(initPayload);
       setWalletState(result);
       saveWalletState(holderId, result);
-      setLastRaw(result);
     });
   }
 
@@ -221,7 +179,6 @@ export function WalletPage() {
       } else {
         setSuccessMessage("HSM key created successfully.");
       }
-      setLastRaw(key);
     });
   }
 
@@ -235,7 +192,6 @@ export function WalletPage() {
         };
         setWalletKey(cacheRef.current.key);
       }
-      setLastRaw(result);
       await performSync();
       setSuccessMessage(
         `HSM key revoked successfully (status list index ${result.index}). ` +
@@ -249,8 +205,7 @@ export function WalletPage() {
       return;
     }
     await runAction(async () => {
-      const result = await withSoleControl((headers) => deleteCredential(credentialId, headers));
-      setLastRaw(result);
+      await withSoleControl((headers) => deleteCredential(credentialId, headers));
       await refreshWalletData();
     });
   }
@@ -258,41 +213,12 @@ export function WalletPage() {
   async function handleRevokeCredential(credentialId: number) {
     await runAction(async () => {
       const result = await withSoleControl((headers) => revokeCredential(credentialId, headers));
-      setLastRaw(result);
       setSuccessMessage(
         result.walletLocalOnly
           ? `Credential #${credentialId} marked revoked in this wallet. The issuer status list was not updated (OID4VCI credential).`
           : `Credential #${credentialId} revoked on the wallet status list.`,
       );
       await refreshWalletData();
-    });
-  }
-
-  async function handleIssueDemo() {
-    if (!isIssuanceEligible(walletState?.state)) {
-      setError(
-        "Initialize the wallet unit first (state must be OPERATIONAL). Use Refresh to update status.",
-      );
-      return;
-    }
-    if (!walletKey) {
-      setError("Create or sync an HSM key before issuing a demo PID.");
-      return;
-    }
-    await runAction(async () => {
-      const issued = await withSoleControl((headers) => issueDemoSdCredential(holderId, headers));
-      setLastRaw(issued);
-      const summary = summarizeCredential(issued);
-      const merged = sortCredentialsByIssuedAt([
-        ...cacheRef.current.credentials.filter((c) => c.id !== summary.id),
-        summary,
-      ]);
-      cacheRef.current = {
-        ...cacheRef.current,
-        credentials: merged,
-        syncedAt: cacheRef.current.syncedAt,
-      };
-      setCredentials(cacheRef.current.credentials);
     });
   }
 
@@ -312,48 +238,8 @@ export function WalletPage() {
     await runAction(async () => {
       const result = await withSoleControl((headers) => revokeWalletUnit(walletId, headers));
       setSuccessMessage(`Wallet unit ${result.walletId} revoked.`);
-      setLastRaw(result);
       await performSync();
     });
-  }
-
-  async function handleManualPresentation(event: React.FormEvent) {
-    event.preventDefault();
-    const credentialId = resolvePresentationCredentialId();
-    if (credentialId == null) {
-      setError("Select a credential for manual SD-JWT presentation.");
-      return;
-    }
-    const claims = claimsInput
-      .split(",")
-      .map((claim) => claim.trim())
-      .filter((claim) => claim.length > 0);
-    if (claims.length === 0) {
-      setError("Enter at least one claim name to disclose.");
-      return;
-    }
-    await runAction(async () => {
-      const result = await withSoleControl((headers) =>
-        createCredentialPresentation(credentialId, claims, headers),
-      );
-      setPresentationResult(result);
-      setLastRaw(result);
-      setSuccessMessage(
-        `Built selective SD-JWT for credential #${credentialId} (${result.revealedClaims.length} claim(s)). ` +
-          "This token is not sent to a verifier. Use Present for a full OID4VP flow.",
-      );
-      window.requestAnimationFrame(() => {
-        presentationResultRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      });
-    });
-  }
-
-  function resolvePresentationCredentialId(): number | null {
-    if (presentationCredentialId !== "" && !Number.isNaN(Number(presentationCredentialId))) {
-      return Number(presentationCredentialId);
-    }
-    const fallback = presentableCredentials[0]?.id;
-    return fallback != null ? fallback : null;
   }
 
   async function handleSign(event: React.FormEvent) {
@@ -367,7 +253,6 @@ export function WalletPage() {
     await runAction(async () => {
       const result = await withSoleControl((headers) => signData(holderId, signInput, headers));
       setSignResult(result);
-      setLastRaw(result);
     });
   }
 
@@ -521,6 +406,7 @@ export function WalletPage() {
           </div>
         ) : null}
 
+        <div className="page-stack">
         <div
           className={`wallet-layout${asideHeight != null ? " wallet-layout--synced" : ""}${syncing ? " wallet-layout--refreshing" : ""}`}
           style={
@@ -538,15 +424,6 @@ export function WalletPage() {
                   <Link to="/issue">Issue</Link>. Data deletion requests are on{" "}
                   <Link to="/privacy">Privacy</Link>.
                 </p>
-              </div>
-              <div className="wallet-panel__actions">
-                <button
-                  type="button"
-                  onClick={() => void handleIssueDemo()}
-                  disabled={busy || !issuanceReady || !walletKey || keyRevoked}
-                >
-                  Issue demo PID
-                </button>
               </div>
             </div>
 
@@ -566,7 +443,7 @@ export function WalletPage() {
             {credentials.length === 0 ? (
               <div className="wallet-empty">
                 <strong>No credentials yet</strong>
-                Issue a demo PID or complete an <Link to="/issue">Issue</Link> flow, then sync.
+                Complete an <Link to="/issue">Issue</Link> flow, then refresh.
               </div>
             ) : (
               <ul className="wallet-credentials">
@@ -755,124 +632,32 @@ export function WalletPage() {
           </aside>
         </div>
 
-        <details className="wallet-advanced present-dev-details" open={!walletInitialized}>
-          <summary>Developer details: wallet init protocol</summary>
-          <div className="wallet-advanced__grid present-dev-details__body">
-            <section className="wallet-panel">
-              <h3 className="wallet-panel__title">Wallet init request</h3>
-              <p className="hint">
-                Lab mapping of <code>POST /wallet/init</code>. In production ARTE also validates Play
-                Integrity / App Attest and issues WIA + WUA (phase <code>initial</code>).
-              </p>
-              {lastInitRequest ? (
-                <JsonPanel title="Last init request" data={lastInitRequest} defaultOpen />
-              ) : (
-                <p className="hint">Initialize the wallet unit to capture the request payload.</p>
-              )}
-              {walletState ? (
-                <JsonPanel title="Last init response" data={walletState} />
-              ) : null}
-              <ProtocolExchangePanel
-                title="Production artefacts (reference)"
-                summary="Not returned by this lab backend on init; shown for thesis traceability (wallet_init.md / ARF §6.5.3)."
-                items={[
-                  { label: "WIA", value: "JWT wallet instance attestation (24h TTL)", mono: false },
-                  { label: "WUA initial", value: "JWT without pid_pub; used for first PID issuance", mono: false },
-                  { label: "After wallet init", value: "operational (anonymous citizen)", mono: false },
-                  { label: "After PID issuance", value: "valid + user_sub from CMD", mono: false },
-                ]}
+        <section className="card wallet-panel">
+          <h2 className="wallet-panel__title">Sign test</h2>
+          <p className="hint">Remote signature inside SoftHSM (requires active key).</p>
+          {keyRevoked ? (
+            <div className="alert alert--info" role="status">
+              Signing disabled. Key is revoked.
+            </div>
+          ) : null}
+          <form className="form" onSubmit={(event) => void handleSign(event)}>
+            <label className="form__field">
+              <span className="form__label">Payload</span>
+              <textarea
+                className="form__textarea"
+                value={signInput}
+                onChange={(event) => setSignInput(event.target.value)}
+                rows={3}
+                disabled={busy}
               />
-            </section>
-
-            <section className="wallet-panel">
-              <h3 className="wallet-panel__title">SD-JWT builder (API lab)</h3>
-              <p className="hint">
-                Low-level <code>POST /credentials/{"{id}"}/presentation</code>. For real flows use{" "}
-                <Link to="/present">Present</Link>.
-              </p>
-              {presentableCredentials.length === 0 ? (
-                <p className="hint">No active credentials available.</p>
-              ) : (
-                <form className="form" onSubmit={(event) => void handleManualPresentation(event)}>
-                  <label className="form__field">
-                    <span className="form__label">Credential</span>
-                    <select
-                      value={presentationCredentialId === "" ? "" : String(presentationCredentialId)}
-                      onChange={(event) =>
-                        setPresentationCredentialId(
-                          event.target.value === "" ? "" : Number(event.target.value),
-                        )
-                      }
-                      disabled={busy}
-                    >
-                      {presentableCredentials.map((credential) => (
-                        <option key={credential.id} value={credential.id}>
-                          #{credential.id}: {formatCredentialTypeLabel(credential.credentialType)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="form__field">
-                    <span className="form__label">Claims to disclose</span>
-                    <input
-                      value={claimsInput}
-                      onChange={(event) => setClaimsInput(event.target.value)}
-                      disabled={busy}
-                      spellCheck={false}
-                      placeholder="given_name, family_name"
-                    />
-                  </label>
-                  <button type="submit" disabled={busy}>
-                    {busy ? "Authenticating…" : "Build SD-JWT"}
-                  </button>
-                </form>
-              )}
-              {presentationResult ? (
-                <div ref={presentationResultRef}>
-                  <p className="hint">
-                    Revealed: <code>{presentationResult.revealedClaims.join(", ")}</code>
-                  </p>
-                  <code className="credential-list__preview" title={presentationResult.presentation}>
-                    {presentationResult.presentation.length > 120
-                      ? `${presentationResult.presentation.slice(0, 120)}…`
-                      : presentationResult.presentation}
-                  </code>
-                  <JsonPanel title="Presentation result" data={presentationResult} />
-                </div>
-              ) : null}
-            </section>
-
-            <section className="wallet-panel">
-              <h3 className="wallet-panel__title">Sign test</h3>
-              <p className="hint">Remote signature inside SoftHSM (requires active key).</p>
-              {keyRevoked ? (
-                <div className="alert alert--info" role="status">
-                  Signing disabled. Key is revoked.
-                </div>
-              ) : null}
-              <form className="form" onSubmit={(event) => void handleSign(event)}>
-                <label className="form__field">
-                  <span className="form__label">Payload</span>
-                  <textarea
-                    className="form__textarea"
-                    value={signInput}
-                    onChange={(event) => setSignInput(event.target.value)}
-                    rows={3}
-                    disabled={busy}
-                  />
-                </label>
-                <button type="submit" disabled={busy || signInput.trim().length === 0 || keyRevoked}>
-                  Sign in HSM
-                </button>
-              </form>
-              {signResult ? (
-                <JsonPanel title="Signature result" data={signResult} defaultOpen />
-              ) : null}
-            </section>
-          </div>
-        </details>
-
-        {lastRaw != null ? <JsonPanel title="Last API response (debug)" data={lastRaw} /> : null}
+            </label>
+            <button type="submit" disabled={busy || signInput.trim().length === 0 || keyRevoked}>
+              Sign in HSM
+            </button>
+          </form>
+          {signResult ? <JsonPanel title="Signature result" data={signResult} defaultOpen /> : null}
+        </section>
+        </div>
       </section>
     </AuthGate>
   );

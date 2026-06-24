@@ -1,6 +1,5 @@
 import type {
   CredentialMutationResult,
-  PresentationResult,
   RevokeKeyResult,
   SignResult,
   WalletCredentialRecord,
@@ -83,20 +82,6 @@ export function signData(
   });
 }
 
-export function issueDemoSdCredential(
-  holderId: string,
-  authHeaders: Headers,
-): Promise<WalletCredentialRecord> {
-  return apiFetch<WalletCredentialRecord>(
-    `/api/v1/wallet/credentials/issue-sd/${encodeURIComponent(holderId)}`,
-    {
-      method: "POST",
-      headers: authHeaders,
-      raw: true,
-    },
-  );
-}
-
 /** Permanently removes a credential from the holder wallet (DASH_05a). */
 export function deleteCredential(
   credentialId: number,
@@ -137,21 +122,6 @@ export function revokeWalletUnit(
       method: "POST",
       headers: authHeaders,
       raw: true,
-    },
-  );
-}
-
-export function createCredentialPresentation(
-  credentialId: number,
-  claimsToDisclose: string[],
-  authHeaders: Headers,
-): Promise<PresentationResult> {
-  return apiFetch<PresentationResult>(
-    `/api/v1/wallet/credentials/${credentialId}/presentation`,
-    {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({ claimsToDisclose }),
     },
   );
 }

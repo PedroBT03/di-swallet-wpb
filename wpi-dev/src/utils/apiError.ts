@@ -125,6 +125,13 @@ function formatUnauthorizedMessage(detail: string): string {
 
 function formatForbiddenMessage(detail: string): string {
   const lower = detail.toLowerCase();
+  if (lower.includes("rpid is not in the allowed list")) {
+    return (
+      "This RP id is not allowed by WPB. In dev, only rpIds listed in " +
+      "wpb.pseudonym.allowed-rp-ids are accepted (default: localhost). " +
+      "Use localhost for a second pseudonym on this UI, or add the domain to the allow list and serve the UI from a matching origin."
+    );
+  }
   if (lower.includes("revoked") || lower.includes("status list")) {
     return (
       "This HSM key has been revoked and can no longer sign data or issue credentials. " +

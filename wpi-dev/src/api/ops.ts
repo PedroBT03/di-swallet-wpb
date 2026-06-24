@@ -2,13 +2,20 @@ import { apiFetch } from "./client";
 
 export interface WpbOperationalInfo {
   operational?: {
+    profile?: string[];
     demoMode?: {
       openid4vp?: boolean;
       openid4vci?: boolean;
     };
+    untrustedAttestation?: boolean;
+    swaggerEnabled?: boolean;
+    registryEnabled?: boolean;
+    trustSourceMode?: string;
     transactionLog?: {
       dekMode?: string;
     };
+    version?: string;
+    gitCommit?: string;
   };
 }
 

@@ -1,0 +1,13 @@
+{
+  "image": {
+    "name": "di-swallet-demo-mark",
+    "url": "demo-logo.svg"
+  },
+  "text": {
+    "name": "Certification notice",
+    "localizations": {
+      "en": "European Digital Identity Wallet lab instance (di-swallet). Trust mark text and imagery are loaded from a certification resource JSON hosted by the wallet provider. In production this points to Commission-published assets.",
+      "pt": "Instância de laboratório da carteira digital de identidade europeia (di-swallet). O texto e a imagem são carregados a partir de um JSON de certificação publicado pelo wallet provider. Em produção estes URLs apontam para recursos da Comissão."
+    }
+  }
+}

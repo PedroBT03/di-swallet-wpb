@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   extractPresentationTokens,
   formatClaimValue,
@@ -130,8 +131,8 @@ export function PresentationSharedPanel({ vpToken }: PresentationSharedPanelProp
         <div className="present-shared__panel" role="tabpanel">
           {parsed.some((item) => item.kind === "sd-jwt" && item.isDemoStub) ? (
             <p className="hint">
-              Demo stub token (no real SD-JWT). Issue a PID on Wallet and present again for
-              claim-level debug values.
+              Demo stub token (no real SD-JWT). Issue a PID on <Link to="/issue">Issue</Link> and
+              present again for claim-level debug values.
             </p>
           ) : null}
           {parsed.some((item) => item.kind === "mdoc" && item.isDemoStub) ? (

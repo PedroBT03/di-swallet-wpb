@@ -11,7 +11,7 @@ import di.swallet.wpb.issuance.domain.IssuancePolicyDecision
 import org.springframework.stereotype.Component
 
 /**
- * Default Phase 2 policy.
+ * Default issuance policy.
  *
  * - At least one credential configuration must be requested.
  * - All requested configurations must be advertised by the issuer

@@ -54,3 +54,6 @@ DI_Swallet_EU_Digital_Identity_Server_Side_Wallet_Architecture_1.pdf
 # wpi-dev (Node)
 wpi-dev/node_modules/
 wpi-dev/dist/
+
+# External reference specs (EUDI docs; kept locally only)
+docs/

@@ -10,11 +10,11 @@ import di.swallet.wpb.openid4vci.protocol.ResolvedIssuerMetadata
 import org.springframework.stereotype.Component
 
 /**
- * Baseline issuer trust validator for Phase 2.
+ * Baseline issuer trust validator.
  *
  * Enforces an allow-list of credential issuer identifiers and validates
  * `signed_metadata` according to [OpenId4VciProperties.sdk.metadataPolicy].
- * Federation, LoTE trust anchors and richer PKIX policies are deferred to Phase 5.
+ * Federation, LoTE trust anchors and richer PKIX policies are not enforced.
  */
 @Component
 class DefaultIssuerTrustValidator(

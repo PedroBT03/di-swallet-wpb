@@ -161,8 +161,8 @@ enum class IssuanceState {
 /**
  * Metadata that scopes a single issuance lifecycle.
  *
- * `correlationId` mirrors the Phase 1 conventions, so logs and events
- * remain traceable across phases.
+ * `correlationId` follows the shared correlation convention, so logs and
+ * events remain traceable across the issuance and presentation flows.
  */
 data class IssuanceSessionMetadata(
     val sessionId: UUID,

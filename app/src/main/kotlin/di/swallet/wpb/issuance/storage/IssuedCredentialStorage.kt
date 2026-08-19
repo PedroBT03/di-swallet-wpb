@@ -22,16 +22,16 @@ import org.springframework.stereotype.Component
 /**
  * Persists credentials issued through OID4VCI back into the existing
  * [WalletCredentialRepository] so they become available to the
- * Phase 1 presentation flow.
+ * presentation flow.
  *
- * For Phase 2 MVP the storage performs a best-effort split of the
+ * The storage performs a best-effort split of the
  * SD-JWT VC value `<issuer-jwt>~<d1>~...~<dN>` into:
  *   - `encodedData`: the issuer-signed JWT (without disclosures)
  *   - `encryptedDisclosures`: the AES-GCM ciphertext of the disclosure list
  *
  * Non-SD-JWT formats are persisted with empty disclosure sets; for mdoc the
  * payload is normalized to a structured runtime envelope consumed by the
- * Phase 7 presentation path.
+ * presentation path.
  */
 interface IssuedCredentialStorage {
     /** Normalizes and saves an issued credential, returning the wallet row id. */

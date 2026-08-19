@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.Date
 
 /**
- * Development-only mock PID issuance. Production issuance must use OID4VCI (Phase 2).
+ * Development-only mock PID issuance. Production issuance must use OID4VCI.
  */
 @RestController
 @RequestMapping("/api/v1/wallet")

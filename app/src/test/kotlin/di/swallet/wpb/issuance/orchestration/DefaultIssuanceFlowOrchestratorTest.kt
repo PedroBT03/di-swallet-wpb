@@ -61,7 +61,7 @@ class DefaultIssuanceFlowOrchestratorTest {
 
     /**
      * In-memory storage stub avoids JPA/H2 wiring for the unit tests.
-     * The Phase 2 orchestrator's only contract with storage is "store the
+     * The orchestrator's only contract with storage is "store the
      * issued credential and return its persistence id".
      */
     private class StubIssuedCredentialStorage : IssuedCredentialStorage {

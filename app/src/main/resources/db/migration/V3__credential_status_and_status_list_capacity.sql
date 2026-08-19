@@ -1,4 +1,4 @@
--- Phase 9: credential revocation references + fixed-capacity status list tracking.
+-- Credential revocation references + fixed-capacity status list tracking.
 
 ALTER TABLE status_lists
     ADD COLUMN IF NOT EXISTS capacity            INTEGER NOT NULL DEFAULT 131072,

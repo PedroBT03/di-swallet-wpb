@@ -7,7 +7,7 @@ package di.swallet.wpb.config
 import org.springframework.boot.context.properties.ConfigurationProperties
 
 /**
- * Typed configuration for OpenID4VP / Phase 1 presentation flows.
+ * Typed configuration for OpenID4VP presentation flows.
  *
  * Binds `wpb.openid4vp.*` keys from [application.properties] so the IDE and
  * Spring Boot configuration processor recognise them as first-class settings.

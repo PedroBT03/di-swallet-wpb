@@ -63,9 +63,9 @@ class SdkOpenId4VpGateway(
     /**
      * Returns fresh ephemeral encryption material for a single dispatch.
      *
-     * Phase 1 does not bind the encryption parameters to the resolved request
-     * (full HAIP response encryption is tracked under Phase 5/8). Each
-     * dispatch still gets a per-request random value so that no two sessions
+     * The encryption parameters are not bound to the resolved request
+     * (full HAIP response encryption is not implemented). Each dispatch
+     * still gets a per-request random value so that no two sessions
      * share key material in memory.
      */
     private fun ephemeralEncryptionParameters(): EncryptionParameters {

@@ -1,4 +1,4 @@
--- Phase 8 Flyway baseline: canonical wallet lifecycle and binding aggregates.
+-- Flyway baseline: canonical wallet lifecycle and binding aggregates.
 
 CREATE TABLE wallet_units (
     id              BIGSERIAL PRIMARY KEY,

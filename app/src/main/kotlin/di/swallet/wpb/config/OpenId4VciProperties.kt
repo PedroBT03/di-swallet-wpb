@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 
 /**
- * Typed configuration for the OID4VCI / Phase 2 issuance subsystem.
+ * Typed configuration for the OID4VCI issuance subsystem.
  *
  * Binds `wpb.openid4vci.*` keys so the IDE and Spring Boot configuration
  * processor recognise them as first-class settings.

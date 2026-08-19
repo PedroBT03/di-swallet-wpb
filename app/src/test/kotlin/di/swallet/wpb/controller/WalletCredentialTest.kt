@@ -33,7 +33,7 @@ class WalletCredentialTest : BaseIntegrationTest() {
     fun `should issue SD-JWT and persist in database`() {
         val testUserId = "user-id-test-${UUID.randomUUID()}"
 
-        // Step 0: Wallet init (Phase 8 activation)
+        // Step 0: Wallet init
         val initEntity = HttpEntity(
             WalletInitRequest(holderId = testUserId, platform = "test", devicePubJwk = WalletTestSupport.ecPublicJwk()),
             getDynamicHeaders(testUserId),

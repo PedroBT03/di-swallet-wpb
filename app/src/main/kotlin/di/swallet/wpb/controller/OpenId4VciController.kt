@@ -28,7 +28,7 @@ import java.util.UUID
 /**
  * Thin REST controller for the OID4VCI issuance lifecycle.
  *
- * Mirrors `OpenId4VpController` from Phase 1: only routing, payload binding
+ * Mirrors `OpenId4VpController`: only routing, payload binding
  * and serialisation; all business logic lives in
  * [IssuanceFlowOrchestrator].
  */

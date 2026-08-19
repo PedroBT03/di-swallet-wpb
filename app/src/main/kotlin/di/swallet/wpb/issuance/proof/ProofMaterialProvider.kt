@@ -10,7 +10,7 @@ import java.security.interfaces.ECPublicKey
 /**
  * Wallet-side material required to satisfy issuer proof-of-possession.
  *
- * The Phase 2 MVP only supports JWT proofs (algorithm `ES256`). The
+ * Only JWT proofs (algorithm `ES256`) are supported. The
  * wallet binds the credential to a hardware-backed key managed by the
  * HSM. `kid` corresponds to the WSCA key identifier and is forwarded
  * to the adapter so it can build the JWT header.

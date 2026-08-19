@@ -14,7 +14,7 @@ import java.util.UUID
 /**
  * Orchestrator port for the OID4VCI issuance flow.
  *
- * Mirrors `PresentationFlowOrchestrator` from Phase 1: controllers stay thin
+ * Mirrors `PresentationFlowOrchestrator`: controllers stay thin
  * and delegate the lifecycle/state-machine handling to the orchestrator.
  */
 interface IssuanceFlowOrchestrator {

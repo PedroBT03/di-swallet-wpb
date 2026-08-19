@@ -1,4 +1,4 @@
--- Phase 10: TS10 transaction log and credential device-bound flag
+-- TS10 transaction log and credential device-bound flag
 
 CREATE TABLE transaction_log_entries (
     id                  BIGSERIAL PRIMARY KEY,

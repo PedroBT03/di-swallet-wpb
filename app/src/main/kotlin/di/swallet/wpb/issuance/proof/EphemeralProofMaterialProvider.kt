@@ -14,12 +14,12 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Phase 2 MVP provider that emits an ephemeral EC key pair per holder.
+ * Provider that emits an ephemeral EC key pair per holder.
  *
  * The wallet's hardware-backed signer is the long-term target for proof of
- * possession (Phase 3). For now the orchestrator uses ephemeral material so
- * the SDK adapter can still construct an issuance proof envelope without
- * requiring a working HSM session.
+ * possession. The orchestrator uses ephemeral material so the SDK adapter
+ * can construct an issuance proof envelope without requiring a working HSM
+ * session.
  *
  * The same `keyId` is reused per holder for the lifetime of the JVM so that
  * resumed deferred issuance keeps a stable PoP key.

@@ -1,22 +1,11 @@
 # WPI Dev: lab frontend
 
-Visual test harness for the DI-Swallet WPB backend. Runs as a separate Node project (not part of the Gradle build).
+Visual test harness for the DI-Swallet WPB. It is a separate Node project (not part of the Gradle build) and is not a production wallet client.
 
 ## Prerequisites
 
 - Node.js 20+
-- **PostgreSQL** on port **5432** (via Docker Compose from the repo root)
-- WPB running locally on port **8080** (`./gradlew :app:bootRun` from the repo root)
-
-### Start PostgreSQL (required for WPB)
-
-From the repository root:
-
-```bash
-docker compose up -d
-```
-
-Default credentials match `application.properties`: user `pedro`, password `tese2026`, database `diswallet`. If `bootRun` fails with *Connection to localhost:5432 refused*, the database is not running: start Docker Desktop (or the Docker daemon) and run the command above.
+- PostgreSQL, WPB, and (for **Present**) the verifier emulator, as in the [repository README](../README.md)
 
 ## Quick start
 
@@ -28,102 +17,23 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). The **Health** page calls `GET /actuator/health` through the Vite proxy and should show **UP** when WPB is running.
 
-### Holder passkey (phase 1)
+Passkey registration requires `http://localhost:5173` in `wallet.origins` on WPB (already set in the `dev` profile).
 
-1. **New holder** (header → *New holder*, or `/onboarding`): pick a holder id and register a passkey.
-2. **Log in** (header → *Log in*, or `/login`): existing holder id + passkey unlock (no re-registration).
-3. **Sign out** ends the UI session; **Log in** restores it using the passkey remembered on this browser.
+## Using the lab
 
-If WebAuthn fails, confirm `http://localhost:5173` is listed in `wallet.origins` on WPB.
+1. **New holder** or **Log in**: register or unlock a holder passkey.
+2. **Wallet**: provision the wallet unit (device bind, HSM key, WIA + KA).
+3. **Issue**: start a simulated OID4VCI issuance (PID or mDL), complete the CMD step, then approve storage consent with the passkey.
+4. **Present**: start the verifier emulator on port **8081**, choose PID or mDL, then approve or reject consent with the passkey.
+5. **Log**, **Privacy**, **Ops**, and **Pseudonyms** exercise transaction history, deletion/DPA contacts, trust mark / status lists, and RP passkeys.
 
-### Wallet dashboard
+Sensitive actions (consent, sign, revoke, delete) prompt for a fresh passkey. Reads after login reuse the holder session.
 
-Open **Wallet** after signing in. Typical demo flow:
-
-1. **Provision wallet**: creates a **CANDIDATE** wallet unit, binds `device_pub` (DPoP), generates the holder key in SoftHSM, and issues the **WUA** (a **WIA** for the instance plus a **KA** for the holder key) (needs FIDO2 device id from passkey registration).
-2. **Issue demo PID** (UC2): requires wallet state **CANDIDATE** or **VALID** and an active HSM key (created at provision). Completing the simulated **CMD** step promotes the unit to **VALID**.
-3. **Sign test**: remote signature inside the HSM.
-
-**Ensure HSM key** remains available to rotate or relink after revocation; it is no longer a separate UC1 prerequisite because provision creates the key.
-
-Protected **sole-control** actions (consent approve/reject, HSM sign, revoke, delete) show an “Authenticating with passkey…” banner. Dashboard reads (wallet sync, consent **view**, transaction log) reuse the **holder session** opened at login (WIAM_15) and do not prompt again.
-
-On **Wallet**, **Refresh** loads key and credentials from the server without a new passkey prompt after login. **Ensure HSM key** creates or returns an HSM key and **does** require a fresh passkey (WIAM_14).
-
-### OpenID4VP present
-
-1. Start WPB with demo-mode: `./gradlew :app:bootRun --args='--wpb.openid4vp.demo-mode=true'`
-2. Start the verifier emulator (`verifier-emulator/`, port **8081**). It signs requests with **ES256** and embeds the verifier **access certificate** in `verifier_info.x5c` (PKIX trust against `demo-lote.json`; not skipped).
-3. On **Wallet**, issue a demo PID (PID scenarios) or driving licence (mDL scenarios).
-4. Open **Present**, choose **PID** or **Driving licence (mDL)**, pick fields or a quick demo, then **Start presentation**.
-5. Review the consent screen (claim paths only: no attribute values), then **Approve** or **Reject** (passkey).
-
-Session state, `PresentationContext`, and audit events are shown at the bottom after the flow runs.
-
-### OpenID4VCI issue (UC2)
-
-1. Complete **UC1** first: **Onboarding** (passkey) → **Wallet** (provision: device bind + HSM key + WUA (WIA + KA)).
-2. WPB with simulated issuer: `wpb.openid4vci.demo-mode=true` (default in `dev` profile).
-3. Open **Issue**: pick PID or mDL, then **Start issuance**.
-4. **Continue** to prepare issuer authorization, then complete the **CMD** step (simulated citizen login).
-5. **Continue** for credential request; the storage consent screen loads automatically. **Approve** or **Reject** with your passkey (WIAM_14 / ISSU_11).
-6. Open **Wallet** → **Refresh** to see the new credential.
-
-WIA, KA, `IssuanceContext`, and audit events appear in **Developer details** on Issue and Wallet.
-
-### Transaction log and privacy
-
-1. After **Present** or **Issue** flows, open **Log** (entries load automatically; use **Refresh** to update). Uses holder session; no extra passkey.
-2. Click a row to load the decrypted transaction record (holder `dek-mode` needs log passphrase first).
-3. Select entries and **Download JWE** with an export password.
-4. Open **Privacy** → load eligible presentations, then **Request deletion** or **Initiate report**.
-5. Use **Copy** / **Open** on returned `mailto:`, `tel:`, or `https:` contact URIs.
-
-**DPA report (demo):** local WPB uses a **dummy** DPA fallback (`dpa-demo@local.test`, labelled “CNPD (demo only)”) because emulator presentations do not store real supervisory-authority contacts and the RP registry is off by default. This lets you exercise mailto/actions in the lab only: configure real DPA contacts for production (see `application-dev.properties` comments).
-
-When WPB runs with `wpb.transaction-log.dek-mode=holder`, derive the log key on **Log** before viewing detail or exporting.
-
-### Ops (trust mark & status lists)
-
-Open **Ops** (no passkey required):
-
-1. **Trust mark**: loads `GET /api/v1/wallet/trust-mark`. Dev profile enables placeholder URLs; remote fetch warnings are expected.
-2. **Status lists**: load the published JWT/JSON bitstring and look up a revocation index from Wallet (HSM key or credential).
-
-### Pseudonyms
-
-Open **Pseudonyms** after sign-in:
-
-1. Create a slot with rpId `localhost` (must match the browser origin).
-2. **Register passkey** runs a separate WebAuthn ceremony for that RP.
-3. Requires `wpb.pseudonym.enabled=true` and `wpb.pseudonym.allowed-rp-ids=localhost` in `application-dev.properties`.
-
-### Advanced wallet actions
-
-- **SD-JWT presentation (manual)**: selective disclosure without a verifier session (`POST /credentials/{id}/presentation`).
-- **Revoke wallet unit**: cascades revocation to keys and WP-managed credentials.
-- **Deferred issuance**: on **Issue**, use the deferred scenario after enabling `wpb.openid4vci.simulator.always-defer=true`; Continue polls `POST /deferred/query`.
-
-See [FEATURE_MATRIX.md](./FEATURE_MATRIX.md) and [scenarios/README.md](./scenarios/README.md) for full traceability and demo scripts.
-
-### 15-minute thesis demo
-
-1. Onboarding (UC1) → Wallet provision (~3 min)
-2. Present (verifier emulator) → Log (~4 min)
-3. Issue (UC2, CMD + PID) → Wallet sync (~4 min)
-4. Privacy deletion + DPA report (~3 min)
-5. Ops trust mark + status list lookup (~1 min)
-
-### Delete wallet data (credentials)
-
-On **Wallet**, each credential has **Delete from wallet** (permanent removal from WPB, logs `CredentialDeletion` in the transaction log) and **Revoke** (status-list invalidation). This is distinct from **Privacy → Data deletion**, which contacts the relying party about data they hold after a presentation.
-
-- WPB Swagger (direct): [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
-
+Step-by-step demo flows: [`scenarios/README.md`](scenarios/README.md).
 
 ## Proxy
 
-The dev server proxies these paths to `http://localhost:8080` (override with `VITE_WPB_PROXY_TARGET` in `.env`):
+The Vite dev server proxies these paths to `http://localhost:8080` (override with `VITE_WPB_PROXY_TARGET` in `.env`):
 
 | Path prefix   | Purpose        |
 |---------------|----------------|
@@ -132,25 +42,9 @@ The dev server proxies these paths to `http://localhost:8080` (override with `VI
 | `/openid4vci` | OID4VCI        |
 | `/actuator`   | Health/metrics |
 
-This avoids CORS configuration on WPB during local development.
-
-## WPB dev configuration
-
-For **FIDO2 / WebAuthn** (phase 1+), the holder origin must be allowed by WPB. In `app/src/main/resources/application-dev.properties`:
-
-```properties
-wallet.origins=http://localhost,http://localhost:8080,http://localhost:5173,https://localhost
-```
-
-Without `http://localhost:5173`, passkey registration from this UI will be rejected.
-
 ## Build
 
 ```bash
 npm run build    # output in dist/
-npm run preview  # serve static build locally
+npm run preview  # serve the static build locally
 ```
-
-## Roadmap
-
-See [IMPLEMENTATION.md](./IMPLEMENTATION.md) for phased delivery (health → FIDO2 → wallet → OID4VP/OID4VCI → privacy → polish).

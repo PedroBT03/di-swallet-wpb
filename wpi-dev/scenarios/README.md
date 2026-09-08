@@ -1,101 +1,80 @@
-# Demo scenarios catalog
+# Demo scenarios
 
-Step-by-step flows for thesis demonstrations. Each scenario assumes WPB on `:8080`, wpi-dev on `:5173`, and PostgreSQL via `docker compose up -d`.
+Catalog of lab flows. Assumes WPB on `:8080`, this UI on `:5173`, and PostgreSQL via `docker compose up -d` from the repository root.
 
 ## Prerequisites (all scenarios)
 
-1. `./gradlew :app:bootRun` from repo root (`dev` profile).
+1. `./gradlew :app:bootRun` from the repository root (`dev` profile).
 2. `cd wpi-dev && npm run dev`.
-3. **Onboarding**: register a new holder + passkey.
-4. **Wallet**: Provision wallet unit (device bind, HSM key, WUA = WIA + KA, state **CANDIDATE**).
+3. **Onboarding**: register a holder and passkey.
+4. **Wallet**: provision the wallet unit (device bind, HSM key, WIA + KA).
 
 ---
 
-## S1: Wallet core (~3 min)
+## S1: Wallet core
 
 | Step | Screen | Action |
 |------|--------|--------|
 | 1 | Wallet | Provision wallet unit |
-| 2 | Issue | Issue demo PID (simulated CMD → **VALID**) |
+| 2 | Issue | Issue demo PID (simulated CMD) |
 | 3 | Wallet | Sign test payload |
-| 4 | Wallet | Revoke credential → Ops → Status lists → lookup index |
+| 4 | Wallet | Revoke credential, then Ops → Status lists → lookup index |
 | 5 | Wallet | Delete from wallet (optional) |
 
-**Screenshots:** wallet grid with **CANDIDATE** state after provision and **VALID** after issuance; credential list with ACTIVE badge; signature JSON panel.
+## S2: OpenID4VP presentation
 
----
-
-## S2: OpenID4VP presentation (~4 min)
+Requires the verifier emulator on `:8081`.
 
 | Step | Screen | Action |
 |------|--------|--------|
-| 1 | Wallet | Issue demo PID or mDL (Issue page) if needed |
-| 2 | Present | Select PID or mDL → use selective scenario → Start |
+| 1 | Issue | Issue demo PID or mDL if needed |
+| 2 | Present | Select PID or mDL → start presentation |
 | 3 | Present | Approve consent (passkey) |
-| 4 | Log | Load transactions → open row |
+| 4 | Log | Open the new transaction |
 
-Requires verifier emulator on `:8081` and `wpb.openid4vp.demo-mode=true`.
-
----
-
-## S3: OpenID4VCI issuance (~4 min)
+## S3: OpenID4VCI issuance
 
 | Step | Screen | Action |
 |------|--------|--------|
-| 1 | Issue | **Issue PID** → Start issuance |
-| 2 | Issue | Continue → **Simulate CMD login** → Continue (credential) |
-| 3 | Issue | Review storage consent → Approve |
-| 4 | Wallet | Sync from server: new credential appears |
+| 1 | Issue | Start PID issuance |
+| 2 | Issue | Continue → simulate CMD login → Continue |
+| 3 | Issue | Approve storage consent |
+| 4 | Wallet | Refresh: the new credential appears |
 
----
+## S4: Deferred issuance
 
-## S4: Deferred issuance (~3 min)
+1. Enable `wpb.openid4vci.simulator.always-defer=true` on WPB (see the comment in `application-dev.properties`).
+2. **Issue** → **PID: deferred issuance**.
+3. Continue until `DEFERRED_PENDING`, then Continue again to poll until issued.
+4. Complete storage consent and refresh the wallet.
 
-1. Enable on WPB: `wpb.openid4vci.simulator.always-defer=true` (see `application-dev.properties` comment).
-2. **Issue** → **PID: deferred issuance** scenario.
-3. Continue until state `DEFERRED_PENDING` → banner explains polling.
-4. Continue again to poll `POST /deferred/query` until `DEFERRED_ISSUED`.
-5. Complete storage consent and sync wallet.
-
----
-
-## S5: Privacy (~3 min)
+## S5: Privacy
 
 | Step | Screen | Action |
 |------|--------|--------|
-| 1 | Present | Complete S2 first (creates log entry) |
-| 2 | Privacy → Deletion | Load eligible → Request deletion → copy mailto |
-| 3 | Privacy → DPA | Load eligible → Initiate report (uses dev DPA fallback) |
+| 1 | Present | Complete S2 first (creates a log entry) |
+| 2 | Privacy → Deletion | Load eligible → request deletion |
+| 3 | Privacy → DPA | Load eligible → initiate report |
 
----
-
-## S6: Ops & pseudonyms (~2 min)
+## S6: Ops and pseudonyms
 
 | Step | Screen | Action |
 |------|--------|--------|
-| 1 | Ops → Trust mark | Load trust mark (warnings OK with placeholder URLs) |
-| 2 | Ops → Status lists | Load published list; lookup revocation index from Wallet |
-| 3 | Pseudonyms | Create slot for `localhost` → Register passkey → list |
+| 1 | Ops → Trust mark | Load trust mark |
+| 2 | Ops → Status lists | Load the published list; look up a revocation index from Wallet |
+| 3 | Pseudonyms | Create a slot for `localhost` → register passkey |
 
----
-
-## S7: Manual SD-JWT & wallet unit revoke (~2 min)
+## S7: Manual SD-JWT and wallet unit revoke
 
 | Step | Screen | Action |
 |------|--------|--------|
-| 1 | Wallet | SD-JWT presentation: select credential, disclose `given_name, family_name` |
-| 2 | Wallet | Revoke wallet unit (cascades keys/credentials) |
-| 3 | Ops | Confirm indices show REVOKED on status list |
+| 1 | Wallet | SD-JWT presentation: disclose selected claims |
+| 2 | Wallet | Revoke wallet unit (cascades keys and credentials) |
+| 3 | Ops | Confirm indices show revoked on the status list |
 
----
-
-## Scripted scenario data
+## Scenario data
 
 | File | Purpose |
 |------|---------|
-| `src/scenarios/vciDemo.ts` | Pre-filled credential offers for Issue page |
-| `src/scenarios/vpDemo.ts` | Pre-filled request URIs for Present page |
-
-## 15-minute thesis demo (compressed)
-
-Run **S1** → **S2** → **S3** → **S5** → **S6** in order (~15 min with passkey prompts). Skip S4 unless deferred issuance is a talking point; mention S7 if discussing revocation depth.
+| `src/scenarios/vciDemo.ts` | Pre-filled credential offers for Issue |
+| `src/scenarios/vpDemo.ts` | Pre-filled request URIs for Present |

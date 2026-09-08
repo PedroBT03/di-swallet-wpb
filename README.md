@@ -28,6 +28,7 @@ adapter for local/demo runs and an SDK-backed adapter for real integrations).
 ### Prerequisites
 - Ubuntu 24.04 · OpenJDK 17 (`sudo apt install openjdk-17-jdk`)
 - SoftHSM2 (`sudo apt install softhsm2 opensc`) · Docker
+- Node.js 20+ (lab frontend) · Python 3 (verifier emulator)
 
 ### 1. Initialize the SoftHSM2 token (once)
 ```bash
@@ -37,18 +38,62 @@ echo "objectstore.backend = file" >> ~/.softhsm2.conf
 softhsm2-util --init-token --free --label "DI-Swallet-WSCD" --pin 1234 --so-pin 123456
 ```
 
-Verify the library path in `app/src/main/resources/application.properties`:
+Confirm the token is visible:
+
+```bash
+export SOFTHSM2_CONF=$HOME/.softhsm2.conf
+softhsm2-util --show-slots
+```
+
+Library path and PIN in `app/src/main/resources/application.properties` (dev default PIN is `1234`):
 ```properties
 wpb.hsm.library=/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
+wpb.hsm.pin=1234
 ```
 
-### 2. Run
+`./gradlew :app:bootRun` and tests set `SOFTHSM2_CONF` automatically. If the token fails to open: check the PIN (`CKR_PIN_INCORRECT`), the library path, or re-run the init command if the slot is empty.
+
+### 2. Run the local lab (frontend)
+
+Four processes, each in its own terminal, from the repository root. The default `dev` profile already enables OID4VCI and OID4VP demo-mode: issuance uses the **in-process simulated issuer**, so there is no separate issuer service. The Flask verifier is only needed for **Present**.
+
+PostgreSQL:
+
 ```bash
-docker compose up -d        # PostgreSQL
-./gradlew :app:bootRun      # WPB (HSM env handled by the Gradle build)
+docker compose up -d
 ```
 
-API docs (Swagger UI): **http://localhost:8080/swagger-ui.html**
+WPB backend (HSM env handled by the Gradle build):
+
+```bash
+./gradlew :app:bootRun
+```
+
+Verifier emulator (OpenID4VP Present):
+
+```bash
+cd verifier-emulator
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python app.py
+```
+
+Lab frontend:
+
+```bash
+cd wpi-dev
+npm install
+npm run dev
+```
+
+| Actor | URL |
+| --- | --- |
+| Frontend (wpi-dev) | http://localhost:5173 |
+| WPB API / Swagger | http://localhost:8080/swagger-ui.html |
+| Verifier emulator | http://localhost:8081 |
+| PostgreSQL | localhost:5432 |
+
+Open the frontend, register a passkey, provision a wallet, then use **Issue** (simulated issuer) and **Present** (verifier on `:8081`). Demo scripts and WebAuthn notes: [`wpi-dev/README.md`](wpi-dev/README.md).
 
 ### 3. Test
 ```bash
@@ -89,22 +134,10 @@ The full, interactive endpoint catalogue is available in Swagger UI.
 
 ```
 app/                 Application code and tests (single Gradle module)
-ops/                 Runbooks, deployment checklist, metrics, security review
-verifier-emulator/   Flask verifier for OpenID4VP smoke flows
-wpi-dev/             Development scenarios
-docs/                Reference specifications and annexes
+verifier-emulator/   Flask verifier for OpenID4VP Present flows
+wpi-dev/             Lab frontend (Vite) and demo scenarios
 docker-compose.yml   Local PostgreSQL
 ```
-
-## Operations
-
-Production hardening, incident handling, and metrics are documented under [`ops/`](ops/):
-
-- [`ops/deployment-checklist.md`](ops/deployment-checklist.md)
-- [`ops/runbook-incidents.md`](ops/runbook-incidents.md)
-- [`ops/runbook-softHSM.md`](ops/runbook-softHSM.md)
-- [`ops/metrics.md`](ops/metrics.md)
-- [`ops/security-review-checklist.md`](ops/security-review-checklist.md)
 
 ## Limitations
 

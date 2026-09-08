@@ -1,8 +1,6 @@
-# Demo trust material (local development only)
+# Demo trust material (lab only)
 
-This folder holds the **verifier access certificate** and signing key used by the
-Flask verifier emulator. The WPB wallet validates the same chain via
-`classpath:trust/demo-lote.json` and `classpath:trust/demo-anchor.pem`.
+Verifier access certificate and signing key used by the Flask emulator. WPB validates the same chain via `classpath:trust/demo-lote.json` and `classpath:trust/demo-anchor.pem`.
 
 ## Chain
 
@@ -20,20 +18,18 @@ WPB Demo Trust CA (demo-anchor.pem)
 
 | File | Purpose |
 |------|---------|
-| `demo-anchor.pem` | Trust anchor (also copied to WPB `app/src/main/resources/trust/`) |
-| `demo-ca.key` | CA private key (dev only; used to re-issue access certs) |
+| `demo-anchor.pem` | Trust anchor (also in WPB `app/src/main/resources/trust/`) |
+| `demo-ca.key` | CA private key (lab only; used to re-issue access certs) |
 | `demo-verifier-access.pem` | Access certificate served in `verifier_info.x5c` |
 | `demo-verifier.key` | ES256 key for signing authorization request JWTs |
 
-**Never use these keys outside local thesis / lab environments.**
+Do not use these keys outside local thesis or lab environments.
 
 ## Regenerating (optional)
 
 ```bash
 cd verifier-emulator/trust
-# See ca.ext / verifier.ext for OpenSSL extensions
 openssl ecparam -name prime256v1 -genkey -noout -out demo-ca.key
-# ... then update demo-lote.json certSha256 and WPB demo-anchor.pem to match
 ```
 
-After regeneration, update `app/src/main/resources/trust/demo-lote.json` (`certSha256` + `trustAnchorsPem`).
+Use `ca.ext` / `verifier.ext` for OpenSSL extensions. After regeneration, update `app/src/main/resources/trust/demo-lote.json` (`certSha256` and `trustAnchorsPem`) and WPB `demo-anchor.pem` to match.

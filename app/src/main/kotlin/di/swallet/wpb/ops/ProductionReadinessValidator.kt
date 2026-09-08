@@ -1,5 +1,9 @@
 /**
- * Fail-fast production readiness checks run when the prod profile is active.
+ * Fail-fast production-readiness checks encoded as an evaluable policy.
+ *
+ * This is not a Spring profile and is not run at application startup. Tests
+ * invoke it directly to pin the rules a fielded deployment would have to
+ * satisfy (no demo flags, no weak secrets, no bundled signing keys, DPA contact).
  */
 
 package di.swallet.wpb.ops
@@ -14,15 +18,11 @@ import di.swallet.wpb.config.WalletProperties
 import org.slf4j.LoggerFactory
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
-import org.springframework.context.annotation.Profile
 import org.springframework.core.env.Environment
-import org.springframework.stereotype.Component
 
 /**
- * Fail-fast guardrails when the `prod` profile is active.
+ * Evaluates production-readiness rules against a supplied configuration.
  */
-@Component
-@Profile("prod")
 class ProductionReadinessValidator(
     private val environment: Environment,
     private val openId4VpProperties: OpenId4VpProperties,
@@ -36,19 +36,19 @@ class ProductionReadinessValidator(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Collects unsafe production settings and aborts startup when any are present.
+     * Collects unsafe production settings and throws when any are present.
      */
     override fun run(args: ApplicationArguments) {
         val violations = mutableListOf<String>()
 
         if (openId4VpProperties.demoMode) {
-            violations += "wpb.openid4vp.demo-mode must be false in prod"
+            violations += "wpb.openid4vp.demo-mode must be false for production readiness"
         }
         if (openId4VciProperties.demoMode) {
-            violations += "wpb.openid4vci.demo-mode must be false in prod"
+            violations += "wpb.openid4vci.demo-mode must be false for production readiness"
         }
         if (walletProperties.allowUntrustedAttestation) {
-            violations += "wallet.allow-untrusted-attestation must be false in prod"
+            violations += "wallet.allow-untrusted-attestation must be false for production readiness"
         }
 
         violations += WeakCryptoSecretPolicy.violations(
@@ -56,7 +56,7 @@ class ProductionReadinessValidator(
             transactionLogEncryptionKey = transactionLogProperties.encryptionKey,
             transactionLogIntegrityKey = transactionLogProperties.integrityKey,
             dekMode = transactionLogProperties.resolvedDekMode(),
-        ).map { "$it must be overridden in prod" }
+        ).map { "$it must be overridden for production readiness" }
 
         violations += BundledSigningKeyPolicy.violations(
             statusListSigningKeyPemPath = statusListProperties.signingKeyPemPath,
@@ -76,7 +76,9 @@ class ProductionReadinessValidator(
         }
 
         if (!openId4VciProperties.ka.enforceProductionTrustPolicy) {
-            logger.warn("prod readiness warning: wpb.openid4vci.ka.enforce-production-trust-policy is false")
+            logger.warn(
+                "production readiness warning: wpb.openid4vci.ka.enforce-production-trust-policy is false",
+            )
         }
         if (!dpaReportProperties.providerFallbackDpa.hasContactChannel()) {
             violations += "wpb.dpa-reporting.provider-fallback-dpa must expose at least one contact channel"
@@ -87,6 +89,6 @@ class ProductionReadinessValidator(
             logger.error(message)
             throw IllegalStateException(message)
         }
-        logger.info("event=production.readiness.passed profiles={}", environment.activeProfiles.joinToString())
+        logger.info("event=production.readiness.passed")
     }
 }

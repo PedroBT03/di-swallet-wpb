@@ -128,7 +128,7 @@ The full, interactive endpoint catalogue is available in Swagger UI.
 - **Revocation** — IETF Token Status List publication and enforcement.
 - **Privacy** — TS10 transaction log with holder-held keys, consent views, pseudonyms, data
   deletion and DPA reporting.
-- **Operations** — hardened `prod` profile, Actuator health/metrics, conformance suite.
+- **Operations** — production-readiness checks, Actuator health/metrics, conformance suite.
 
 ## Project Structure
 

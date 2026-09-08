@@ -52,7 +52,7 @@ dependencies {
 
     // Reactive streams (coroutines interop) required for suspending controller support
     implementation("org.reactivestreams:reactive-streams:1.0.4")
-    implementation("io.projectreactor:reactor-core:3.5.15")
+    implementation("io.projectreactor:reactor-core")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 

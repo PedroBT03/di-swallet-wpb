@@ -8,7 +8,6 @@ import di.swallet.wpb.service.verification.VerificationService
 import di.swallet.wpb.service.HsmService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
-import org.springframework.context.annotation.Profile
 import org.springframework.web.bind.annotation.*
 
 /** Request body containing an SD-JWT presentation and the holder whose key should verify it. */
@@ -22,7 +21,6 @@ data class VerificationRequest(
  */
 @RestController
 @RequestMapping("/api/v1/mock-rp")
-@Profile("!prod")
 @Tag(name = "Mock Relying Party", description = "Simulates an external verifier checking a presentation")
 class MockRpController(
     private val verificationService: VerificationService,

@@ -19,7 +19,7 @@ adapter for local/demo runs and an SDK-backed adapter for real integrations).
 
 ## Tech Stack
 
-- **Language:** Kotlin 2.2.0 · **Framework:** Spring Boot 3.5.14
+- **Language:** Kotlin 2.3.0 · **Framework:** Spring Boot 4.1.1
 - **Crypto:** BouncyCastle · PKCS#11 (SunPKCS11) · SoftHSM2
 - **Persistence:** Spring Data JPA — PostgreSQL (runtime), H2 (tests), Flyway migrations
 

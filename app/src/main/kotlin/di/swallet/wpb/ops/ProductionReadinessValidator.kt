@@ -38,7 +38,7 @@ class ProductionReadinessValidator(
     /**
      * Collects unsafe production settings and aborts startup when any are present.
      */
-    override fun run(args: ApplicationArguments?) {
+    override fun run(args: ApplicationArguments) {
         val violations = mutableListOf<String>()
 
         if (openId4VpProperties.demoMode) {

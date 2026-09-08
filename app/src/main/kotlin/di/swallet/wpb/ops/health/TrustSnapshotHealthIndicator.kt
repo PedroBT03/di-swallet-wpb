@@ -7,8 +7,8 @@ package di.swallet.wpb.ops.health
 import di.swallet.wpb.presentation.trust.TrustSnapshotHealth
 import di.swallet.wpb.presentation.trust.TrustSnapshotHealthStatus
 import di.swallet.wpb.presentation.trust.TrustSnapshotService
-import org.springframework.boot.actuate.health.Health
-import org.springframework.boot.actuate.health.HealthIndicator
+import org.springframework.boot.health.contributor.Health
+import org.springframework.boot.health.contributor.HealthIndicator
 import org.springframework.stereotype.Component
 
 /**

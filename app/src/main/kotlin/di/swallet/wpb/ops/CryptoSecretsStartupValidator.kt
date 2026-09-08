@@ -28,7 +28,7 @@ class CryptoSecretsStartupValidator(
     /**
      * Fails startup when weak crypto secrets are configured without an explicit opt-in flag.
      */
-    override fun run(args: ApplicationArguments?) {
+    override fun run(args: ApplicationArguments) {
         val violations = WeakCryptoSecretPolicy.violations(
             disclosureEncryptionKey = walletProperties.disclosures.encryptionKey,
             transactionLogEncryptionKey = transactionLogProperties.encryptionKey,

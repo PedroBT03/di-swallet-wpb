@@ -10,6 +10,7 @@ import di.swallet.wpb.config.WalletProperties
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.springframework.boot.DefaultApplicationArguments
 
 class CryptoSecretsStartupValidatorTest {
 
@@ -20,7 +21,7 @@ class CryptoSecretsStartupValidatorTest {
     @Test
     fun `fails when weak disclosure key is used without opt-in`() {
         val validator = validator(allowKnownWeakCryptoSecrets = false)
-        assertThrows(IllegalStateException::class.java) { validator.run(null) }
+        assertThrows(IllegalStateException::class.java) { validator.run(DefaultApplicationArguments()) }
     }
 
     /**
@@ -30,7 +31,7 @@ class CryptoSecretsStartupValidatorTest {
     @Test
     fun `allows weak keys when explicitly opted in`() {
         val validator = validator(allowKnownWeakCryptoSecrets = true)
-        assertDoesNotThrow { validator.run(null) }
+        assertDoesNotThrow { validator.run(DefaultApplicationArguments()) }
     }
 
     /**
@@ -51,7 +52,7 @@ class CryptoSecretsStartupValidatorTest {
             },
             securityProperties = SecurityProperties(),
         )
-        assertDoesNotThrow { validator.run(null) }
+        assertDoesNotThrow { validator.run(DefaultApplicationArguments()) }
     }
 
     /**
@@ -73,7 +74,7 @@ class CryptoSecretsStartupValidatorTest {
             },
             securityProperties = SecurityProperties(),
         )
-        assertDoesNotThrow { validator.run(null) }
+        assertDoesNotThrow { validator.run(DefaultApplicationArguments()) }
     }
 
     /**

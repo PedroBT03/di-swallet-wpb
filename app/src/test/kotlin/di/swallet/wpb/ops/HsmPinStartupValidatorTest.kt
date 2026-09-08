@@ -8,6 +8,7 @@ import di.swallet.wpb.config.HsmProperties
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.springframework.boot.DefaultApplicationArguments
 
 class HsmPinStartupValidatorTest {
 
@@ -23,7 +24,7 @@ class HsmPinStartupValidatorTest {
                 allowKnownWeakPin = false
             },
         )
-        assertThrows(IllegalStateException::class.java) { validator.run(null) }
+        assertThrows(IllegalStateException::class.java) { validator.run(DefaultApplicationArguments()) }
     }
 
     /**
@@ -38,7 +39,7 @@ class HsmPinStartupValidatorTest {
                 allowKnownWeakPin = true
             },
         )
-        assertDoesNotThrow { validator.run(null) }
+        assertDoesNotThrow { validator.run(DefaultApplicationArguments()) }
     }
 
     /**
@@ -52,6 +53,6 @@ class HsmPinStartupValidatorTest {
                 pin = "staging-hsm-pin"
             },
         )
-        assertDoesNotThrow { validator.run(null) }
+        assertDoesNotThrow { validator.run(DefaultApplicationArguments()) }
     }
 }

@@ -14,6 +14,7 @@ import di.swallet.wpb.config.WalletProperties
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.springframework.boot.DefaultApplicationArguments
 import org.springframework.mock.env.MockEnvironment
 
 class ProductionReadinessValidatorTest {
@@ -29,7 +30,7 @@ class ProductionReadinessValidatorTest {
             environment = env,
             openId4VpProperties = OpenId4VpProperties().apply { demoMode = true },
         )
-        assertThrows(IllegalStateException::class.java) { validator.run(null) }
+        assertThrows(IllegalStateException::class.java) { validator.run(DefaultApplicationArguments()) }
     }
 
     /**
@@ -39,7 +40,7 @@ class ProductionReadinessValidatorTest {
     @Test
     fun `fails when bundled dev signing keys remain in prod`() {
         val validator = validator(environment = prodEnvironment())
-        assertThrows(IllegalStateException::class.java) { validator.run(null) }
+        assertThrows(IllegalStateException::class.java) { validator.run(DefaultApplicationArguments()) }
     }
 
     /**
@@ -67,7 +68,7 @@ class ProductionReadinessValidatorTest {
             mdocProperties = externalMdocKeyProperties(),
             dpaReportProperties = configuredDpaFallback(),
         )
-        assertDoesNotThrow { validator.run(null) }
+        assertDoesNotThrow { validator.run(DefaultApplicationArguments()) }
     }
 
     /**
@@ -94,7 +95,7 @@ class ProductionReadinessValidatorTest {
             mdocProperties = externalMdocKeyProperties(),
             dpaReportProperties = configuredDpaFallback(),
         )
-        assertDoesNotThrow { validator.run(null) }
+        assertDoesNotThrow { validator.run(DefaultApplicationArguments()) }
     }
 
     /**
@@ -121,7 +122,7 @@ class ProductionReadinessValidatorTest {
             mdocProperties = externalMdocKeyProperties(),
             dpaReportProperties = DpaReportProperties(),
         )
-        assertThrows(IllegalStateException::class.java) { validator.run(null) }
+        assertThrows(IllegalStateException::class.java) { validator.run(DefaultApplicationArguments()) }
     }
 
     /**

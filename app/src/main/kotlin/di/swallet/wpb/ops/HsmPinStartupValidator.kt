@@ -24,7 +24,7 @@ class HsmPinStartupValidator(
     /**
      * Fails startup when the configured HSM PIN is blank or a known weak default.
      */
-    override fun run(args: ApplicationArguments?) {
+    override fun run(args: ApplicationArguments) {
         if (!isWeakPin(hsmProperties.pin)) return
 
         if (hsmProperties.allowKnownWeakPin) {

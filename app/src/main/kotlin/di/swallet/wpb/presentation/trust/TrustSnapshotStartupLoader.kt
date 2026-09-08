@@ -22,7 +22,7 @@ class TrustSnapshotStartupLoader(
     /**
      * Refreshes the trust snapshot once at startup and logs whether loading succeeded.
      */
-    override fun run(args: ApplicationArguments?) {
+    override fun run(args: ApplicationArguments) {
         when (val availability = trustSnapshotService.refresh()) {
             is TrustSnapshotAvailability.Available ->
                 logger.info("event=trust.snapshot.startup_loaded source={}", availability.snapshot.source)

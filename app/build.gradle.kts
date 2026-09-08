@@ -1,13 +1,13 @@
 plugins {
     // Core Spring Boot and Dependency Management
-    id("org.springframework.boot") version "3.5.14"
+    id("org.springframework.boot") version "4.1.1"
     id("io.spring.dependency-management") version "1.1.7"
     
     // Kotlin plugins for JVM, Spring, JPA, and Annotation Processing (kapt)
-    kotlin("jvm") version "2.2.0"
-    kotlin("plugin.spring") version "2.2.0"
-    kotlin("plugin.jpa") version "2.2.0"
-    kotlin("kapt") version "2.2.0"
+    kotlin("jvm") version "2.3.0"
+    kotlin("plugin.spring") version "2.3.0"
+    kotlin("plugin.jpa") version "2.3.0"
+    kotlin("kapt") version "2.3.0"
     
     application
     jacoco
@@ -22,7 +22,8 @@ repositories {
 
 dependencies {
     // --- Web & Core Infrastructure ---
-    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation("org.springframework.boot:spring-boot-jackson2")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation(kotlin("reflect"))
     implementation(kotlin("stdlib"))
@@ -38,8 +39,7 @@ dependencies {
 
     // --- Persistence Layer ---
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.flywaydb:flyway-core")
-    implementation("org.flywaydb:flyway-database-postgresql")
+    implementation("org.springframework.boot:spring-boot-starter-flyway")
     runtimeOnly("org.postgresql:postgresql") // Production database
     runtimeOnly("com.h2database:h2") // Allow local H2 runtime for dev/emulator
     testImplementation("com.h2database:h2")  // In-memory database for isolated testing
@@ -65,7 +65,7 @@ dependencies {
     implementation("com.yubico:webauthn-server-attestation:2.5.4")
     
     // --- API Documentation ---
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
 
     // --- Operations ---
     implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -78,6 +78,9 @@ dependencies {
     
     // --- Testing Framework ---
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
+    testImplementation("org.springframework.boot:spring-boot-restclient")
+    testImplementation("org.springframework.boot:spring-boot-resttestclient")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("org.wiremock:wiremock-standalone:3.5.4")
     testImplementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.20.1")

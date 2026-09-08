@@ -18,9 +18,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration
+import org.springframework.boot.jackson2.autoconfigure.Jackson2AutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.mock.web.MockHttpServletRequest
@@ -39,7 +39,7 @@ class TransactionLogHolderModeIntegrationTestConfig
     TransactionLogCrypto::class,
     HolderLogKeyContext::class,
     Ts10JweEncoder::class,
-    JacksonAutoConfiguration::class,
+    Jackson2AutoConfiguration::class,
     TransactionLogHolderModeIntegrationTestConfig::class,
 )
 @TestPropertySource(

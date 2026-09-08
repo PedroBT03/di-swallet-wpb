@@ -61,13 +61,13 @@ class ConformanceReportExtension : TestWatcher, AfterAllCallback, BeforeTestExec
     }
 
     /** Records a FAILED scenario outcome capturing the throwable message as the failure detail. */
-    override fun testFailed(context: ExtensionContext, cause: Throwable) {
-        record(context, "FAILED", cause.message)
+    override fun testFailed(context: ExtensionContext, cause: Throwable?) {
+        record(context, "FAILED", cause?.message)
     }
 
     /** Records a SKIPPED scenario outcome when JUnit aborts a test before completion. */
-    override fun testAborted(context: ExtensionContext, cause: Throwable) {
-        record(context, "SKIPPED", cause.message)
+    override fun testAborted(context: ExtensionContext, cause: Throwable?) {
+        record(context, "SKIPPED", cause?.message)
     }
 
     /** Records a SKIPPED scenario outcome for explicitly disabled tests with the disable reason. */

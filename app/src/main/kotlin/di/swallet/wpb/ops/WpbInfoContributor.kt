@@ -48,7 +48,7 @@ class WpbInfoContributor(
             ),
         )
         buildProperties.ifPresent { build ->
-            operational["version"] = build.version
+            operational["version"] = build.version ?: "unknown"
             operational["gitCommit"] = build.get("git.commit.id.abbrev") ?: build.get("commit.id.abbrev") ?: "unknown"
         }
         builder.withDetail("operational", operational)

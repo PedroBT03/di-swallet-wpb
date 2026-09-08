@@ -21,9 +21,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration
+import org.springframework.boot.jackson2.autoconfigure.Jackson2AutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.TestPropertySource
@@ -40,7 +40,7 @@ class TransactionLogServiceIntegrationTestConfig
     MigrationObjectBuilder::class,
     CredentialIssuerResolver::class,
     di.swallet.wpb.security.HolderLogKeyContext::class,
-    JacksonAutoConfiguration::class,
+    Jackson2AutoConfiguration::class,
     TransactionLogServiceIntegrationTestConfig::class,
 )
 @TestPropertySource(

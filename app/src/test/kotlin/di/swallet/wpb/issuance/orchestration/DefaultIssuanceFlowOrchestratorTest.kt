@@ -215,7 +215,7 @@ class DefaultIssuanceFlowOrchestratorTest {
             ),
             repository = InMemoryIssuanceSessionRepository(),
             trustValidator = DefaultIssuerTrustValidator(properties, IssuerSignedMetadataValidator(properties)),
-            policy = DefaultIssuancePolicy(properties),
+            policy = DefaultIssuancePolicy(),
             proofProvider = EphemeralProofMaterialProvider(),
             attestationProvider = StubWalletAttestationProvider(wiaStatus),
             wiaValidationService = DefaultWiaValidationService(
@@ -445,17 +445,15 @@ class DefaultIssuanceFlowOrchestratorTest {
     }
 
     /**
-     * mDL offer with allowMdoc=false yields policyDecision.allowed=false at resolution.
+     * An mDL offer is accepted by wallet policy (SD-JWT VC and mdoc are both allowed).
      */
     @Test
-    fun `mdoc policy block rejects offer`() {
-        val (orch, _) = orchestrator(OpenId4VciProperties().apply {
-            policy.allowMdoc = false
-        })
+    fun `mdoc offer is accepted by policy`() {
+        val (orch, _) = orchestrator()
         val mdocOffer =
             """openid-credential-offer://credential_offer={"credential_issuer":"https://issuer.example","credential_configuration_ids":["org.iso.18013.5.1.mDL"]}"""
         val ctx = orch.resolveOffer(mdocOffer, holderId = "holder-policy")
-        assertFalse(ctx.policyDecision!!.allowed)
+        assertTrue(ctx.policyDecision!!.allowed)
     }
 
     /**

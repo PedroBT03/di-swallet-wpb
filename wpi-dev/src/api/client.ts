@@ -15,6 +15,11 @@ export type ApiFetchOptions = RequestInit & {
   raw?: boolean;
 };
 
+function isJsonResponse(contentType: string): boolean {
+  const normalized = contentType.toLowerCase();
+  return normalized.includes("application/json") || normalized.includes("+json");
+}
+
 /**
  * Fetch against WPB via the Vite dev proxy (same origin as the UI).
  * Paths should start with `/api`, `/actuator`, `/openid4vp`, or `/openid4vci`.
@@ -32,7 +37,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   if (!response.ok) {
     const contentType = response.headers.get("content-type") ?? "";
     let body: unknown = await response.text();
-    if (contentType.includes("application/json") && typeof body === "string" && body.length > 0) {
+    if (isJsonResponse(contentType) && typeof body === "string" && body.length > 0) {
       try {
         body = JSON.parse(body) as unknown;
       } catch {
@@ -49,7 +54,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   }
 
   const contentType = response.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
+  if (isJsonResponse(contentType)) {
     return (await response.json()) as T;
   }
 

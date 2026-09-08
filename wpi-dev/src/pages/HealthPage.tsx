@@ -1,81 +1,183 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { wpbExternalBase } from "../api/client";
 import { fetchHealthSnapshot, type NamedHealthComponent } from "../api/health";
 import {
   fetchWpbOperationalInfo,
   parseOpenId4VciDemoMode,
   parseOpenId4VpDemoMode,
-  parseTransactionLogDekMode,
 } from "../api/ops";
 import { JsonPanel } from "../components/JsonPanel";
 import type { HealthResponse } from "../types/health";
 import type { WpbOperationalInfo } from "../api/ops";
 import { formatApiError } from "../utils/apiError";
 
-function statusBadgeClass(status: string | undefined): string {
+type ReadinessLevel = "ready" | "blocked" | "warning" | "unknown";
+
+interface ReadinessRow {
+  id: string;
+  label: string;
+  level: ReadinessLevel;
+  detail: string;
+}
+
+const LAB_COMPONENT_ORDER = ["db", "hsm", "trustSnapshot"] as const;
+
+function healthLevel(status: string | undefined): ReadinessLevel {
   if (status === "UP") {
-    return "status-badge status-badge--up";
-  }
-  if (status === "DOWN" || status === "OUT_OF_SERVICE") {
-    return "status-badge status-badge--down";
+    return "ready";
   }
   if (status === "DEGRADED") {
-    return "status-badge status-badge--unknown";
+    return "warning";
   }
-  return "status-badge status-badge--unknown";
+  if (status === "DOWN" || status === "OUT_OF_SERVICE") {
+    return "blocked";
+  }
+  return "unknown";
 }
 
-function statusLabel(status: string | undefined): string {
-  return status && status.length > 0 ? status : "UNKNOWN";
+function levelBadgeClass(level: ReadinessLevel): string {
+  switch (level) {
+    case "ready":
+      return "status-badge status-badge--up";
+    case "blocked":
+      return "status-badge status-badge--down";
+    case "warning":
+      return "status-badge status-badge--unknown";
+    default:
+      return "status-badge status-badge--unknown";
+  }
 }
 
-function demoFlagBadge(enabled: boolean | null): { className: string; label: string } {
+function levelLabel(level: ReadinessLevel): string {
+  switch (level) {
+    case "ready":
+      return "OK";
+    case "blocked":
+      return "BLOCKED";
+    case "warning":
+      return "DEGRADED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+function demoLevel(enabled: boolean | null): ReadinessLevel {
   if (enabled === true) {
-    return { className: "status-badge status-badge--up", label: "ON" };
+    return "ready";
   }
   if (enabled === false) {
-    return { className: "status-badge status-badge--down", label: "OFF" };
+    return "blocked";
   }
-  return { className: "status-badge status-badge--unknown", label: "UNKNOWN" };
+  return "unknown";
 }
 
-function formatProfiles(profiles: string[] | undefined): string {
-  if (!profiles || profiles.length === 0) {
-    return "default";
+function displayComponentName(name: string): string {
+  switch (name) {
+    case "db":
+      return "PostgreSQL";
+    case "hsm":
+      return "HSM (SoftHSM)";
+    case "trustSnapshot":
+      return "Trust snapshot";
+    default:
+      return name;
   }
-  return profiles.join(", ");
 }
 
-function componentDetailHint(component: NamedHealthComponent): string | null {
+function componentDetail(component: NamedHealthComponent): string {
   const details = component.details;
-  if (!details) {
-    return null;
-  }
-  if (component.name === "hsm") {
+  if (component.name === "hsm" && details) {
     const keys = details.keyEntryCount;
     const token = details.tokenLabel;
     if (keys != null && token != null) {
-      return `${keys} key(s) on ${String(token)}`;
+      return `${keys} key(s) on token ${String(token)}`;
     }
     if (typeof details.reason === "string") {
       return details.reason;
     }
   }
-  if (component.name === "trustSnapshot" && typeof details.reason === "string") {
-    return details.reason;
+  if (component.name === "trustSnapshot" && details) {
+    const parts: string[] = [];
+    if (typeof details.ageSeconds === "number") {
+      parts.push(`age ${details.ageSeconds}s`);
+    }
+    if (typeof details.reason === "string") {
+      parts.push(details.reason);
+    }
+    if (parts.length > 0) {
+      return parts.join(" · ");
+    }
   }
-  return null;
+  if (component.name === "db" && details && typeof details.database === "string") {
+    return details.database;
+  }
+  if (component.status === "UP") {
+    return "Reachable";
+  }
+  return component.status ?? "No details from actuator";
 }
 
-function displayComponentName(name: string): string {
-  if (name === "hsm") {
-    return "HSM (SoftHSM)";
+function buildReadinessRows(
+  health: HealthResponse | null,
+  components: NamedHealthComponent[],
+  operational: WpbOperationalInfo | null,
+): ReadinessRow[] {
+  const rows: ReadinessRow[] = [];
+
+  rows.push({
+    id: "wpb",
+    label: "WPB API",
+    level: health ? healthLevel(health.status) : "unknown",
+    detail: health?.status === "UP" ? `Listening on ${wpbExternalBase}` : "Backend not reachable",
+  });
+
+  const byName = new Map(components.map((component) => [component.name, component]));
+  for (const name of LAB_COMPONENT_ORDER) {
+    const component = byName.get(name);
+    rows.push({
+      id: name,
+      label: displayComponentName(name),
+      level: component ? healthLevel(component.status) : "unknown",
+      detail: component
+        ? componentDetail(component)
+        : "Component not reported - restart WPB after pulling latest dev profile settings",
+    });
   }
-  if (name === "trustSnapshot") {
-    return "Trust snapshot";
+
+  const vpDemo = parseOpenId4VpDemoMode(operational ?? {});
+  rows.push({
+    id: "demo-vp",
+    label: "Present demo mode",
+    level: demoLevel(vpDemo),
+    detail:
+      vpDemo === true
+        ? "Simulated verifier flows enabled"
+        : vpDemo === false
+          ? "Start WPB with --wpb.openid4vp.demo-mode=true for local Present"
+          : "Not reported by /actuator/info",
+  });
+
+  const vciDemo = parseOpenId4VciDemoMode(operational ?? {});
+  rows.push({
+    id: "demo-vci",
+    label: "Issue demo mode",
+    level: demoLevel(vciDemo),
+    detail:
+      vciDemo === true
+        ? "Simulated issuer flows enabled"
+        : vciDemo === false
+          ? "Start WPB with --wpb.openid4vci.demo-mode=true for local Issue"
+          : "Not reported by /actuator/info",
+  });
+
+  return rows;
+}
+
+function formatProfiles(profiles: string[] | undefined): string {
+  if (!profiles || profiles.length === 0) {
+    return "dev (default)";
   }
-  return name;
+  return profiles.join(", ");
 }
 
 export function HealthPage() {
@@ -112,136 +214,83 @@ export function HealthPage() {
     void load();
   }, [load]);
 
-  const swaggerUrl = `${wpbExternalBase}/swagger-ui.html`;
-  const vpDemo = parseOpenId4VpDemoMode(operational ?? {});
-  const vciDemo = parseOpenId4VciDemoMode(operational ?? {});
-  const logDekMode = parseTransactionLogDekMode(operational ?? {});
+  const rows = useMemo(
+    () => buildReadinessRows(health, components, operational),
+    [health, components, operational],
+  );
+  const blockedCount = rows.filter((row) => row.level === "blocked").length;
+  const labReady = rows.every((row) => row.level === "ready" || row.level === "warning");
   const labConfig = operational?.operational;
-  const vpDemoBadge = demoFlagBadge(vpDemo);
-  const vciDemoBadge = demoFlagBadge(vciDemo);
+  const swaggerUrl = `${wpbExternalBase}/swagger-ui.html`;
 
   return (
     <section className="page page--health">
       <header className="page__header">
-        <h1>Health</h1>
+        <h1>Lab status</h1>
         <p className="page__lead">
-          WPB reachability and lab configuration. No passkey required.
+          Quick check that WPB, PostgreSQL, SoftHSM, and demo flags are ready before onboarding,
+          Present, or Issue.
         </p>
       </header>
 
       {error ? (
         <div className="alert alert--error" role="alert">
-          <strong>Connection failed</strong>
+          <strong>Cannot reach WPB</strong>
           <p>{error}</p>
           <p className="hint">
-            Start PostgreSQL (<code>docker compose up -d</code>) and WPB from the repo root:{" "}
+            Start PostgreSQL with <code>docker compose up -d</code>, then WPB:{" "}
             <code>./gradlew :app:bootRun</code>
           </p>
         </div>
       ) : null}
 
       <div className="page-stack">
-        <div className="card ops-scenario-card">
-          <h2 className="card__title">Before you demo</h2>
-          <ol className="ops-scenario-card__steps">
-            <li>
-              Confirm <strong>Overall</strong> is <strong>UP</strong> below, then continue to{" "}
-              <Link to="/onboarding">Onboarding</Link> or <Link to="/login">Log in</Link>.
-            </li>
-            <li>
-              Check <strong>HSM</strong> (SoftHSM reachable) and <strong>Trust snapshot</strong>{" "}
-              (verifier trust material loaded).
-            </li>
-            <li>
-              For local <Link to="/present">Present</Link> and <Link to="/issue">Issue</Link> flows,
-              confirm OpenID4VP and OpenID4VCI <strong>demo mode</strong> in lab configuration.
-            </li>
-          </ol>
-        </div>
-
         <div className="card">
-          <h2 className="card__title">Backend status</h2>
-          <p className="hint">
-            From Spring Boot Actuator on <code>{wpbExternalBase}</code> (proxied through Vite).{" "}
-            <strong>Overall</strong> is the aggregate WPB health. <strong>HSM</strong> and{" "}
-            <strong>Trust snapshot</strong> are the two checks that matter most in this lab.
-          </p>
-          <div className="toolbar privacy-card__toolbar">
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void load()}
-              disabled={refreshing}
-            >
-              {refreshing ? (
-                <>
-                  <span className="btn-spinner" aria-hidden="true" />
-                  Refreshing…
-                </>
-              ) : (
-                "Refresh"
-              )}
-            </button>
-            <a className="button button--secondary" href={swaggerUrl} target="_blank" rel="noreferrer">
-              Open Swagger
-            </a>
+          <div className="wallet-panel__header">
+            <h2 className="card__title">Readiness</h2>
+            <div className="wallet-panel__actions">
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void load()}
+                disabled={refreshing}
+              >
+                {refreshing ? "Refreshing…" : "Refresh"}
+              </button>
+              <a className="button button--secondary" href={swaggerUrl} target="_blank" rel="noreferrer">
+                Swagger
+              </a>
+            </div>
           </div>
 
-          {refreshing && !health ? (
-            <p className="hint">Loading health…</p>
-          ) : health ? (
-            <>
-              <div className="wallet-stats ops-stats">
-                <div className="wallet-stat">
-                  <span className="wallet-stat__label">Overall</span>
-                  <span className={statusBadgeClass(health.status)}>{statusLabel(health.status)}</span>
-                </div>
-                {components.map((component) => (
-                  <div key={component.name} className="wallet-stat">
-                    <span className="wallet-stat__label">{displayComponentName(component.name)}</span>
-                    <span className={statusBadgeClass(component.status)}>
-                      {statusLabel(component.status)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {components.length > 0 ? (
-                <ul className="component-list">
-                  {components.map((component) => {
-                    const hint = componentDetailHint(component);
-                    return (
-                      <li key={component.name} className="component-list__item">
-                        <div>
-                          <span className="component-list__name">{displayComponentName(component.name)}</span>
-                          {hint ? <div className="hint">{hint}</div> : null}
-                        </div>
-                        <span className={statusBadgeClass(component.status)}>
-                          {statusLabel(component.status)}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-
-              <JsonPanel title="Actuator health JSON" data={{ aggregate: health, components }} />
-            </>
+          {!error && !refreshing ? (
+            <p className="hint" role="status">
+              {labReady
+                ? "All checks passed."
+                : blockedCount > 0
+                  ? `${blockedCount} check(s) need attention before demo flows will work.`
+                  : "Some checks could not be resolved. See details below."}
+            </p>
           ) : null}
+
+          <ul className="component-list">
+            {rows.map((row) => (
+              <li key={row.id} className="component-list__item">
+                <div>
+                  <span className="component-list__name">{row.label}</span>
+                  <div className="hint">{row.detail}</div>
+                </div>
+                <span className={levelBadgeClass(row.level)}>{levelLabel(row.level)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="card">
-          <h2 className="card__title">Lab configuration</h2>
-          <p className="hint">
-            Non-secret flags from <code>GET /actuator/info</code>. Present and Issue pages read the
-            same demo-mode values at runtime.
-          </p>
-
-          {refreshing && !operational ? (
-            <p className="hint">Loading configuration…</p>
-          ) : labConfig ? (
-            <>
-              <dl className="details-list ops-trust-details">
+        {labConfig ? (
+          <details className="present-dev-details">
+            <summary>Build &amp; profile</summary>
+            <div className="present-dev-details__body">
+              <dl className="details-list">
                 <div className="details-list__row">
                   <dt>Spring profile</dt>
                   <dd>
@@ -259,40 +308,6 @@ export function HealthPage() {
                     </dd>
                   </div>
                 ) : null}
-                <div className="details-list__row">
-                  <dt>OpenID4VP demo</dt>
-                  <dd>
-                    <span className={vpDemoBadge.className}>{vpDemoBadge.label}</span>
-                  </dd>
-                </div>
-                <div className="details-list__row">
-                  <dt>OpenID4VCI demo</dt>
-                  <dd>
-                    <span className={vciDemoBadge.className}>{vciDemoBadge.label}</span>
-                  </dd>
-                </div>
-                <div className="details-list__row">
-                  <dt>Transaction log DEK</dt>
-                  <dd>
-                    <code>{logDekMode ?? "unknown"}</code>
-                  </dd>
-                </div>
-                {typeof labConfig.registryEnabled === "boolean" ? (
-                  <div className="details-list__row">
-                    <dt>RP registry</dt>
-                    <dd>
-                      <span
-                        className={
-                          labConfig.registryEnabled
-                            ? "status-badge status-badge--up"
-                            : "status-badge status-badge--unknown"
-                        }
-                      >
-                        {labConfig.registryEnabled ? "ENABLED" : "OFF"}
-                      </span>
-                    </dd>
-                  </div>
-                ) : null}
                 {labConfig.trustSourceMode ? (
                   <div className="details-list__row">
                     <dt>Trust source</dt>
@@ -302,12 +317,19 @@ export function HealthPage() {
                   </div>
                 ) : null}
               </dl>
-              <JsonPanel title="Actuator info JSON" data={operational} />
-            </>
-          ) : (
-            <p className="hint">Configuration details unavailable. Health may still be UP.</p>
-          )}
-        </div>
+            </div>
+          </details>
+        ) : null}
+
+        {health || operational ? (
+          <details className="present-dev-details">
+            <summary>Actuator raw JSON</summary>
+            <div className="present-dev-details__body">
+              {health ? <JsonPanel title="GET /actuator/health" data={health} /> : null}
+              {operational ? <JsonPanel title="GET /actuator/info" data={operational} /> : null}
+            </div>
+          </details>
+        ) : null}
       </div>
     </section>
   );

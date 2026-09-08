@@ -164,7 +164,7 @@ function unwrapTaggedItem(item: unknown): Record<string, unknown> | null {
 }
 
 /**
- * Reads claims from mdoc nameSpaces — both IssuerSigned item arrays
+ * Reads claims from mdoc nameSpaces - both IssuerSigned item arrays
  * (`elementIdentifier` / `elementValue`) and DeviceSigned maps (`claim → value`).
  */
 function extractNamespaceClaims(nameSpaces: unknown): SharedLeafClaim[] {

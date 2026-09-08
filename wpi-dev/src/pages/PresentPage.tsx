@@ -29,7 +29,6 @@ import {
   type PresentDocumentType,
 } from "../features/present/pidClaims";
 import { useAuthedApi } from "../hooks/useAuthedApi";
-import { scenariosForDocument, VP_PRESENT_SCENARIOS, type VpDemoScenario } from "../scenarios/vpDemo";
 import type {
   PresentationConsentView,
   PresentationContext,
@@ -47,12 +46,10 @@ export function PresentPage() {
   const [selectedDocument, setSelectedDocument] = useState<PresentDocumentType>("pid");
   const claimOptions = claimOptionsForDocument(selectedDocument);
   const claimGroups = CLAIM_GROUPS(claimOptions);
-  const demoScenarios = scenariosForDocument(selectedDocument);
 
   const [selectedClaims, setSelectedClaims] = useState<string[]>(() =>
     defaultClaimsForDocument("pid"),
   );
-  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
   const [activeSharesLabel, setActiveSharesLabel] = useState<string | null>(null);
   const [context, setContext] = useState<PresentationContext | null>(null);
   const [consentView, setConsentView] = useState<PresentationConsentView | null>(null);
@@ -67,11 +64,7 @@ export function PresentPage() {
   const sessionId = context?.sessionMeta.sessionId ?? null;
   const flowState = context?.state ?? consentView?.state ?? null;
   const showBuilder = context == null && consentView == null;
-  const sharesSummary = activeSharesLabel ?? (
-    activeScenarioId
-      ? VP_PRESENT_SCENARIOS.find((s) => s.id === activeScenarioId)?.sharesLabel
-      : null
-  ) ?? null;
+  const sharesSummary = activeSharesLabel;
 
   const refreshVpDemoMode = useCallback(() => {
     fetchWpbOperationalInfo()
@@ -147,7 +140,7 @@ export function PresentPage() {
     [withApiAuth],
   );
 
-  async function handleStart(uri: string, scenarioId: string | null, sharesLabel: string | null) {
+  async function handleStart(uri: string, sharesLabel: string | null) {
     const trimmed = uri.trim();
     if (!trimmed) {
       setError("No verifier request configured.");
@@ -160,7 +153,6 @@ export function PresentPage() {
 
     refreshVpDemoMode();
     setStarting(true);
-    setActiveScenarioId(scenarioId);
     setActiveSharesLabel(sharesLabel);
     setConsentView(null);
     setEvents(null);
@@ -186,7 +178,6 @@ export function PresentPage() {
     setError(null);
     setSelectedDocument(documentType);
     setSelectedClaims(defaultClaimsForDocument(documentType));
-    setActiveScenarioId(null);
     setActiveSharesLabel(null);
   }
 
@@ -197,19 +188,11 @@ export function PresentPage() {
     }
     void handleStart(
       buildCustomVerifierRequestUri(selectedClaims, selectedDocument),
-      null,
       formatClaimsLabel(selectedClaims, selectedDocument),
     );
   }
 
-  function handleStartScenario(scenario: VpDemoScenario) {
-    setSelectedDocument(scenario.documentType);
-    setSelectedClaims(scenario.requestedClaims);
-    void handleStart(scenario.requestUri, scenario.id, scenario.sharesLabel);
-  }
-
   function handleReset() {
-    setActiveScenarioId(null);
     setActiveSharesLabel(null);
     setContext(null);
     setConsentView(null);
@@ -308,15 +291,9 @@ export function PresentPage() {
             Start the <code>verifier-emulator</code> on port 8081 and issue a PID or mDL on{" "}
             <Link to="/issue">Issue</Link> before presenting. WPB needs{" "}
             <code>wpb.openid4vp.demo-mode=true</code> (on by default in the <code>dev</code>{" "}
-            profile).
+            profile) to enable local emulator flows.
           </p>
         </div>
-
-        {vpDemoMode === true ? (
-          <div className="alert alert--info" role="status">
-            WPB reports <code>openid4vp.demo-mode=true</code>. Local emulator flows are enabled.
-          </div>
-        ) : null}
 
         {vpDemoMode === false ? (
           <div className="alert alert--error" role="alert">
@@ -343,8 +320,7 @@ export function PresentPage() {
         <PresentationStepper state={flowState} />
 
         {showBuilder ? (
-          <div className="present-builder-layout">
-            <section className="card present-builder">
+          <section className="card present-builder">
               <h2 className="card__title">What do you want to share?</h2>
               <p className="hint present-builder__lead">
                 Choose <strong>PID</strong> (SD-JWT) or <strong>driving licence (mDL)</strong>, then
@@ -428,35 +404,9 @@ export function PresentPage() {
                 }
                 onClick={handleStartCustom}
               >
-                {starting && activeScenarioId == null ? "Starting…" : "Start presentation"}
+                {starting ? "Starting…" : "Start presentation"}
               </button>
-            </section>
-
-            <aside className="present-builder-aside">
-              <section className="card present-demos">
-                <h2 className="card__title">Quick demos</h2>
-                <p className="hint present-demos__lead">
-                  Pre-configured verifier requests for common selective-disclosure examples.
-                </p>
-                <ul className="present-demos-list">
-                  {demoScenarios.map((scenario) => (
-                    <li key={scenario.id} className="present-demos-list__item">
-                      <h3 className="present-demos-list__title">{scenario.title}</h3>
-                      <p className="hint">{scenario.sharesLabel}</p>
-                      <button
-                        type="button"
-                        className="button--secondary present-demos-list__btn"
-                        disabled={busy || starting || vpDemoMode === false}
-                        onClick={() => handleStartScenario(scenario)}
-                      >
-                        {starting && activeScenarioId === scenario.id ? "Starting…" : "Try demo"}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            </aside>
-          </div>
+          </section>
         ) : null}
 
         {loadingConsent ? (

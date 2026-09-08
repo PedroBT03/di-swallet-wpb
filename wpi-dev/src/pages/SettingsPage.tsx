@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getWalletKey } from "../api/wallet";
-import { wpbExternalBase } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { AuthenticatingBanner } from "../components/AuthenticatingBanner";
 import { JsonPanel } from "../components/JsonPanel";
@@ -15,8 +14,6 @@ export function SettingsPage() {
   const { withApiAuth } = useAuthedApi();
   const [testResult, setTestResult] = useState<WalletKeyRecord | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
-
-  const swaggerUrl = `${wpbExternalBase}/swagger-ui.html`;
 
   async function handleTestSession() {
     if (!session) {
@@ -81,9 +78,6 @@ export function SettingsPage() {
               <Link className="button button--secondary" to="/onboarding">
                 New holder
               </Link>
-              <a className="button button--secondary" href={swaggerUrl} target="_blank" rel="noreferrer">
-                Open Swagger
-              </a>
             </div>
           </div>
         </div>
@@ -150,8 +144,7 @@ export function SettingsPage() {
         <div className="card">
           <h2 className="card__title">Authentication checks</h2>
           <p className="hint">
-            Quick probes against <code>GET /api/v1/wallet/keys/{"{holderId}"}</code>. Use Swagger for
-            full API exploration.
+            Quick probes against <code>GET /api/v1/wallet/keys/{"{holderId}"}</code>.
           </p>
           <ul className="settings-actions">
             <li className="settings-action">
@@ -210,20 +203,6 @@ export function SettingsPage() {
                 Forget passkey
               </button>
             </li>
-            <li className="settings-action">
-              <span className="settings-action__title">WPB API explorer</span>
-              <p className="hint settings-action__hint">
-                Open Swagger UI on the running backend ({wpbExternalBase}).
-              </p>
-              <a
-                className="button settings-action__btn"
-                href={swaggerUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open Swagger
-              </a>
-            </li>
           </ul>
 
           {testResult ? (
@@ -233,9 +212,7 @@ export function SettingsPage() {
               </p>
               <JsonPanel title="Wallet key response" data={testResult} defaultOpen />
             </>
-          ) : (
-            <p className="hint">Run a test above to verify session or sole-control authentication.</p>
-          )}
+          ) : null}
         </div>
       </div>
     </section>

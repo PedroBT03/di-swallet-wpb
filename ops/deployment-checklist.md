@@ -5,15 +5,15 @@ Use this checklist before exposing the Wallet Provider Backend to holders or eco
 ## Secrets and configuration
 
 - [ ] `SPRING_PROFILES_ACTIVE=prod`
-- [ ] `spring.datasource.password` — not the dev default (`tese2026`)
-- [ ] `wpb.hsm.pin` — not the dev default (`1234`); HSM token initialized on target host
-- [ ] `wallet.disclosures.encryption-key` — unique 32-byte Base64 key
-- [ ] `wpb.transaction-log.encryption-key` and `wpb.transaction-log.integrity-key` — unique 32-byte Base64 keys
-- [ ] `wpb.status-list.signing-key-pem-path` — production signing key (auto-generate disabled in prod)
+- [ ] `spring.datasource.password` - not the dev default (`tese2026`)
+- [ ] `wpb.hsm.pin` - not the dev default (`1234`); HSM token initialized on target host
+- [ ] `wallet.disclosures.encryption-key` - unique 32-byte Base64 key
+- [ ] `wpb.transaction-log.encryption-key` and `wpb.transaction-log.integrity-key` - unique 32-byte Base64 keys
+- [ ] `wpb.status-list.signing-key-pem-path` - production signing key (auto-generate disabled in prod)
 - [ ] `wpb.openid4vp.demo-mode=false` and `wpb.openid4vci.demo-mode=false`
 - [ ] `wallet.allow-untrusted-attestation=false`
-- [ ] `wallet.rp.id` and `wallet.origins` — production HTTPS domain only
-- [ ] `wpb.dpa-reporting.provider-fallback-dpa.*` — at least one of `email`, `phone`, or `form-uri` (enforced by `ProductionReadinessValidator`)
+- [ ] `wallet.rp.id` and `wallet.origins` - production HTTPS domain only
+- [ ] `wpb.dpa-reporting.provider-fallback-dpa.*` - at least one of `email`, `phone`, or `form-uri` (enforced by `ProductionReadinessValidator`)
 
 ## Trust and registry
 
@@ -24,7 +24,7 @@ Use this checklist before exposing the Wallet Provider Backend to holders or eco
 ## Network and edge
 
 - [ ] TLS termination at reverse proxy or ingress
-- [ ] Rate limiting / WAF for public status list paths (`/api/v1/wallet/status-lists/*`) at the edge — not in WPB
+- [ ] Rate limiting / WAF for public status list paths (`/api/v1/wallet/status-lists/*`) at the edge - not in WPB
 - [ ] Actuator (`/actuator/*`) reachable only from monitoring network or via authenticated proxy
 - [ ] `wpb.swagger.enabled=false` (default in `application-prod.properties`)
 

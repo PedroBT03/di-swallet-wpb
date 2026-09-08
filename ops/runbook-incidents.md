@@ -1,4 +1,4 @@
-# Runbook — Operational Incidents
+# Runbook - Operational Incidents
 
 ## HSM unavailable (`hsm` health DOWN)
 
@@ -21,7 +21,7 @@ Inspect `consecutiveRefreshFailures` in health details. Threshold: `wpb.ops.trus
 
 1. Correlate with WPI client version and clock skew.
 2. Check for scanning / missing `X-Wallet-Authorization` (reason `missing_or_invalid`).
-3. Apply rate limiting at reverse proxy if abuse is suspected — WPB does not implement rate limits on status lists or auth.
+3. Apply rate limiting at reverse proxy if abuse is suspected - WPB does not implement rate limits on status lists or auth.
 
 ## Status list latency (`wpb.statuslist.get`)
 

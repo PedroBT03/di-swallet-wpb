@@ -4,7 +4,6 @@
 
 package di.swallet.wpb.issuance.policy
 
-import di.swallet.wpb.config.OpenId4VciProperties
 import di.swallet.wpb.issuance.domain.IssuanceContext
 import di.swallet.wpb.issuance.domain.IssuanceCredentialFormat
 import di.swallet.wpb.issuance.domain.IssuanceSessionMetadata
@@ -19,10 +18,7 @@ import java.util.UUID
 
 class DefaultIssuancePolicyTest {
 
-    /** OpenId4Vci properties with only the mdoc allow flag toggled for policy evaluation tests. */
-    private fun props(allowMdoc: Boolean = false): OpenId4VciProperties = OpenId4VciProperties().apply {
-        policy.allowMdoc = allowMdoc
-    }
+    private val policy = DefaultIssuancePolicy()
 
     /** Builds an OFFER_RESOLVED context requesting [requested] ids against optional [advertised] issuer metadata. */
     private fun ctx(
@@ -58,7 +54,7 @@ class DefaultIssuancePolicyTest {
      */
     @Test
     fun `empty configuration list is rejected`() {
-        val decision = DefaultIssuancePolicy(props()).evaluate(ctx(requested = emptyList()))
+        val decision = policy.evaluate(ctx(requested = emptyList()))
         assertFalse(decision.allowed)
     }
 
@@ -70,46 +66,45 @@ class DefaultIssuancePolicyTest {
         val advertised = listOf(
             CredentialConfigurationDescriptor("pid_jwt", IssuanceCredentialFormat.SD_JWT_VC),
         )
-        val decision = DefaultIssuancePolicy(props()).evaluate(ctx(listOf("unknown"), advertised))
+        val decision = policy.evaluate(ctx(listOf("unknown"), advertised))
         assertFalse(decision.allowed)
         assertTrue(decision.reason!!.contains("unsupported"))
     }
 
     /**
-     * An advertised mDL configuration is denied while allowMdoc remains false.
+     * An advertised mDL configuration is accepted alongside SD-JWT VC.
      */
     @Test
-    fun `mdoc rejected by default policy`() {
+    fun `mdoc configuration is allowed`() {
         val advertised = listOf(
             CredentialConfigurationDescriptor("driver_license", IssuanceCredentialFormat.MSO_MDOC),
         )
-        val decision = DefaultIssuancePolicy(props()).evaluate(ctx(listOf("driver_license"), advertised))
-        assertFalse(decision.allowed)
-        assertTrue(decision.reason!!.contains("SD-JWT", ignoreCase = true) ||
-                decision.reason!!.contains("not allowed", ignoreCase = true))
-    }
-
-    /**
-     * The same mDL request is allowed once allowMdoc is enabled.
-     */
-    @Test
-    fun `mdoc allowed when policy flag set`() {
-        val advertised = listOf(
-            CredentialConfigurationDescriptor("driver_license", IssuanceCredentialFormat.MSO_MDOC),
-        )
-        val decision = DefaultIssuancePolicy(props(allowMdoc = true)).evaluate(ctx(listOf("driver_license"), advertised))
+        val decision = policy.evaluate(ctx(listOf("driver_license"), advertised))
         assertTrue(decision.allowed)
     }
 
     /**
-     * A requested pid_jwt SD-JWT configuration that is advertised passes by default.
+     * A requested pid_jwt SD-JWT configuration that is advertised passes.
      */
     @Test
-    fun `sd-jwt configuration is allowed by default`() {
+    fun `sd-jwt configuration is allowed`() {
         val advertised = listOf(
             CredentialConfigurationDescriptor("pid_jwt", IssuanceCredentialFormat.SD_JWT_VC),
         )
-        val decision = DefaultIssuancePolicy(props()).evaluate(ctx(listOf("pid_jwt"), advertised))
+        val decision = policy.evaluate(ctx(listOf("pid_jwt"), advertised))
+        assertTrue(decision.allowed)
+    }
+
+    /**
+     * SD-JWT VC and mdoc configurations advertised together are both accepted.
+     */
+    @Test
+    fun `sd-jwt and mdoc configurations are both allowed`() {
+        val advertised = listOf(
+            CredentialConfigurationDescriptor("pid_jwt", IssuanceCredentialFormat.SD_JWT_VC),
+            CredentialConfigurationDescriptor("driver_license", IssuanceCredentialFormat.MSO_MDOC),
+        )
+        val decision = policy.evaluate(ctx(listOf("pid_jwt", "driver_license"), advertised))
         assertTrue(decision.allowed)
     }
 
@@ -118,7 +113,7 @@ class DefaultIssuancePolicyTest {
      */
     @Test
     fun `policy is permissive when metadata is not yet resolved`() {
-        val decision = DefaultIssuancePolicy(props()).evaluate(ctx(listOf("pid_jwt")))
+        val decision = policy.evaluate(ctx(listOf("pid_jwt")))
         assertTrue(decision.allowed)
     }
 }

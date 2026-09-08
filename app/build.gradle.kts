@@ -124,6 +124,20 @@ springBoot {
     }
 }
 
+/** Parses KEY=VALUE lines from the repo-root `.env` (comments and blanks ignored). */
+fun parseDotEnv(file: File): Map<String, String> {
+    if (!file.isFile) return emptyMap()
+    return file.readLines().mapNotNull { line ->
+        val trimmed = line.trim()
+        if (trimmed.isEmpty() || trimmed.startsWith("#")) return@mapNotNull null
+        val separator = trimmed.indexOf('=')
+        if (separator <= 0) return@mapNotNull null
+        trimmed.substring(0, separator).trim() to trimmed.substring(separator + 1).trim()
+    }.toMap()
+}
+
+val localDotEnv = parseDotEnv(rootProject.file(".env"))
+
 tasks.withType<JavaExec> {
     // Access internal JDK modules required for HSM (PKCS#11) and Certificate operations
     jvmArgs(
@@ -135,6 +149,18 @@ tasks.withType<JavaExec> {
         "SOFTHSM2_CONF",
         System.getenv("SOFTHSM2_CONF") ?: "${System.getProperty("user.home")}/.softhsm2.conf",
     )
+    if (System.getenv("SPRING_DATASOURCE_USERNAME").isNullOrBlank()) {
+        environment(
+            "SPRING_DATASOURCE_USERNAME",
+            localDotEnv["POSTGRES_USER"] ?: "pedro",
+        )
+    }
+    if (System.getenv("SPRING_DATASOURCE_PASSWORD").isNullOrBlank()) {
+        environment(
+            "SPRING_DATASOURCE_PASSWORD",
+            localDotEnv["POSTGRES_PASSWORD"] ?: "tese2026",
+        )
+    }
 }
 
 jacoco {
@@ -225,12 +251,16 @@ tasks.register<Test>("conformanceTest") {
     classpath = sourceSets.test.get().runtimeClasspath
 }
 
+val performanceReportDir = layout.buildDirectory.dir("reports/performance")
+
 tasks.register<Test>("performanceTest") {
     description = "Runs @Tag(performance) smoke tests (manual / optional CI)"
     group = "verification"
     useJUnitPlatform {
         includeTags("performance")
     }
+    systemProperty("spring.profiles.active", "test")
+    systemProperty("performance.report.dir", performanceReportDir.get().asFile.absolutePath)
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
 }

@@ -1,4 +1,4 @@
-# Runbook — SoftHSM2 (development / CI)
+# Runbook - SoftHSM2 (development / CI)
 
 This runbook covers the virtual HSM used in development and automated tests. Production should use a certified HSM; the probe semantics are the same (PKCS#11 session, no signing in health checks).
 
@@ -34,8 +34,8 @@ Gradle `bootRun` and tests set `SOFTHSM2_CONF` automatically when using the proj
 
 `/actuator/health` component `hsm` reports:
 
-- **UP** — PKCS#11 session opened, key entry count available
-- **DOWN** — library missing, wrong PIN, or token unavailable
+- **UP** - PKCS#11 session opened, key entry count available
+- **DOWN** - library missing, wrong PIN, or token unavailable
 
 The health probe does **not** perform signing operations.
 

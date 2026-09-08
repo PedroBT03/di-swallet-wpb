@@ -31,9 +31,6 @@ class OpenId4VciProperties {
     var trust: TrustProperties = TrustProperties()
 
     @NestedConfigurationProperty
-    var policy: PolicyProperties = PolicyProperties()
-
-    @NestedConfigurationProperty
     var simulator: SimulatorProperties = SimulatorProperties()
 
     @NestedConfigurationProperty
@@ -82,12 +79,6 @@ class OpenId4VciProperties {
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .toSet()
-    }
-
-    /** Credential format policy gates such as mDoc allowance. */
-    class PolicyProperties {
-        /** Allow `mso_mdoc` credentials. Defaults to false and is controlled by policy gate. */
-        var allowMdoc: Boolean = false
     }
 
     /** In-process simulator behavior for demo and test issuance flows. */

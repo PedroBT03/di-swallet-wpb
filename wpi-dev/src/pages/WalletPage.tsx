@@ -52,7 +52,7 @@ export function WalletPage() {
   });
 
   const [walletState, setWalletState] = useState<WalletInitResult | null>(null);
-  const [platform, setPlatform] = useState("web");
+  const platform = "web";
   const [wiaJwt, setWiaJwt] = useState<string | null>(null);
   const [initExchange, setInitExchange] = useState<WalletInitExchange | null>(null);
   const [walletKey, setWalletKey] = useState<WalletKeyRecord | null>(null);
@@ -622,7 +622,8 @@ export function WalletPage() {
                       <span className="form__label">Platform</span>
                       <input
                         value={platform}
-                        onChange={(event) => setPlatform(event.target.value)}
+                        readOnly
+                        aria-readonly="true"
                         disabled={busy}
                       />
                     </label>

@@ -18,16 +18,23 @@ export function fetchHealthComponent(name: string): Promise<NamedHealthComponent
 
 const KNOWN_HEALTH_COMPONENTS = ["hsm", "trustSnapshot"] as const;
 
-/** Loads aggregate health plus known contributor endpoints (details are often hidden on /health). */
+/** Loads aggregate health and extracts named components when the actuator exposes them. */
 export async function fetchHealthSnapshot(): Promise<{
   aggregate: HealthResponse;
   components: NamedHealthComponent[];
 }> {
-  const [aggregate, ...components] = await Promise.all([
-    fetchHealth(),
-    ...KNOWN_HEALTH_COMPONENTS.map((name) =>
+  const aggregate = await fetchHealth();
+  if (aggregate.components && Object.keys(aggregate.components).length > 0) {
+    const components = Object.entries(aggregate.components).map(([name, component]) => ({
+      name,
+      ...component,
+    }));
+    return { aggregate, components };
+  }
+  const components = await Promise.all(
+    KNOWN_HEALTH_COMPONENTS.map((name) =>
       fetchHealthComponent(name).catch(() => ({ name, status: "UNKNOWN" as const })),
     ),
-  ]);
+  );
   return { aggregate, components };
 }

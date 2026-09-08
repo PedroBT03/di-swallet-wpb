@@ -23,9 +23,9 @@ class MdocProperties {
 
     /**
      * Session transcript mode:
-     * - `legacy-aud-nonce` — simplified map (CI default until HAIP verifier is ready)
-     * - `openid4vp` — ISO 18013-5 / OID4VP OpenID4VPHandover
-     * - `hybrid` — openid4vp when responseUri is present, else legacy
+     * - `legacy-aud-nonce` - simplified map (CI default until HAIP verifier is ready)
+     * - `openid4vp` - ISO 18013-5 / OID4VP OpenID4VPHandover
+     * - `hybrid` - openid4vp when responseUri is present, else legacy
      */
     var sessionTranscriptMode: String = "legacy-aud-nonce"
 

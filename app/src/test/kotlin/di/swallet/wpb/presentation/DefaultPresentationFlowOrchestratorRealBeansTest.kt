@@ -53,7 +53,7 @@ import java.time.Instant
 /**
  * Locks in the lifecycle fix: with the **real** trust validator,
  * credential matcher and policy engine, the wallet must reach
- * `CONSENT_PENDING` when there is at least one matching wallet credential —
+ * `CONSENT_PENDING` when there is at least one matching wallet credential -
  * even with `demo-mode = false`. The previous bug had policy run before
  * matching, which made every non-demo session collapse into `REJECTED`.
  */

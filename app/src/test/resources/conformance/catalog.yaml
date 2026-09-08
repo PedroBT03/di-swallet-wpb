@@ -222,19 +222,6 @@ scenarios:
     testClass: di.swallet.wpb.ops.ActuatorSmokeTest
     description: Actuator info operational block reflects profile and demo flags.
 
-  # --- Tier 3 external interop (opt-in, not in default conformanceTest) ---
-  - id: vci_real_issuer_smoke
-    hlr: [ISSU_01]
-    protocol: openid4vci
-    tier: 3
-    negative: false
-    testClass: di.swallet.wpb.openid4vci.adapter.SdkOpenId4VciGatewayRealIssuerIT
-    description: Optional smoke against a real OID4VCI issuer (env-gated).
-
-  - id: vp_real_registry_smoke
-    hlr: [RPA_05]
-    protocol: openid4vp
-    tier: 3
-    negative: false
-    testClass: di.swallet.wpb.presentation.registry.Ts5RpRegistryRealRegistryIT
-    description: Optional smoke against a real WRP registry (env-gated).
+  # Live-endpoint smokes (SdkOpenId4VciGatewayRealIssuerIT, Ts5RpRegistryRealRegistryIT)
+  # live under @Tag(external) and ./gradlew :app:externalInteropTest. They are not
+  # catalogue entries for the default conformanceTest run.

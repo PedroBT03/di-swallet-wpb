@@ -93,13 +93,27 @@ export async function signWiaPopJwt(params: WiaPopSignParams): Promise<string> {
     }),
   );
   const signingInput = `${header}.${payload}`;
-  const derSignature = await crypto.subtle.sign(
+  const signature = await crypto.subtle.sign(
     { name: "ECDSA", hash: "SHA-256" },
     privateKey,
     new TextEncoder().encode(signingInput),
   );
-  const rawSignature = derEcdsaSignatureToRaw(new Uint8Array(derSignature));
+  const rawSignature = ecdsaSignatureToJwsRaw(new Uint8Array(signature));
   return `${signingInput}.${bytesToBase64Url(rawSignature)}`;
+}
+
+/**
+ * Web Crypto returns IEEE P1363 raw R||S (64 bytes for P-256) in Chromium/Node;
+ * some stacks still emit ASN.1 DER - accept both for JWS ES256.
+ */
+function ecdsaSignatureToJwsRaw(signature: Uint8Array): Uint8Array {
+  if (signature.length === 64) {
+    return signature;
+  }
+  if (signature[0] === 0x30) {
+    return derEcdsaSignatureToRaw(signature);
+  }
+  throw new Error("Invalid ECDSA signature format.");
 }
 
 /** Converts an ASN.1 DER ECDSA signature to the raw R||S form used in JWS ES256. */

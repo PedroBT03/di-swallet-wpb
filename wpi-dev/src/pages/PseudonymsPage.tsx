@@ -182,7 +182,7 @@ export function PseudonymsPage() {
               </li>
               <li>
                 Another rpId (e.g. <code>localhost2</code>) is blocked in dev unless WPB allows it, and
-                WebAuthn still requires the browser origin to match the rpId — from this UI only{" "}
+                WebAuthn still requires the browser origin to match the rpId - from this UI only{" "}
                 <code>localhost</code> works.
               </li>
               <li>

@@ -60,7 +60,7 @@ class Fido2Service(
             .allowUntrustedAttestation(walletProperties.allowUntrustedAttestation)
             .build()
 
-        logger.info("FIDO2: RelyingParty initialized — rpId='${walletProperties.rp.id}', origins=$origins, untrustedAttestation=${walletProperties.allowUntrustedAttestation}")
+        logger.info("FIDO2: RelyingParty initialized - rpId='${walletProperties.rp.id}', origins=$origins, untrustedAttestation=${walletProperties.allowUntrustedAttestation}")
     }
 
     /**

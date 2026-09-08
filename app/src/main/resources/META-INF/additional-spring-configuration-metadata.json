@@ -74,12 +74,6 @@
       "sourceMethod": "getTrust()"
     },
     {
-      "name": "wpb.openid4vci.policy",
-      "type": "di.swallet.wpb.config.OpenId4VciProperties$PolicyProperties",
-      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
-      "sourceMethod": "getPolicy()"
-    },
-    {
       "name": "wpb.openid4vci.simulator",
       "type": "di.swallet.wpb.config.OpenId4VciProperties$SimulatorProperties",
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties",
@@ -388,13 +382,6 @@
       "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$TrustProperties",
       "description": "Comma-separated allow-list of credential issuer identifiers.",
       "defaultValue": ""
-    },
-    {
-      "name": "wpb.openid4vci.policy.allow-mdoc",
-      "type": "java.lang.Boolean",
-      "sourceType": "di.swallet.wpb.config.OpenId4VciProperties$PolicyProperties",
-      "description": "Allow mso_mdoc credential configurations behind policy gate.",
-      "defaultValue": false
     },
     {
       "name": "wpb.openid4vci.simulator.always-defer",

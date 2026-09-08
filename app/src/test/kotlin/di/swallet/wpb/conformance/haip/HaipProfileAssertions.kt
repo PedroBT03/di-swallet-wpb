@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 
 /**
  * Explicit HAIP-profile checks for OIA_03b/c (SD-JWT VP) and ISSU_01 (OID4VCI path exercised elsewhere).
- * Scope is intentionally narrow — not a full ARB/HAIP certification checklist.
+ * Scope is intentionally narrow - not a full ARB/HAIP certification checklist.
  */
 object HaipProfileAssertions {
 

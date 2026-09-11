@@ -51,10 +51,11 @@ dependencies {
     implementation("com.authlete:cbor:1.19")
 
     // Reactive streams (coroutines interop) required for suspending controller support
-    implementation("org.reactivestreams:reactive-streams:1.0.4")
+    implementation("org.reactivestreams:reactive-streams")
     implementation("io.projectreactor:reactor-core")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("io.micrometer:context-propagation")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
 
     // --- Cryptography & Security ---
     // Standard security provider for X.509 and certificate utilities

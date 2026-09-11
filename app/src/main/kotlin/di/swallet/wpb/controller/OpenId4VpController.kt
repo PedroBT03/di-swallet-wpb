@@ -43,11 +43,13 @@ class OpenId4VpController(
      */
     @PostMapping("/authorize")
     @Operation(summary = "Start OpenID4VP session")
-    suspend fun authorize(@RequestBody request: AuthorizationStartRequest): PresentationContext {
-        return presentationFlowOrchestrator.startSession(
-            requestUri = request.requestUri,
-            holderId = request.holderId,
-        )
+    fun authorize(@RequestBody request: AuthorizationStartRequest): PresentationContext {
+        return runBlocking {
+            presentationFlowOrchestrator.startSession(
+                requestUri = request.requestUri,
+                holderId = request.holderId,
+            )
+        }
     }
 
     /**

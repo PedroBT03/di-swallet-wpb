@@ -40,6 +40,7 @@ dependencies {
     // --- Persistence Layer ---
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
+    runtimeOnly("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql") // Production database
     runtimeOnly("com.h2database:h2") // Allow local H2 runtime for dev/emulator
     testImplementation("com.h2database:h2")  // In-memory database for isolated testing

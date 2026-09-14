@@ -1,152 +1,109 @@
 # DI-Swallet: Wallet Provider Backend (WPB)
 
-Server-side implementation of the **Wallet Provider Backend (WPB)** for the EU Digital Identity
-Wallet, developed for the **DI-Swallet** research project at **Instituto Superior Técnico**.
+Server-side **Wallet Provider Backend** for a research EU Digital Identity Wallet (DI-Swallet), developed at Instituto Superior Técnico.
 
-> **Thesis prototype.** This is a research backend, not a fielded system. Several integrations
-> are simulated or gated for local use (see [Limitations](#limitations)).
+The WPB hosts Wallet Instance logic, the WSCA/SCI boundary, and remote key use. The user device is a thin client. This repository is the prototype described in the author's MSc dissertation; it is **not** a fielded national wallet.
 
-## Architecture
+## Scope
 
-Hexagonal (ports-and-adapters) Spring Boot service. Each external EUDI reference library is
-reached only through a domain-typed **port**, implemented by a swappable **adapter** (a simulated
-adapter for local/demo runs and an SDK-backed adapter for real integrations).
+Hexagonal Spring Boot service. External EUDI libraries sit behind domain-typed ports (`OpenId4VciGateway`, `OpenId4VpGateway`), with a simulated adapter for local runs and an SDK adapter for real endpoints.
 
-- **WPI** — REST API to the User Domain (issuance and presentation).
-- **WSCA / WSCD** — hardware-backed cryptography via **SoftHSM2** over PKCS#11.
-- **Security interceptor** — enforces sole-control (fresh FIDO2 assertion) on sensitive routes.
-- **Flow orchestrators** — issuance (OpenID4VCI) and presentation (OpenID4VP) state machines.
+| Piece | In this repository |
+| --- | --- |
+| WPI / PI | OpenID4VCI issuance and OpenID4VP presentation (REST + orchestrators) |
+| Formats | Independent SD-JWT VC and ISO/IEC 18013-5 mdoc pipelines |
+| WSCA / SCI | `HsmService`, SCI guard, FIDO2/WebAuthn assertion verification |
+| Remote WSCD | SoftHSM2 PKCS#11 **software token** (substitutes a certified HSM; the SoftHSM2 software is used unmodified) |
+| Lab UI | `wpi-dev` (Vite); not a production client |
+| Verifier lab | `verifier-emulator` (Flask) for Present flows |
 
-## Tech Stack
+## Prerequisites
 
-- **Language:** Kotlin 2.3.0 · **Framework:** Spring Boot 4.1.1
-- **Crypto:** BouncyCastle · PKCS#11 (SunPKCS11) · SoftHSM2
-- **Persistence:** Spring Data JPA — PostgreSQL (runtime), H2 (tests), Flyway migrations
+- Ubuntu 24.04 (or equivalent), OpenJDK 17, Docker, SoftHSM2 (`softhsm2`, `opensc`)
+- Node.js 20+ and Python 3 only if you run the lab frontend and verifier emulator
 
-## Quickstart
+## Setup
 
-### Prerequisites
-- Ubuntu 24.04 · OpenJDK 17 (`sudo apt install openjdk-17-jdk`)
-- SoftHSM2 (`sudo apt install softhsm2 opensc`) · Docker
-- Node.js 20+ (lab frontend) · Python 3 (verifier emulator)
+Initialize the SoftHSM2 token once:
 
-### 1. Initialize the SoftHSM2 token (once)
 ```bash
 mkdir -p ~/softhsm/tokens
 echo "directories.tokendir = $HOME/softhsm/tokens" > ~/.softhsm2.conf
 echo "objectstore.backend = file" >> ~/.softhsm2.conf
 softhsm2-util --init-token --free --label "DI-Swallet-WSCD" --pin 1234 --so-pin 123456
-```
-
-Confirm the token is visible:
-
-```bash
 export SOFTHSM2_CONF=$HOME/.softhsm2.conf
 softhsm2-util --show-slots
 ```
 
-Library path and PIN in `app/src/main/resources/application.properties` (dev default PIN is `1234`):
+Dev defaults in `app/src/main/resources/application.properties` / `application-dev.properties`:
+
 ```properties
 wpb.hsm.library=/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
 wpb.hsm.pin=1234
 ```
 
-`./gradlew :app:bootRun` and tests set `SOFTHSM2_CONF` automatically. If the token fails to open: check the PIN (`CKR_PIN_INCORRECT`), the library path, or re-run the init command if the slot is empty.
+`./gradlew :app:bootRun` and the test tasks set `SOFTHSM2_CONF` automatically. The PIN `1234` is a known-weak lab value; do not use it outside local/CI.
 
-### 2. Run the local lab (frontend)
-
-Four processes, each in its own terminal, from the repository root. The default `dev` profile already enables OID4VCI and OID4VP demo-mode: issuance uses the **in-process simulated issuer**, so there is no separate issuer service. The Flask verifier is only needed for **Present**.
-
-PostgreSQL:
+Copy `.env.example` to `.env` if you want Compose/Gradle to pick up local database overrides. `.env` is gitignored. Lab database defaults are `wpb` / `wpb-dev` / `diswallet`. If you previously created a Postgres volume with older credentials, recreate it:
 
 ```bash
-docker compose up -d
+docker compose down -v && docker compose up -d
 ```
 
-WPB backend (HSM env handled by the Gradle build):
+## Run the local lab
+
+Four processes, from the repository root. The `dev` profile uses an in-process simulated issuer; the Flask verifier is only needed for **Present**.
 
 ```bash
-./gradlew :app:bootRun
+docker compose up -d          # PostgreSQL on localhost:5432
+./gradlew :app:bootRun        # WPB on :8080 (Swagger at /swagger-ui.html)
 ```
 
-Verifier emulator (OpenID4VP Present):
-
 ```bash
-cd verifier-emulator
-python3 -m venv .venv
+cd verifier-emulator && python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python app.py
+.venv/bin/python app.py       # :8081
 ```
-
-Lab frontend:
 
 ```bash
-cd wpi-dev
-npm install
-npm run dev
+cd wpi-dev && npm install && npm run dev   # :5173
 ```
 
-| Actor | URL |
-| --- | --- |
-| Frontend (wpi-dev) | http://localhost:5173 |
-| WPB API / Swagger | http://localhost:8080/swagger-ui.html |
-| Verifier emulator | http://localhost:8081 |
-| PostgreSQL | localhost:5432 |
+Open the frontend, register a passkey, provision a wallet, then **Issue** (simulated) and **Present** (`:8081`). Lab UI notes: [`wpi-dev/README.md`](wpi-dev/README.md).
 
-Open the frontend, register a passkey, provision a wallet, then use **Issue** (simulated issuer) and **Present** (verifier on `:8081`). Demo scripts and WebAuthn notes: [`wpi-dev/README.md`](wpi-dev/README.md).
+Sensitive routes expect `X-Wallet-Authorization: fido2-assertion:<Base64URL_JSON>`. The interactive API catalogue is Swagger UI, not this README.
 
-### 3. Test
+## Tests
+
+SoftHSM2 is required for integration tests.
+
 ```bash
-./gradlew clean test                              # full suite (SoftHSM2 required for integration tests)
-./gradlew :app:test :app:jacocoTestReport         # + coverage → app/build/reports/jacoco/test/html/index.html
+./gradlew :app:test
+./gradlew :app:test :app:jacocoTestReport
+# HTML report: app/build/reports/jacoco/test/html/index.html
+./gradlew :app:conformanceTest
 ```
 
-## API Reference
+## Configuration
 
-Protected endpoints require an `X-Wallet-Authorization: fido2-assertion:<Base64URL_JSON>` header.
-Development flow: register a device (`POST /api/v1/wallet/auth/register/{userId}`), request a
-challenge (`GET /api/v1/wallet/auth/challenge/{userId}`), sign it in the authenticator, and send
-the assertion in the header.
-
-| Action | Endpoint |
+| Concern | Where |
 | --- | --- |
-| Generate HSM-backed key | `POST /api/v1/wallet/keys/{userId}` |
-| Retrieve key metadata | `GET /api/v1/wallet/keys/{userId}` |
-| ECDSA signature (in-HSM) | `POST /api/v1/wallet/sign/{userId}` |
+| Database | `docker-compose.yml` / `.env.example` (`wpb` / `wpb-dev`); rejected by production-readiness checks |
+| HSM | `wpb.hsm.library`, `wpb.hsm.pin`, SoftHSM2 token above |
+| WebAuthn origins | `wallet.rp.*`, `wallet.origins` (localhost in `dev`) |
+| Demo vs SDK adapters | `dev` profile enables OID4VCI/VP demo-mode |
+| Lab trust material | `app/src/main/resources/trust/` and `verifier-emulator/trust/` (lab keys only; see that folder's README) |
 
-The full, interactive endpoint catalogue is available in Swagger UI.
+## Documentation
 
-## Features
+Architecture, implementation, evaluation, and the full prototype-vs-production boundary are in the MSc dissertation (Instituto Superior Técnico). A public PDF/URL will be linked here when available.
 
-- **Issuance (OpenID4VCI)** — credential-offer resolution, authorization-code and pre-authorized
-  flows, deferred issuance, consent gating.
-- **Presentation (OpenID4VP)** — DCQL matching, selective disclosure, encrypted responses.
-- **Formats** — SD-JWT VC and ISO/IEC 18013-5 mdoc pipelines (dispatched by credential format).
-- **Attestations** — Wallet Instance Attestation (WIA) and Key Attestation (KA).
-- **Trust** — LoTE (ETSI TS 119 602) parsing, PKIX access-certificate validation, TS5 RP registry.
-- **Lifecycle & keys** — wallet unit state machine, device binding, HSM key management.
-- **Revocation** — IETF Token Status List publication and enforcement.
-- **Privacy** — TS10 transaction log with holder-held keys, consent views, pseudonyms, data
-  deletion and DPA reporting.
-- **Operations** — production-readiness checks, Actuator health/metrics, conformance suite.
+## Prototype status
 
-## Project Structure
+The backend is a thesis prototype: SoftHSM2 rather than a certified HSM/QSCD; simulated issuer/verifier adapters by default; FIDO2 registration without hardware attestation; issuance/presentation sessions in memory. Holder proofs are still signed inside the PKCS#11 token.
 
-```
-app/                 Application code and tests (single Gradle module)
-verifier-emulator/   Flask verifier for OpenID4VP Present flows
-wpi-dev/             Lab frontend (Vite) and demo scenarios
-docker-compose.yml   Local PostgreSQL
-```
+Do not deploy this configuration as a production wallet. Do not reuse the included lab database defaults, SoftHSM PIN, or test keys.
 
-## Limitations
+## Licence
 
-As a thesis prototype, this backend intentionally stops short of a fielded deployment. Key gaps:
-
-- **WSCD:** SoftHSM2 is used in place of a certified HSM/QSCD, so LoA High / QES is targeted, not
-  achieved.
-- **Issuer/verifier:** simulated adapters are the default; real endpoints require the SDK adapters.
-- **Device registration:** no hardware attestation (FIDO MDS) verification.
-- **Sessions:** held in memory rather than a distributed store.
-
-The design rationale and a full analysis of these limitations are covered in the dissertation.
+This project's source is licensed under the [Apache License 2.0](LICENSE). Third-party dependencies remain under their own licences.

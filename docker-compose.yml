@@ -3,10 +3,10 @@ services:
     image: postgres:15-alpine
     container_name: di-swallet-db
     environment:
-      # Local dev credentials
-      POSTGRES_USER: pedro
-      POSTGRES_PASSWORD: tese2026
-      POSTGRES_DB: diswallet
+      # Local lab credentials only (also in .env.example). Recreate the volume after changing them.
+      POSTGRES_USER: ${POSTGRES_USER:-wpb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wpb-dev}
+      POSTGRES_DB: ${POSTGRES_DB:-diswallet}
     ports:
       - "5432:5432"
     volumes:

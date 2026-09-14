@@ -299,9 +299,7 @@ class HsmService(
     }
 
     /**
-     * Signs a JWT Claims Set using the user's private key inside the HSM.
-     * This implements the core logic of the Format Engine, transforming identity
-     * data into a signed JWS (JSON Web Signature).
+     * Signs a JWT Claims Set using the holder's private key inside the PKCS#11 token.
      */
     fun signJwt(userId: String, claims: JWTClaimsSet): String {
         val walletKey = getUserKey(userId)

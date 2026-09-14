@@ -71,7 +71,7 @@ class ProductionReadinessValidator(
         }
 
         val dbPassword = environment.getProperty("spring.datasource.password").orEmpty()
-        if (dbPassword.isBlank() || dbPassword == WeakSecretDefaults.KNOWN_WEAK_DB_PASSWORD) {
+        if (dbPassword.isBlank() || dbPassword in WeakSecretDefaults.knownWeakDbPasswords) {
             violations += "spring.datasource.password must be set to a non-default secret"
         }
 

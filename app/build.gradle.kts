@@ -45,7 +45,7 @@ dependencies {
     runtimeOnly("com.h2database:h2") // Allow local H2 runtime for dev/emulator
     testImplementation("com.h2database:h2")  // In-memory database for isolated testing
 
-    // --- Identity & Credential Formats (Format Engine) ---
+    // --- Identity and credential formats ---
     // Used for JWS, JWT, and SD-JWT operations
     implementation("com.nimbusds:nimbus-jose-jwt:9.37.3")
     // CBOR/COSE/mdoc tooling for ISO 18013-5 interoperable artifacts.
@@ -157,13 +157,13 @@ tasks.withType<JavaExec> {
     if (System.getenv("SPRING_DATASOURCE_USERNAME").isNullOrBlank()) {
         environment(
             "SPRING_DATASOURCE_USERNAME",
-            localDotEnv["POSTGRES_USER"] ?: "pedro",
+            localDotEnv["POSTGRES_USER"] ?: "wpb",
         )
     }
     if (System.getenv("SPRING_DATASOURCE_PASSWORD").isNullOrBlank()) {
         environment(
             "SPRING_DATASOURCE_PASSWORD",
-            localDotEnv["POSTGRES_PASSWORD"] ?: "tese2026",
+            localDotEnv["POSTGRES_PASSWORD"] ?: "wpb-dev",
         )
     }
 }

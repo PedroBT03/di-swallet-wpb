@@ -173,12 +173,159 @@ class WpbPerformanceBenchmarkTest : BaseIntegrationTest() {
             .onSuccess { results += it }
             .onFailure { notes += "e2e_fido2_to_signed_sdjwt: not measured (${it.message})" }
 
-        writeReport(results, notes)
+        writeBaselineReport(results, notes)
 
         // Sanity guard so the benchmark fails loudly if a path regresses catastrophically
         // or the HSM is misconfigured; thresholds are deliberately generous for SoftHSM/CI.
         val coreSign = results.first { it.label == "hsm_es256_sign" }
         assertThat(coreSign.medianMs).isLessThan(1_000.0)
+    }
+
+    /**
+     * Load study for NFG-04: the same PKCS#11 signing primitives at increasing concurrency.
+     * Two operations share one harness so throughput and latency trends are comparable.
+     * End-to-end issuance is excluded from the sweep because concurrent issue-sd calls
+     * on one holder race credential supersession.
+     */
+    @Test
+    fun `WPB signing load study under increasing concurrency`() {
+        val holder = "perf-load-${UUID.randomUUID()}"
+        WalletTestSupport.bootstrapHolderForIssuance(
+            deviceBindingService, walletUnitRepository, hsmService, holder,
+        )
+        val signingInput = ByteArray(256) { (it % 251).toByte() }
+        val operations = listOf(
+            LoadOp("hsm_es256_sign") { hsmService.signData(holder, signingInput) },
+            LoadOp("presentation_kbjwt_sign") {
+                hsmService.signKeyBindingJwt(
+                    holder,
+                    mapOf(
+                        "nonce" to UUID.randomUUID().toString(),
+                        "aud" to "https://verifier.example",
+                        "iat" to Instant.now().epochSecond,
+                        "sd_hash" to "GhQ1s2t3u4v5w6x7y8z9A0B1C2D3E4F5G6H7I8J9K0L",
+                    ),
+                )
+            },
+        )
+        val levels = intArrayOf(1, 2, 4, 8, 16)
+        val repeats = 2
+        val warmupOps = 16
+        val measuredOps = 64
+        val rows = mutableListOf<LoadRow>()
+
+        for (op in operations) {
+            for (threads in levels) {
+                for (repeat in 1..repeats) {
+                    rows += concurrentLoad(
+                        operation = op.name,
+                        threads = threads,
+                        repeat = repeat,
+                        warmupOps = warmupOps,
+                        measuredOps = measuredOps,
+                        work = op.work,
+                    )
+                }
+            }
+        }
+        writeLoadStudy(rows, warmupOps, measuredOps, repeats, levels)
+        assertThat(rows).isNotEmpty
+        assertThat(rows.none { it.failures > 0 }).isTrue()
+    }
+
+    private data class LoadOp(val name: String, val work: () -> Unit)
+
+    private data class LoadRow(
+        val operation: String,
+        val concurrency: Int,
+        val repeat: Int,
+        val samples: Int,
+        val failures: Int,
+        val wallSeconds: Double,
+        val throughputOps: Double,
+        val medianMs: Double,
+        val p95Ms: Double,
+        val meanMs: Double,
+        val minMs: Double,
+        val maxMs: Double,
+    ) {
+        fun toCsv(): String =
+            listOf(
+                operation,
+                concurrency.toString(),
+                repeat.toString(),
+                samples.toString(),
+                failures.toString(),
+                "%.4f".format(wallSeconds),
+                "%.4f".format(throughputOps),
+                "%.2f".format(medianMs),
+                "%.2f".format(p95Ms),
+                "%.2f".format(meanMs),
+                "%.2f".format(minMs),
+                "%.2f".format(maxMs),
+            ).joinToString(",")
+    }
+
+    private fun concurrentLoad(
+        operation: String,
+        threads: Int,
+        repeat: Int,
+        warmupOps: Int,
+        measuredOps: Int,
+        work: () -> Unit,
+    ): LoadRow {
+        runPool(threads, warmupOps, work)
+        val measured = runPool(threads, measuredOps, work)
+        val st = stats(operation, measured.nanos)
+        println(
+            "LOAD %s c=%-2d r=%d n=%d fail=%d wall=%.3fs thr=%.2f ops/s p50=%.2f p95=%.2f ms".format(
+                operation, threads, repeat, measured.nanos.size, measured.failures,
+                measured.wallSeconds, measured.throughput, st.medianMs, st.p95Ms,
+            ),
+        )
+        return LoadRow(
+            operation = operation,
+            concurrency = threads,
+            repeat = repeat,
+            samples = measured.nanos.size,
+            failures = measured.failures,
+            wallSeconds = measured.wallSeconds,
+            throughputOps = measured.throughput,
+            medianMs = st.medianMs,
+            p95Ms = st.p95Ms,
+            meanMs = st.meanMs,
+            minMs = st.minMs,
+            maxMs = st.maxMs,
+        )
+    }
+
+    private data class PoolRun(
+        val nanos: List<Long>,
+        val failures: Int,
+        val wallSeconds: Double,
+        val throughput: Double,
+    )
+
+    private fun runPool(threads: Int, totalOps: Int, work: () -> Unit): PoolRun {
+        val pool = Executors.newFixedThreadPool(threads)
+        val failures = AtomicInteger(0)
+        val perOpNanos = java.util.Collections.synchronizedList(ArrayList<Long>(totalOps))
+        val wallStart = System.nanoTime()
+        try {
+            val futures: List<Future<*>> = (0 until totalOps).map {
+                pool.submit {
+                    val s = System.nanoTime()
+                    runCatching { work() }.onFailure { failures.incrementAndGet() }
+                    perOpNanos += System.nanoTime() - s
+                }
+            }
+            futures.forEach { it.get(180, TimeUnit.SECONDS) }
+        } finally {
+            pool.shutdownNow()
+        }
+        val wallSeconds = (System.nanoTime() - wallStart) / 1_000_000_000.0
+        val throughput = if (wallSeconds > 0) totalOps / wallSeconds else 0.0
+        return PoolRun(perOpNanos.toList(), failures.get(), wallSeconds, throughput)
     }
 
     private fun concurrentSigningThroughput(
@@ -244,7 +391,7 @@ class WpbPerformanceBenchmarkTest : BaseIntegrationTest() {
         return stats("e2e_fido2_to_signed_sdjwt", nanos)
     }
 
-    private fun writeReport(results: List<Stats>, notes: List<String>) {
+    private fun writeBaselineReport(results: List<Stats>, notes: List<String>) {
         val header = "%-34s samples  min   p50   p95   p99   max  mean  ops/s".format("benchmark")
         println("===== WPB performance benchmarks =====")
         println(header)
@@ -252,9 +399,7 @@ class WpbPerformanceBenchmarkTest : BaseIntegrationTest() {
         notes.forEach { println("NOTE $it") }
         println("======================================")
 
-        val reportDir: Path = Paths.get(
-            System.getProperty("performance.report.dir") ?: "build/reports/performance",
-        )
+        val reportDir = reportDir()
         Files.createDirectories(reportDir)
         val sb = StringBuilder()
         sb.appendLine("# DI-Swallet WPB Performance Report")
@@ -276,5 +421,109 @@ class WpbPerformanceBenchmarkTest : BaseIntegrationTest() {
             notes.forEach { sb.appendLine("- $it") }
         }
         Files.writeString(reportDir.resolve("summary.md"), sb.toString())
+
+        val csv = StringBuilder()
+        csv.appendLine("benchmark,samples,min_ms,median_ms,p95_ms,p99_ms,max_ms,mean_ms,ops_per_s")
+        results.forEach { s ->
+            csv.appendLine(
+                listOf(
+                    s.label,
+                    s.samples.toString(),
+                    "%.2f".format(s.minMs),
+                    "%.2f".format(s.medianMs),
+                    "%.2f".format(s.p95Ms),
+                    "%.2f".format(s.p99Ms),
+                    "%.2f".format(s.maxMs),
+                    "%.2f".format(s.meanMs),
+                    "%.2f".format(s.opsPerSecond),
+                ).joinToString(","),
+            )
+        }
+        Files.writeString(reportDir.resolve("baseline.csv"), csv.toString())
+        writeEnvironment(reportDir)
     }
+
+    private fun writeLoadStudy(
+        rows: List<LoadRow>,
+        warmupOps: Int,
+        measuredOps: Int,
+        repeats: Int,
+        levels: IntArray,
+    ) {
+        val reportDir = reportDir()
+        Files.createDirectories(reportDir)
+        val csv = StringBuilder()
+        csv.appendLine(
+            "operation,concurrency,repeat,samples,failures,wall_s,throughput_ops_s,median_ms,p95_ms,mean_ms,min_ms,max_ms",
+        )
+        rows.forEach { csv.appendLine(it.toCsv()) }
+        Files.writeString(reportDir.resolve("load_study.csv"), csv.toString())
+
+        val md = StringBuilder()
+        md.appendLine("# WPB signing load study")
+        md.appendLine()
+        md.appendLine("Generated: ${Instant.now()}")
+        md.appendLine()
+        md.appendLine("- Warm-up operations per (operation, concurrency, repeat): $warmupOps")
+        md.appendLine("- Measured operations per run: $measuredOps")
+        md.appendLine("- Repeats per load level: $repeats")
+        md.appendLine("- Concurrency levels: ${levels.joinToString(", ")}")
+        md.appendLine("- WSCD: SoftHSM2 software PKCS#11 token")
+        md.appendLine()
+        md.appendLine("| Operation | Concurrency | Repeat | Failures | Throughput (ops/s) | Median (ms) | p95 (ms) |")
+        md.appendLine("|-----------|------------:|-------:|---------:|-------------------:|------------:|---------:|")
+        rows.forEach { r ->
+            md.appendLine(
+                "| %s | %d | %d | %d | %.2f | %.2f | %.2f |".format(
+                    r.operation, r.concurrency, r.repeat, r.failures,
+                    r.throughputOps, r.medianMs, r.p95Ms,
+                ),
+            )
+        }
+        Files.writeString(reportDir.resolve("load_study.md"), md.toString())
+        writeEnvironment(reportDir)
+        println("===== WPB load study written to $reportDir =====")
+    }
+
+    private fun writeEnvironment(reportDir: Path) {
+        val cpuModel = runCatching {
+            Files.readAllLines(Paths.get("/proc/cpuinfo"))
+                .firstOrNull { it.startsWith("model name") }
+                ?.substringAfter(":")
+                ?.trim()
+        }.getOrNull() ?: "unknown"
+        val memKb = runCatching {
+            Files.readAllLines(Paths.get("/proc/meminfo"))
+                .firstOrNull { it.startsWith("MemTotal:") }
+                ?.split(Regex("\\s+"))
+                ?.getOrNull(1)
+                ?.toLong()
+        }.getOrNull()
+        val memGib = if (memKb != null) "%.1f".format(memKb / 1024.0 / 1024.0) else "unknown"
+        val json = """
+            {
+              "generated": "${Instant.now()}",
+              "os": "${System.getProperty("os.name")} ${System.getProperty("os.version")}",
+              "arch": "${System.getProperty("os.arch")}",
+              "cpu_model": ${jsonString(cpuModel)},
+              "available_processors": ${Runtime.getRuntime().availableProcessors()},
+              "mem_gib": "$memGib",
+              "java_version": ${jsonString(System.getProperty("java.version"))},
+              "java_vm": ${jsonString(System.getProperty("java.vm.name"))},
+              "wscd": "SoftHSM2 PKCS#11 software token",
+              "database": "H2 in-memory (Spring profile test)",
+              "postgresql": "not used in this benchmark",
+              "client_server": "same JVM (Spring Boot RANDOM_PORT TestRestTemplate)",
+              "note": "SoftHSM2 is a software prototype substitute. Results must not be extrapolated to certified Remote WSCD hardware."
+            }
+        """.trimIndent()
+        Files.writeString(reportDir.resolve("environment.json"), json)
+    }
+
+    private fun jsonString(value: String): String =
+        "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+    private fun reportDir(): Path = Paths.get(
+        System.getProperty("performance.report.dir") ?: "build/reports/performance",
+    )
 }
